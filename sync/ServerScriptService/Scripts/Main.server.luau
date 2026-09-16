@@ -17,7 +17,8 @@ local PlayerComponents = {
 	Weapon = component.Weapon,
 	Movement = component.Movement,
 	Status = component.Status,
-	Animation = component.Animation
+	Animation = component.Animation,
+	Attributes = component.Attributes
 }
 
 

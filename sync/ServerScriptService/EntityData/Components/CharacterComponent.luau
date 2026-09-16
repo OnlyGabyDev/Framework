@@ -160,6 +160,7 @@ local ExposeAPI = {
 }
 
 return {
+	InitPriority = "High",
 	new = CharacterComponent.new,
 	ExposeAPI = ExposeAPI
 }

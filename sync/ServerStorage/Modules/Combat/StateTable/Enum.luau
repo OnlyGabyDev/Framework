@@ -116,6 +116,7 @@ enum.Stats = {
     JumpForce = "JumpForce",
     Defense = "Defense",
     DamageMult = "DamageMult",
+    Weapon = "Weapon",
 }
 
 enum.MAX_RECURSION = 50 -- limite de ações recursivas de uma chain em um segundo

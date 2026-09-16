@@ -11,7 +11,7 @@ function AttributeComponents.new(entity, config)
     self.Entity = entity
 
     -- Busca por config padrão (override)
-    self.BaseStats = config.BaseStats or nil
+    self.BaseStats = config.BaseStats or {}
 
     -- Modificadores ativos
     -- Ex: table["Speed"]["BuffID"] = { Type = "Flat", Value = -0.5 }
@@ -29,6 +29,8 @@ function AttributeComponents:GetStat(AttributeName, default)
     local base = self.BaseStats[AttributeName] or default or 0
     local mods = self.Modifiers[AttributeName]
 
+
+    --Se não for um status complexo, retorne apenas o valor encontrado no DB
     if not mods then return base end
 
     local finalBase = base
@@ -106,7 +108,7 @@ end
 function AttributeComponents:OnAdded()
 
 		local charData = self:GetStats()
-        if not self.BaseStats then
+        if not next(self.BaseStats) then
              local DefaultStats =  
                 {
                     Speed = 16,
@@ -127,7 +129,7 @@ function AttributeComponents:OnAdded()
                 MaxHP = charData["Stats"][StateTable.Enum.Stats.MaxHP] or DefaultStats.MaxHP,
                 Defense = charData["Stats"][StateTable.Enum.Stats.Defense] or DefaultStats.Defense,
                 DamageMult = charData["Stats"][StateTable.Enum.Stats.DamageMult] or DefaultStats.DamageMult,
-
+                Weapon = charData[StateTable.Enum.Stats.Weapon],
             }
         end
 end
@@ -141,6 +143,7 @@ local ExposeAPI = {
 }
 
 return {
+    InitPriority = "High",
     new = AttributeComponents.new,
     ExposeAPI = ExposeAPI
 }

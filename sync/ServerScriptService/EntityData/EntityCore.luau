@@ -79,9 +79,13 @@ function EntityCore:AddComponent(componentName : string, config : {[string]: any
 	-- Expõe API do componente diretamente na entidade
 	if ComponentRegistry[componentName].ExposeAPI then
 		for methodName, method in pairs(ComponentRegistry[componentName].ExposeAPI) do
-				self[methodName] = function(...)
-					return method(component, ...)
-			end
+				self[methodName] = function(firstArg, ...)
+					if firstArg == self then
+						return method(component, ...)
+					else
+						return method(component, firstArg, ...)
+					end
+				end
 		end
 	end
 	
@@ -93,8 +97,28 @@ end
 Função chamada após todos os componentes serem carregados.
 ]]
 function EntityCore:ComponentsLoaded()
-	-- Chama OnAdded em todos os componentes
+	local highPriority = {}
+	local normalPriority = {}
+
 	for name, component in pairs(self.Components) do
+		local registryData = ComponentRegistry[name]
+		if registryData and registryData.InitPriority == "High" then
+			table.insert(highPriority, component)
+		else
+			table.insert(normalPriority, component)
+		end
+	end
+
+	-- Executa alta prioridade primeiro
+	--ALTAMENTE recomendado utilizar APENAS para componentes core que vão ser altamente requisitados.
+	for _, component in ipairs(highPriority) do
+		if component.OnAdded then
+			component:OnAdded()
+		end
+	end
+
+	-- Executa prioridade normal em seguida
+	for _, component in ipairs(normalPriority) do
 		if component.OnAdded then
 			component:OnAdded()
 		end
@@ -210,6 +234,7 @@ function EntityCore.RegisterComponent(name : string, componentModule : {[string]
 	ComponentRegistry[name] = {
 		new = componentModule.new,
 		ExposeAPI = componentModule.ExposeAPI,
+		InitPriority = componentModule.InitPriority
 	}
 
 	print("[EntityCore] Componente registrado:", name)

@@ -7,6 +7,7 @@
 local RS = game:GetService("ReplicatedStorage")
 local Storage = game:GetService("ServerStorage")
 local HitboxWrapper = require(Storage.Modules.Combat.Hitbox.HitboxWrapper)
+local StateTable = require(Storage.Modules.Combat.StateTable)
 
 local WeaponComponent = {}
 WeaponComponent.__index = WeaponComponent
@@ -34,12 +35,7 @@ function WeaponComponent.new(entity, config)
 	self.HitOrigin = nil
 	self.Hitbox = nil
 
-	-- Equipa arma se fornecida
-	if self.WeaponName then
-		task.defer(function()
-			self:EquipWeapon(self.WeaponName)
-		end)
-	end
+
 
 	return self
 end
@@ -74,6 +70,7 @@ function WeaponComponent:EquipWeapon(weaponName : string) : boolean
 
 
 		local weaponFolder = weaponsFolder:FindFirstChild(weaponName)
+		warn(weaponName)
 		if not weaponFolder then
 			warn("[WeaponComponent] Arma não encontrada:", weaponName)
 			return false
@@ -134,6 +131,8 @@ function WeaponComponent:EquipWeapon(weaponName : string) : boolean
 	if not self.IsCosmetic then
 		self.Hitbox = HitboxWrapper.new(self.Entity)
 	end
+	
+	print(string.format("[WeaponComponent] Arma '%s' equipada com sucesso na entidade %s!", weaponName, tostring(self.Entity.ID)))
 
 	return true
 end
@@ -278,7 +277,14 @@ function WeaponComponent:Destroy()
 end
 
 function WeaponComponent:OnAdded()
-	self:EquipWeapon(self.Entity.GetStat("Weapon"))
+	local weaponToEquip = self.WeaponName or self.Entity:GetStat(StateTable.Enum.Stats.Weapon)
+
+	
+	if weaponToEquip and type(weaponToEquip) == "string" and weaponToEquip ~= "" and weaponToEquip ~= "None" then
+		self:EquipWeapon(weaponToEquip)
+	else
+		warn(string.format("[WeaponComponent] Nenhuma arma equipada na entidade %s. (Weapon: %s)", tostring(self.Entity.ID), tostring(weaponToEquip)))
+	end
 end
 
 --=============================================================================

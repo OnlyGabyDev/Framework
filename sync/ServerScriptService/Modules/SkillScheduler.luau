@@ -125,7 +125,7 @@ function SkillScheduler._Update(dt)
 end
 
 -- Debug
-function SkillScheduler.GetStats()
+function SkillScheduler:GetStats()
 	return {
 		skills = #activeSkills,
 		status = #activeStatus,

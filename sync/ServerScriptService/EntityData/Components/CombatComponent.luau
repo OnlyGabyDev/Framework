@@ -427,7 +427,6 @@ Atualiza o loadout de Skills (func interna)
 ]]
 function CombatComponent:_ApplyLoadout(loadoutData)
 	if typeof(loadoutData) ~= "table" then warn("[CombatComponent],ApplyFunc, Loadout =~ table"); return end
-	warn(loadoutData)
 
 	local StructureCheck = loadoutData.Slots ~= nil or loadoutData.List ~= nil
 	assert(StructureCheck,"[CombatComponent] formatação de loadout inválida, confira tipo (slots ou list)") 
@@ -547,7 +546,7 @@ function CombatComponent:SetChosenChar(Char)
     self:LoadSkillsData()
 
     -- Atualiza stats
-    local stats = self.Entity.GetStats()
+    local stats = self.Entity:GetStats()
     self.Entity.SetAttribute(StateTable.Enum.Stats.Speed, stats.speed or StateTable.Enum.Stats.Speed, 16)
     self.Entity.SetAttribute(StateTable.Enum.Stats.JumpForce, stats.JumpPower or StateTable.Enum.Stats.JumpForce, 50)
 
