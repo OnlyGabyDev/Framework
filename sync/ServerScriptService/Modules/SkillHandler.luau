@@ -67,7 +67,7 @@ function SkillHandler.HandleSkillInput(ID,skillIndex)
 		if max == 1 then
 		--Pego o primeiro runner da lista
 			local runner = activeRunners[1]
-			if entityCore:TrySelfCancel() then --tenta cancelar a skill atual
+			if entityCore.TrySelfCancel() then --tenta cancelar a skill atual
 				runner:Recast() 				--Roda o recast
 				entityCore.SetCooldown(skillName)
 				return true,skillName 

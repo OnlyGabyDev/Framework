@@ -31,11 +31,11 @@ function MovementComponent:SetJumpForce(value)
 end
 
 function MovementComponent:GetSpeed()
-    return self.Entity:GetStat(StateTable.Enum.Stats.Speed)
+    return self.Entity.GetStat(StateTable.Enum.Stats.Speed)
 end
 
 function MovementComponent:GetJumpForce()
-    return self.Entity:GetStat(StateTable.Enum.Stats.JumpForce)
+    return self.Entity.GetStat(StateTable.Enum.Stats.JumpForce)
 end
 
 function MovementComponent:SetMovement()

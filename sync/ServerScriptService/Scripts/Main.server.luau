@@ -66,7 +66,7 @@ Players.PlayerAdded:Connect(function(player)
 			local cd = ED.CombatData
 			
 			
-			cd:ApplyStatus(Status,ED,nil,nil)
+			cd.ApplyStatus(Status,ED,nil,nil)
 			
 			print ("Stacks: ",cd:Count(Status))
 			
@@ -79,12 +79,12 @@ local function toggleMoveBlock(player)
 	local ED = DataManager.Get(player)
 	local cd = ED.CombatData
 
-	if cd.Status:GetStatus("Stun") then
+	if cd.GetStatus("Stun") then
 		warn("Stun removido!")
 		cd:Remove({ data = { name = "Stun" } })
 	else
 		warn("Stun aplicado!")
-		cd:ApplyStatus(StatusTable.States.stun, ED, 5) -- 5 segundos
+		cd.ApplyStatus(StatusTable.States.stun, ED, 5) -- 5 segundos
 	end
 end
 

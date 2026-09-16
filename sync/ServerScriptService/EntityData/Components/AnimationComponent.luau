@@ -84,14 +84,14 @@ function AnimationComponent:_Initialize() : boolean
 		return false
 	end
 	
-	local wrapper = charComp:GetCharacterWrapper()
+	local wrapper = self.Entity.GetCharacterWrapper()
 	if not wrapper then
 		return false
 	end
 	
 	
 	-- Tenta obter Humanoid primeiro
-	local humanoid = self.Entity:GetHumanoid()
+	local humanoid = self.Entity.GetHumanoid()
 	
 	if humanoid then
 		-- Sistema baseado em Humanoid
@@ -315,7 +315,7 @@ function AnimationComponent:PlaySequence(sequence: {SequenceStep}, index: number
 				end
 				-- Chama recursivamente usando o componente
 				task.defer(function()
-					AnimationComponent.PlaySequence(self, sequence, nextIndex, loopInfo)
+					self:PlaySequence(sequence, nextIndex, loopInfo)
 				end)
 				return
 			end
@@ -323,7 +323,7 @@ function AnimationComponent:PlaySequence(sequence: {SequenceStep}, index: number
 		
 		-- Próximo step normal
 		task.defer(function()
-			AnimationComponent.PlaySequence(self, sequence, (index :: number) + 1, loopInfo)
+			self:PlaySequence(sequence, (index :: number) + 1, loopInfo)
 		end)
 	end
 	

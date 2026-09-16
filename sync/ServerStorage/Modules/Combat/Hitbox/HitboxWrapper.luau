@@ -51,7 +51,7 @@ function HitboxWrapper.new(Entity,excludeSelf : boolean?)
 	self.Entity = Entity
 	
 
-	self.weapon = Entity:GetWeapon()
+	self.weapon = Entity.GetWeapon()
 	self.activeHitboxes = {}
 	self.hitboxConfigs = {}
 	self.isActive = false

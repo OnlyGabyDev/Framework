@@ -58,7 +58,7 @@ function DataManager.Create(Entity,components : {})
 
 	--Setta o wrapper no componente Character (vital)
 	if core:HasComponent(core.ComponentKey.Character) then
-	core:SetEntity(Entity)
+	core.SetEntity(Entity)
 	end
 
 	-- inicializa o wrapper e guarda o modelo/character da entidade
@@ -84,7 +84,7 @@ function DataManager.Create(Entity,components : {})
 
 	--inicializa o wrapper de movimentação
 	if core:HasComponent(core.ComponentKey.Movement) then
-	core:SetMovement()
+	core.SetMovement()
 	end
 
 	warn("===========VITALS END========")

@@ -79,13 +79,19 @@ function EntityCore:AddComponent(componentName : string, config : {[string]: any
 	-- Expõe API do componente diretamente na entidade
 	if ComponentRegistry[componentName].ExposeAPI then
 		for methodName, method in pairs(ComponentRegistry[componentName].ExposeAPI) do
-				self[methodName] = function(firstArg, ...)
-					if firstArg == self then
-						return method(component, ...)
-					else
-						return method(component, firstArg, ...)
-					end
+			self[methodName] = function(...)
+				local n = select("#", ...)
+				if n > 0 and (...) == self then
+					error(
+						string.format(
+							"[EntityCore] '%s' é API de componente — chame com '.' (entity.%s(...)), não ':' (entity:%s(...))",
+							methodName, methodName, methodName
+						),
+						2
+					)
 				end
+				return method(component, ...)
+			end
 		end
 	end
 	

@@ -61,7 +61,7 @@ function HealthComponent:_ValidateHit(context)
 	--Se não tiver componente de status, não existem tags de ivulnerabilidade e valida o hit.
 	if not self.Entity:HasComponent(self.Entity.ComponentKey.Status) then return true end
 
-	local targetTags = self.Entity:GetActiveTags()
+	local targetTags = self.Entity.GetActiveTags()
 	local immunityRules = self._immunityRules or self.Entity.GetImmunityRules() 
 	local attackTraits = context.traits
 	
@@ -112,7 +112,7 @@ function HealthComponent:TakeDamage(amount : number, source : any)
 		end
 
 		--busca por todas as TAGS ativas na entidade
-		local ActiveTags,owner = self.Entity:GetActiveTags()
+		local ActiveTags,owner = self.Entity.GetActiveTags()
 		local blockTag = StateTable.Enum.Tags.block
 
 		--se encontrar a tag de block ativa, e se a source não ignorar block 
@@ -303,7 +303,7 @@ function HealthComponent:GetHP()
 end
 
 function HealthComponent:GetMaxHP()
-	self.MaxHP = self.Entity:GetStat("MaxHP", 100)
+	self.MaxHP = self.Entity.GetStat("MaxHP", 100)
 	--warn(self.Entity.GetStat("MaxHP",100))
 	return self.maxHP
 end
@@ -322,7 +322,7 @@ function HealthComponent:SetHP(value)
 end
 
 function HealthComponent:SetMaxHP(value)
-	self.Entity:SetStat("MaxHP", value)
+	self.Entity.SetStat("MaxHP", value)
 	self:GetMaxHP()
 
 	local ratio = self.HP / self.MaxHP

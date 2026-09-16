@@ -14,7 +14,7 @@ function MovementController.Unregister(entity)
 end
 
 function MovementController.ProcessEntity(comp, dt)
-    local wrapper = comp:GetMovementWrapper()
+    local wrapper = comp.GetMovementWrapper()
     local entity = comp.Entity
     
     if not wrapper or not entity then return end
@@ -29,7 +29,7 @@ function MovementController.ProcessEntity(comp, dt)
 
     -- Busca tags relacionadas a movimentação
     local tags = { canMove = true, canDisplace = true }
-    if entity.HasComponent(entity.ComponentKey.Status) then
+    if entity:HasComponent(entity.ComponentKey.Status) then
         local activeTags = entity.GetActiveTags()
         if activeTags[StateTable.Enum.Tags.canMove] ~= nil then
             tags.canMove = activeTags[StateTable.Enum.Tags.canMove]
@@ -44,8 +44,8 @@ function MovementController.ProcessEntity(comp, dt)
     -- ============================================================
     
     -- Busca os Stats calculados do frame atual
-    local currentSpeed = entity:GetStat(StateTable.Enum.Stats.Speed, 16)
-    local currentJump = entity:GetStat(StateTable.Enum.Stats.JumpForce, 50)
+    local currentSpeed = entity.GetStat(StateTable.Enum.Stats.Speed, 16)
+    local currentJump = entity.GetStat(StateTable.Enum.Stats.JumpForce, 50)
 
     -- Aplica os valores físicos no Wrapper
     wrapper:SetSpeed(currentSpeed)
@@ -53,7 +53,7 @@ function MovementController.ProcessEntity(comp, dt)
 
     -- Executa Movimento se permitido
     if tags.canMove then
-        wrapper:Move(entity:GetDirection())
+        wrapper:Move(entity.GetDirection())
     else
         wrapper:Move(Vector3.zero) 
     end
@@ -71,7 +71,7 @@ function MovementController.ProcessEntity(comp, dt)
             
             -- Cancelamento de Dash por Root (se for skill de movimento)
             if not tags.canMove and forceEntry.Type == "Dash" then
-                entity:RemoveForce(id)
+                entity.RemoveForce(id)
                 continue
             end
 
@@ -81,7 +81,7 @@ function MovementController.ProcessEntity(comp, dt)
             local duration = data.Duration or 0.5
 
             if forceEntry.ElapsedTime >= duration then
-                entity:RemoveForce(id)
+                entity.RemoveForce(id)
                 continue
             end
 

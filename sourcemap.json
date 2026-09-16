@@ -42,7 +42,7 @@
     {
       "name": "ReplicatedFirst",
       "className": "ReplicatedFirst",
-      "guid": "9240"
+      "guid": "8537"
     },
     {
       "name": "ReplicatedStorage",
@@ -3661,7 +3661,7 @@
     {
       "name": "SoundService",
       "className": "SoundService",
-      "guid": "8848"
+      "guid": "7714"
     },
     {
       "name": "StarterGui",
@@ -5002,17 +5002,17 @@
         {
           "name": "Camera",
           "className": "Camera",
-          "guid": "220835",
+          "guid": "227041",
           "children": [
             {
               "name": "ShapecastHitboxHelper",
               "className": "Folder",
-              "guid": "220836",
+              "guid": "227042",
               "children": [
                 {
                   "name": "CurrentObject",
                   "className": "ObjectValue",
-                  "guid": "220837"
+                  "guid": "227043"
                 }
               ]
             }

@@ -305,7 +305,7 @@ function CombatComponent:CanContinue(skill) : boolean
 	
 	--existem estados ativos?
 	if statusComp then
-		local rawState = self.Entity:GetActiveStates()
+		local rawState = self.Entity.GetActiveStates()
 			if #rawState == 0 then
 				return true 
 			end
@@ -546,16 +546,16 @@ function CombatComponent:SetChosenChar(Char)
     self:LoadSkillsData()
 
     -- Atualiza stats
-    local stats = self.Entity:GetStats()
+    local stats = self.Entity.GetStats()
     self.Entity.SetAttribute(StateTable.Enum.Stats.Speed, stats.speed or StateTable.Enum.Stats.Speed, 16)
     self.Entity.SetAttribute(StateTable.Enum.Stats.JumpForce, stats.JumpPower or StateTable.Enum.Stats.JumpForce, 50)
 
     -- Atualiza HP
     local health = self.Entity:GetComponent(self.Entity.ComponentKey.Health)
     if health and stats.MaxHP then
-        local ratio = health:GetHealthRatio()
+        local ratio = self.Entity.GetHealthRatio()
         health.MaxHP = stats.MaxHP
-        health:SetHP(stats.MaxHP * ratio) -- Mantém proporção
+        self.Entity.SetHP(stats.MaxHP * ratio) -- Mantém proporção
     end
 
     return true
@@ -605,14 +605,14 @@ end
 
 -- Aplica Stats
 function CombatComponent:_ApplyStats(stats)
-	if stats.Speed then self.Entity:SetSpeed(stats.Speed) end
-	if stats.JumpPower then self.Entity:SetJumpForce(stats.JumpPower) end
+	if stats.Speed then self.Entity.SetSpeed(stats.Speed) end
+	if stats.JumpPower then self.Entity.SetJumpForce(stats.JumpPower) end
 	
 	local health = self.Entity:GetComponent("Health")
 	if health and stats.MaxHP then
-		local ratio = health:GetHealthRatio()
-		health:SetMaxHP(stats.MaxHP)
-		health:SetHP(stats.MaxHP * ratio)
+		local ratio = self.Entity.GetHealthRatio()
+		self.Entity.SetMaxHP(stats.MaxHP)
+		self.Entity.SetHP(stats.MaxHP * ratio)
 	end
 end
 

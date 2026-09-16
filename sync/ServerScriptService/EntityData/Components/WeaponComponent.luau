@@ -59,7 +59,7 @@ function WeaponComponent:EquipWeapon(weaponName : string) : boolean
 	if self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then
 
 
-		local chosenChar = self.Entity:GetChosenChar()
+		local chosenChar = self.Entity.GetChosenChar()
 
 		-- Busca arma na pasta de assets
 		local weaponsFolder = RS.Assets.Weapons:FindFirstChild(chosenChar)
@@ -153,7 +153,7 @@ function WeaponComponent:_GetAttachPoint(weaponModel : Instance) : string
 	end
 
 	-- 2. Busca no personagem
-	local Stats = self.Entity:GetStats()
+	local Stats = self.Entity.GetStats()
 	if Stats.attachTo then
 		return Stats.attachTo
 	end
@@ -277,7 +277,7 @@ function WeaponComponent:Destroy()
 end
 
 function WeaponComponent:OnAdded()
-	local weaponToEquip = self.WeaponName or self.Entity:GetStat(StateTable.Enum.Stats.Weapon)
+	local weaponToEquip = self.WeaponName or self.Entity.GetStat(StateTable.Enum.Stats.Weapon)
 
 	
 	if weaponToEquip and type(weaponToEquip) == "string" and weaponToEquip ~= "" and weaponToEquip ~= "None" then
