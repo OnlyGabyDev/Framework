@@ -1,3 +1,9 @@
+---
+trigger: always_on
+glob:
+description: Bugs confirmados e objetivos pendentes
+---
+
 _Parte 3 de 4 do contexto do projeto — ver 00 e 01 para regras e arquitetura antes de delegar qualquer bug abaixo._
 
 ## Bugs Confirmados e Ordem de Prioridade
@@ -117,6 +123,3 @@ estável (stats corretos, gates de cast funcionando, skill isolada).
    (`stats.speed`, shape diferente) — violação direta da regra 17. Resolver
    como parte do bug 1, unificando a leitura de stats num único shape
    declarado.
-
----
-

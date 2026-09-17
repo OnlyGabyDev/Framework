@@ -1,3 +1,9 @@
+---
+trigger: always_on
+glob:
+description: Instruções de delegação para sub-agentes
+---
+
 _Parte 4 de 4 do contexto do projeto — instruções de como delegar as tasks descritas em 02-bugs-e-objetivos.md._
 
 ## Instruções de Delegação para Sub-Agentes

@@ -1,3 +1,9 @@
+---
+trigger: always_on
+glob:
+description: Arquitetura e design do framework
+---
+
 _Parte 2 de 4 do contexto do projeto — ver 00-identidade-e-regras.md para identidade, estilo de trabalho e as 20 regras do framework._
 
 ## Arquitetura Atual (visão geral)
@@ -142,6 +148,3 @@ internos (`Self`/`Out`/`LockedCast`, que já são neutros) e ajustando os
 métodos do `CombatComponent` para `SetCastLock`/`GetCastLock`/`RemoveCastLock`.
 Não executar a renomeação sem validar o nome final — múltiplos arquivos
 dependem disso, então vale fechar a nomenclatura antes de tocar código.
-
----
-

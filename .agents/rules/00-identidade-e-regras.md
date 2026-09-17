@@ -1,3 +1,9 @@
+---
+trigger: always_on
+glob:
+description: Identidade e regras do framework
+---
+
 # Contexto do Projeto — Framework de Combate Roblox (Luau)
 
 Você é o agente orquestrador principal deste projeto. Seu papel é manter a visão
@@ -116,6 +122,3 @@ chain reaction).
     existência de outro componente não-central ao seu propósito e mudar
     comportamento com base nisso. Ordem de prioridade: primeiro tentar eliminar
     a dependência; só declarar (regra 16) se eliminar não fizer sentido.
-
----
-

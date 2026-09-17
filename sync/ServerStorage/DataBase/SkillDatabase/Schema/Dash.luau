@@ -1,15 +1,10 @@
 local ServerStorage = game:GetService("ServerStorage")
-local BaseSkills = require(ServerStorage.Modules.BaseSkills.BaseSkills)
-
 
 local Skill = {
-	
-
-
 
 data = {
-	cooldown = 2,    --2
-	duration = 0.15, --0.15  
+	cooldown = 2,
+	duration = 0.15,
 	castTime = 0,
 	speed = 150,
 	anim  = "anim",
@@ -17,46 +12,58 @@ data = {
 
 callbacks = {
 	onStart = function(self)
-		
-			local statsTable = self.statusTable
-			
-			local control = statsTable.States.noControl
+        self.stateID = nil
+        self.dashForceID = nil
 
-			--local state = statsTable.PlayerStates.Out.cast
-			local state = statsTable.PlayerStates.Self.selfCast
-			 
-			stateID = self.cd:ApplyStatus(state,self.ED, 9999, self)
-			
-			self.cd:ApplyStatus(control,self.ED,5,self,stateID)
-			
-			print(stateID)
-			
-			local dir = self.ED:getDirection()
-			local speed = self.data.speed
-			root = self.ED.Root
-		
-			
-			dashDir = BaseSkills.dash(dir,speed)
-			
-	end,
+        local statsTable = self.statusTable
+        local control = statsTable.States.NoControl
+        local state = statsTable.PlayerStates.Self.selfCast
+            
+        -- PlayerStates usam a API SetPlayerState (CombatComponent)
+        self.Entity.SetPlayerState(state, self)
+        
+        -- Status normais usam ApplyStatus (StatusComponent)
+        self.stateID = self.Entity.ApplyStatus(control, 5, self)
+        
+        local dir = self.Entity.GetDirection()
+        if dir.Magnitude == 0 then
+            local wrapper = self.Entity.GetCharacterWrapper()
+            dir = wrapper and wrapper:GetRoot().CFrame.LookVector or Vector3.new(0, 0, -1)
+        end
 
-	onStep = function(self, dt)
-		
-			root.CFrame = root.CFrame + dashDir * dt
-			
-			
+        local speed = self.data.speed
+        
+        -- Invocando AddForce que injetamos na entidade no MovementComponent
+        self.dashForceID = self.Entity.AddForce({
+            Type = "Dash",
+            Duration = self.data.duration,
+            Speed = speed,
+            Direction = dir.Unit,
+            Hard = true,          
+            IgnoreGravity = true, 
+            Priority = 10         
+        })
 	end,
 
 	onEnd = function(self)
-			self.cd:RemoveID(stateID)
+        self.Entity.RemovePlayerState()
+        if self.stateID then
+            self.Entity.RemoveStatusByID(self.stateID)
+        end
+        if self.dashForceID then
+            self.Entity.RemoveForce(self.dashForceID)
+        end
 	end,
 	
 	onCancel = function(self)
-			self.cd:RemoveID(stateID)
+        self.Entity.RemovePlayerState()
+        if self.stateID then
+            self.Entity.RemoveStatusByID(self.stateID)
+        end
+        if self.dashForceID then
+            self.Entity.RemoveForce(self.dashForceID)
+        end
 	end,
-	
-   }
-
 }
-
+}
 return Skill

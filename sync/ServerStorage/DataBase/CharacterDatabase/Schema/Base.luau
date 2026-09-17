@@ -5,12 +5,13 @@ local Keys = SkillDB.Keys
 return {
 	Stats = {
 		MaxHP = 100,
-		Speed = 2000,
+		Speed = 20,
 		JumpForce = 50,
 	},
 	Loadout = {
 		Slots = {
-			[1] = Keys.Schema.M1
+			[1] = Keys.Schema.M1,
+			[2] = Keys.Schema.Dash
 		}
 	},
 

@@ -26,6 +26,10 @@ local Skill = {
 --		# Eventos
 		
 		onStart = function(self)
+
+   
+   
+			warn(self)
 			
 --		#Referencias/vars
 
