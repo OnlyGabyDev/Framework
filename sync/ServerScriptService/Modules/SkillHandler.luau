@@ -19,6 +19,19 @@ function SkillHandler.HandleMovementInput(ID, dir)
 	return false
 end
 
+--[[
+Mesmo padrão de HandleMovementInput, mas pra direção de câmera/mira (usada
+por Forces com Direction dinâmico, tipo dash estilo ult do Sion). Ver
+InputValidator.server.luau (RequestLook) e MovementComponent:SetLookDirection.
+]]
+function SkillHandler.HandleLookInput(ID, look)
+	local entityCore = DataManager.Get(ID)
+	if not entityCore then return false end
+
+	entityCore.SetLookDirection(look)
+	return true
+end
+
 function SkillHandler.HandleSkillInput(ID,skillIndex)
 
 	local entityCore = DataManager.Get(ID) 	--Salva o EntityCore da entidade que chamou a função
@@ -50,22 +63,22 @@ function SkillHandler.HandleSkillInput(ID,skillIndex)
 
 	if not skill.data.ChainHistory then
 		local data = {
-    	rootOrigin = entityCore,
-    	rootSkill = skillName,
-    	history = {skillName},
-    	depth = 1,
-		chainStart = tick()
+			rootOrigin = entityCore,
+			rootSkill = skillName,
+			history = {skillName},
+			depth = 1,
+			chainStart = tick()
 		}
 		ChainHistory = StateTable.BuildHistory(data)
 	end
 
 	maxCooldown = entityCore.GetCooldown(skillName) --Pega o cooldown total da skill
-	
+
 	--Se já tiver uma instância ativa dessa skill e for maior do que o máximo
 	if #activeRunners > 0 and #activeRunners >= max then 
 		--Se o máximo for 1 (padrão de skill de recast apenas, sem spawns)
 		if max == 1 then
-		--Pego o primeiro runner da lista
+			--Pego o primeiro runner da lista
 			local runner = activeRunners[1]
 			if entityCore.TrySelfCancel() then --tenta cancelar a skill atual
 				runner:Recast() 				--Roda o recast
@@ -75,11 +88,11 @@ function SkillHandler.HandleSkillInput(ID,skillIndex)
 		end
 		return false
 	end
-		
+
 	--Cancela a skill anterior se ela for responsável por um state Self
 	--Se obtiver retorno false (estado encontrado mas não é Self), sai do código
 	if not entityCore.TrySelfCancel() then return false end
-	
+
 	entityCore.SetCooldown(skillName)
 
 	--inicializa o runner da skill

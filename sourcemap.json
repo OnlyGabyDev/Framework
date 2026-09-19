@@ -42,7 +42,7 @@
     {
       "name": "ReplicatedFirst",
       "className": "ReplicatedFirst",
-      "guid": "8537"
+      "guid": "6626"
     },
     {
       "name": "ReplicatedStorage",
@@ -917,6 +917,11 @@
               "name": "UpdateHealthBar",
               "className": "RemoteEvent",
               "guid": "22311"
+            },
+            {
+              "name": "RequestLook",
+              "className": "UnreliableRemoteEvent",
+              "guid": "589330"
             }
           ]
         },
@@ -1069,6 +1074,22 @@
                   "guid": "14216",
                   "filePaths": [
                     "sync/ServerScriptService/Modules/Physics/MovementController.luau"
+                  ]
+                },
+                {
+                  "name": "ForceRig",
+                  "className": "ModuleScript",
+                  "guid": "587793",
+                  "filePaths": [
+                    "sync/ServerScriptService/Modules/Physics/ForceRig.luau"
+                  ]
+                },
+                {
+                  "name": "Settings",
+                  "className": "ModuleScript",
+                  "guid": "588192",
+                  "filePaths": [
+                    "sync/ServerScriptService/Modules/Physics/Settings.luau"
                   ]
                 }
               ]
@@ -3661,12 +3682,12 @@
     {
       "name": "SoundService",
       "className": "SoundService",
-      "guid": "7714"
+      "guid": "6601"
     },
     {
       "name": "StarterGui",
       "className": "StarterGui",
-      "guid": "9253",
+      "guid": "8508",
       "children": [
         {
           "name": "CooldownGUI",
@@ -3919,12 +3940,12 @@
     {
       "name": "StarterPack",
       "className": "StarterPack",
-      "guid": "9252"
+      "guid": "8469"
     },
     {
       "name": "StarterPlayer",
       "className": "StarterPlayer",
-      "guid": "9251",
+      "guid": "8460",
       "children": [
         {
           "name": "StarterCharacterScripts",
@@ -4322,6 +4343,22 @@
                     "sync/StarterPlayer/StarterPlayerScripts/RbxCharacterSounds/AtomicBinding.luau"
                   ]
                 }
+              ]
+            },
+            {
+              "name": "LookDirectionBroadcaster",
+              "className": "LocalScript",
+              "guid": "588903",
+              "filePaths": [
+                "sync/StarterPlayer/StarterPlayerScripts/LookDirectionBroadcaster.client.luau"
+              ]
+            },
+            {
+              "name": "TeleportSmoother",
+              "className": "LocalScript",
+              "guid": "589903",
+              "filePaths": [
+                "sync/StarterPlayer/StarterPlayerScripts/TeleportSmoother.client.luau"
               ]
             }
           ]
@@ -5002,17 +5039,17 @@
         {
           "name": "Camera",
           "className": "Camera",
-          "guid": "227041",
+          "guid": "362400",
           "children": [
             {
               "name": "ShapecastHitboxHelper",
               "className": "Folder",
-              "guid": "227042",
+              "guid": "362401",
               "children": [
                 {
                   "name": "CurrentObject",
                   "className": "ObjectValue",
-                  "guid": "227043"
+                  "guid": "362402"
                 }
               ]
             }
