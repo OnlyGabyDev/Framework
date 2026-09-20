@@ -324,12 +324,20 @@ CreateMovement, Função de criação de um novo wrapper de movimentação
 @params Character Wrapper
 @return tabela de funções.
 ]]
-EntityWrapper.CreateMovement = function(characterWrapper)
+EntityWrapper.CreateMovement = function(characterWrapper, config)
+	local wrapper
 	if characterWrapper:GetHumanoid() then 
-		return HumanoidMovement.new(characterWrapper)
+		wrapper = HumanoidMovement.new(characterWrapper)
 	else
-		return NPCMovement.new(characterWrapper)
+		wrapper = NPCMovement.new(characterWrapper)
 	end
+
+	if config then
+		for k, v in pairs(config) do
+			wrapper[k] = v
+		end
+	end
+	return wrapper
 end
 
 -- ========== EXPORTS ========== --

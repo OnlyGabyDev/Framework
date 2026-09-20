@@ -81,13 +81,11 @@ function MovementController.ProcessEntity(comp, dt)
 		return
 	end
 
-	if comp.IsFrozen then
-
-		wrapper:SetFrozen(true)
-		return
-	else
-		wrapper:SetFrozen(false)
+	if comp.IsFrozen ~= comp._appliedFrozen then
+		comp._appliedFrozen = comp.IsFrozen
+		wrapper:SetFrozen(comp.IsFrozen)
 	end
+	if comp.IsFrozen then return end
 
 	local tags = { canMove = true, canDisplace = true }
 	if entity:HasComponent(entity.ComponentKey.Status) then
@@ -100,18 +98,18 @@ function MovementController.ProcessEntity(comp, dt)
 		end
 	end
 
-
-	wrapper:SetSpeed(comp:GetSpeed())
-	wrapper:SetJumpForce(comp:GetJumpForce())
+	local canMove = tags.canMove
+	wrapper:SetSpeed(canMove and comp:GetSpeed() or 0)
+	wrapper:SetJumpForce(canMove and comp:GetJumpForce() or 0)
+	
 	local gravityScale = 1
 	if entity:HasComponent(entity.ComponentKey.Attributes) then
 		gravityScale = entity.GetStat("GravityScale", 1)
 	end
 	wrapper:SetAmbientGravityScale(gravityScale)
 
-
-	if comp.Direction ~= Vector3.zero then
-		wrapper:Move(tags.canMove and comp.Direction or Vector3.zero)
+	if wrapper.DrivesInput then
+		wrapper:Move(canMove and comp.Direction or Vector3.zero)
 	end
 
 

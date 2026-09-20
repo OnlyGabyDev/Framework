@@ -6,8 +6,8 @@
 local Skill = {
 
 	data = {
-		cooldown = 30,
-		duration = 2,
+		cooldown = 3,
+		duration = 20,
 		castTime = 0,
 		Speed = 90,
 		TurnRateDegrees = 50,  

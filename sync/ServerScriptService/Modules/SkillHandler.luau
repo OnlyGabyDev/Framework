@@ -10,13 +10,12 @@ local StateTable = require(Storage.Modules.Combat.StateTable)
 function SkillHandler.HandleMovementInput(ID, dir)
 
 	local entityCore = DataManager.Get(ID) 	--Salva o EntityCore do player que chamou a função
-	local dirNormal = (dir and dir.Magnitude > 0) and dir.Unit or Vector3.zero --normaliza direção
-
-	if dirNormal.Magnitude > 0 then
-		entityCore.SetDirection(dirNormal) --se tiver uma nova direção, então dê update, caso contrário mantenha a antiga
-		return true
-	end
-	return false
+	if not entityCore then return false end
+	
+	local n = (typeof(dir) == "Vector3" and dir.Magnitude > 0) and dir.Unit or Vector3.zero
+	
+	entityCore.SetDirection(n)
+	return n.Magnitude > 0
 end
 
 --[[

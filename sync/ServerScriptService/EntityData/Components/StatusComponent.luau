@@ -482,30 +482,38 @@ Limpa referências ao runner finalizar
 @param runner - SkillRunner que finalizou SkillRunner
 ]]
 function StatusComponent:_OnRunnerFinished(name : string, runner)
-	local entry = self.Effects.status[name]
-	if not entry then return end
+	for _, groupName in ipairs({"status", "state"}) do
+		local group = self.Effects[groupName]
+		local entry = group[name]
+		if not entry then continue end
 
-	-- Caso único
-	if entry.runner == runner then
-		self.Effects.status[name] = nil
-		self:_MarkTagsDirty()
-		return
-	end
+		-- Caso único
+		if entry.runner == runner then
+			group[name] = nil
+			self:_MarkTagsDirty()
+			return
+		end
 
-	-- Caso múltiplas instâncias
-	if type(entry) == "table" then
-		for i = #entry, 1, -1 do
-			if entry[i].runner == runner then
-				table.remove(entry, i)
+		-- Caso múltiplas instâncias
+		if type(entry) == "table" then
+			local removed = false
+			for i = #entry, 1, -1 do
+				if entry[i].runner == runner then
+					table.remove(entry, i)
+					removed = true
+				end
+			end
+
+			if #entry == 0 then
+				group[name] = nil
+			end
+			
+			if removed then
+				self:_MarkTagsDirty()
+				return
 			end
 		end
-
-		if #entry == 0 then
-			self.Effects.status[name] = nil
-		end
 	end
-
-	self:_MarkTagsDirty()
 end
 
 --=============================================================================

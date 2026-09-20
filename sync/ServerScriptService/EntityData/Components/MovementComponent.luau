@@ -51,7 +51,8 @@ function MovementComponent.new(entity, config)
 	self.Entity = entity
 
 	-- Intenção de Input
-	self.Direction = Vector3.zero      -- direção normalizada de WASD
+	self.Direction = Vector3.zero      -- input AO VIVO (zero = soltou tudo)
+	self.LastDirection = Vector3.zero  -- último não-zero (fallback de dash/facing)
 	self.LookDirection = Vector3.zero  -- direção "plana" da câmera do dono (ver SetLookDirection)
 	self.IsFrozen = false              -- USE SÓ pra hard-stop (cutscene/loading).
 	-- CC de combate = StateTable (Root/Stun/canMove), que já
@@ -97,7 +98,7 @@ function MovementComponent:SetMovement()
 	local wrapper = self.Entity.GetCharacterWrapper()
 
 	-- Criamos o wrapper de movimentação.
-	self.MovementWrapper = EntityWrapper.CreateMovement(wrapper)
+	self.MovementWrapper = EntityWrapper.CreateMovement(wrapper, {DrivesInput = self.Entity.Player == nil})
 
 	-- Regra 16: Dependência Opcional Explícita
 	if not self.Entity:HasComponent(self.Entity.ComponentKey.Status) then
@@ -169,7 +170,11 @@ function MovementComponent:ClearForces()
 end
 
 local ExposeAPI = {
-	SetDirection = function(Component, dir) Component.Direction = dir end,
+	SetDirection = function(Component, dir) 
+		Component.Direction = dir 
+		if dir.Magnitude > 0 then Component.LastDirection = dir end
+	end,
+	GetLastDirection = function(Component) return Component.LastDirection end,
 	GetDirection = function(Component) return Component.Direction end,
 	SetLookDirection = function(Component, dir) Component.LookDirection = dir end,
 	GetLookDirection = function(Component) return Component.LookDirection end,
