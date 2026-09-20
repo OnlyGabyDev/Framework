@@ -86,6 +86,10 @@ function MovementComponent:GetJumpForce()
 	return self.Entity.GetStat(StateTable.Enum.Stats.JumpForce, 50)
 end
 
+function MovementComponent:GetDirection()
+	return self.Direction
+end
+
 function MovementComponent:SetMovement()
 	if self.MovementWrapper then return false end 
 

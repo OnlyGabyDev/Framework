@@ -159,12 +159,12 @@ function StatusComponent:ApplyStatus(statusData, duration : number?, sourceSkill
 	if meta.traits and meta.traits[StateTable.Enum.Traits.Stackable] and meta.stackOnSelf then
 		local existing = group[meta.name]
 		if existing then
-			if existing.counter >= (meta.maxStacks or math.huge) then
+			if existing.runner.skill.counter >= (meta.maxStacks or math.huge) then
 				return ID -- Limite atingido
 			end
 
 			
-			existing.runner.counter += 1
+			existing.runner.skill.counter += 1
 
 			if existing.runner then
 				existing.runner.elapsedTime = 0 -- Reset timer
@@ -389,11 +389,11 @@ function StatusComponent:RemoveAmount(name: string, amount: number): boolean
 	end
 
 	--Remoção de stacks na mesma instância
-	if entry.runner and entry.runner.counter then
-		entry.runner.counter -= amount
+	if entry.runner and entry.runner.skill.counter then
+		entry.runner.skill.counter -= amount
 		removed = true
 
-		if entry.runner.counter <= 0 then
+		if entry.runner.skill.counter <= 0 then
 			entry.runner:endSkill(true)
 			group[name] = nil
 		end
@@ -640,7 +640,7 @@ function StatusComponent:GetStatusCounter(name : string) : number
 	
 	local entry = list[1]
 	if entry.runner and entry.data.data.stackOnSelf then
-		return entry.runner.counter
+		return entry.runner.skill.counter
 	else
 		return #list
 	end

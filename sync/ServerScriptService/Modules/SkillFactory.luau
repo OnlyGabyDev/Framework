@@ -3,7 +3,7 @@ local SkillFactory = {}
 -- Funções padrão para as skills
 local SkillDefaults = {
 	onStart = function() end,
-	--onStep = function() end,
+	--onStep = function() end, --Necessário para manter heartbeat da skill rodando
 	onEnd = function() end,
 	--onHit = function() end,
 	onCancel = function()end,

@@ -7,11 +7,10 @@ local Skill = {
 
 	data = {
 		cooldown = 30,
-		duration = 0,
+		duration = 2,
 		castTime = 0,
-		FlightDuration = 2.5,
 		Speed = 90,
-		TurnRateDegrees = 180,  
+		TurnRateDegrees = 50,  
 		anim = "anim",
 	},
 
@@ -21,7 +20,7 @@ local Skill = {
 
 
 			self.control = statsTable.States.NoControl
-			self.stateID = self.Entity.ApplyStatus(self.control, self.data.FlightDuration + 0.5, self)
+			self.stateID = self.Entity.ApplyStatus(self.control, self.data.duration, self)
 
 			self.Entity.SetPlayerState(statsTable.PlayerStates.Self.selfCast, self)
 
@@ -38,15 +37,15 @@ local Skill = {
 				Hard = true,
 				IgnoreGravity = true,
 				Priority = 20,
-				Duration = self.data.FlightDuration,
+				Duration = self.data.duration,
 				Speed = self.data.Speed,
 				TurnRate = math.rad(self.data.TurnRateDegrees),
 				FaceDirection = true,
 
 				Direction = function(_elapsed, _duration, ctx)
-					local look = ctx.MovementComponent.LookDirection
+					local look = ctx.Entity.GetLookDirection()
 					if look.Magnitude < 0.1 then
-						return ctx.MovementComponent.Direction
+						return ctx.Entity.GetDirection()
 					end
 					return look
 				end,

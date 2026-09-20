@@ -112,7 +112,7 @@ local Skill = {
 
 				self.Entity.ApplyStatus(self.control, 9999, self, self.stateID)
 				
-				self.Entity.StartHitbox(self.data.duration,function(hitResult) self:onHit(hitResult.target, hitResult)end)
+				self.Entity.StartHitbox(self.data.duration,function(hitResult) self:onHit(hitResult)end)
 				
 				self.damage = 3
 
