@@ -100,14 +100,22 @@ local function activate(entityCore, event)
 
 	--Se já tiver uma instância ativa dessa skill e for maior do que o máximo
 	if #activeRunners > 0 and #activeRunners >= maxInstances then 
-		--Se o máximo for 1 (padrão de skill de recast apenas, sem spawns)
-		if maxInstances == 1 and entityCore.TrySelfCancel() then --tenta cancelar a skill atual
+		if maxInstances == 1 then
 			local runner = activeRunners[1]
-			runner:Recast(nil, event) 				--Roda o recast informando o gesto
-			track(entityCore, event, runner)
-			return true, skillName, startCooldown(entityCore, skillName)
+			-- Tenta recast primeiro (runner permanece vivo, sem Stop)
+			if runner:Recast(true) then
+				runner:Recast(nil, event)
+				track(entityCore, event, runner)
+				return true, skillName, startCooldown(entityCore, skillName)
+			end
+			-- Sem onRecast: tenta cancelar e recriar a skill
+			if not entityCore.TrySelfCancel() then
+				return false
+			end
+			-- TrySelfCancel matou o runner antigo, cai pro fluxo de criação abaixo
+		else
+			return false
 		end
-		return false
 	end
 
 	--Cancela a skill anterior se ela for responsável por um state Self

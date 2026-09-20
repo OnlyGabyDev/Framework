@@ -289,7 +289,6 @@ function CombatComponent:TrySelfCancel() : boolean
 			warn("Skill não pode rodar!")
 			return false -- Encontrou PlayerState mas não é Self
 		end
-	
 	return true -- Nenhum PlayerState ativo
 end
 

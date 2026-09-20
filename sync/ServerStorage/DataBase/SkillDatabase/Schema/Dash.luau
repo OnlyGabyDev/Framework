@@ -2,8 +2,8 @@
 local Skill = {
 
 data = {
-	cooldown = 0.2,
 	duration = 0.35,
+	cooldown = 0.2 + 0.35,
 	castTime = 0,
 	speed = 80, --150
 	anim  = "anim",
@@ -39,11 +39,21 @@ callbacks = {
         
 
         -- Invocando AddForce que injetamos na entidade no MovementComponent
+        local dir = self.Entity.GetDirection()
+        if dir.Magnitude < 0.1 then
+            local look = self.Entity.GetLookDirection()
+            if look.Magnitude > 0.1 then
+                dir = Vector3.new(look.X, 0, look.Z).Unit
+            else
+                dir = self.Entity.GetLastDirection()
+            end
+        end
+
         self.dashForceID = self.Entity.AddForce({
             Type = "Dash",
             Duration = self.data.duration,
             Speed = speed,
-            Direction = self.Entity.GetDirection(),
+            Direction = dir,
             Hard = true,          
             IgnoreGravity = true, 
             Priority = 10,
