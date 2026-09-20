@@ -18,7 +18,7 @@ function AntiCheat.Init()
 		connection = RunService.Heartbeat:Connect(function(dt)
 			AntiCheat._Update(dt)
 		end)
-		print("[AntiCheat] Iniciado")
+		warn("[AntiCheat] Iniciado")
 	end
 end
 

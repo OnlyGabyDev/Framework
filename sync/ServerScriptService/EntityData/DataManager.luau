@@ -87,7 +87,7 @@ function DataManager.Create(Entity,components : {})
 	core.SetMovement()
 	end
 
-	warn("===========VITALS END========")
+	warn("===========VITALS END=============")
 	
 	return core
 

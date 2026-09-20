@@ -15,12 +15,12 @@ local Id = Intents.Id
 
 return {
 	Bindings = {
-		[Id.Primary] = { Enum.UserInputType.MouseButton1, Enum.KeyCode.ButtonR2 },
+		[Id.Primary] = { Enum.UserInputType.MouseButton1, Enum.KeyCode.ButtonX },
 		[Id.Dash] = { Enum.KeyCode.LeftShift, Enum.KeyCode.ButtonB },
-		[Id.Ability1] = { Enum.KeyCode.One, Enum.KeyCode.ButtonX },
-		[Id.Ability2] = { Enum.KeyCode.Two, Enum.KeyCode.ButtonY },
+		[Id.Ability1] = { Enum.KeyCode.One, Enum.KeyCode.ButtonR1 },
+		[Id.Ability2] = { Enum.KeyCode.Two, Enum.KeyCode.ButtonR2},
 		[Id.Ability3] = { Enum.KeyCode.Three, Enum.KeyCode.ButtonL1 },
-		[Id.Ultimate] = { Enum.KeyCode.Four, Enum.KeyCode.ButtonR1 },
+		[Id.Ultimate] = { Enum.KeyCode.Four, Enum.KeyCode.ButtonY },
 	},
 
 	ButtonTag = "InputButton",

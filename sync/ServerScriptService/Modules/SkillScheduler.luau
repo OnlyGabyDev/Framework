@@ -41,7 +41,6 @@ function SkillScheduler.Register(runner, runnerType)
 		connection = RunService.Heartbeat:Connect(function(dt)
 			SkillScheduler._Update(dt)
 		end)
-	print("[SkillScheduler] Iniciado")
 	end
 
 	return true
@@ -74,7 +73,6 @@ function SkillScheduler.Unregister(runner, runnerType)
 	if totalRunners == 0 and connection then
 		connection:Disconnect()
 		connection = nil
-		print("[SkillScheduler] Parado (sem runners)")
 	end
 end
 

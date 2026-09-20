@@ -29,7 +29,6 @@ local Skill = {
 
    
    
-			warn(self)
 			
 --		#Referencias/vars
 
