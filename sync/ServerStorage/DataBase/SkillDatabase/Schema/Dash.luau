@@ -48,8 +48,7 @@ callbacks = {
             IgnoreGravity = true, 
             Priority = 10,
         })
-	end,
-
+	end,    
 
 	onEnd = function(self)
         self.cleanUp()

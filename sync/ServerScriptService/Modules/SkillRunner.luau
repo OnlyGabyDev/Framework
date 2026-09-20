@@ -274,6 +274,9 @@ end
 
 --Finaliza a skill
 function SkillRunner:endSkill(cancel)
+	
+	if self.state == STATES.Ended then return end
+	self.state = STATES.Ended
 
 	--Se foi cancelada externamente
 	if cancel then
@@ -281,9 +284,6 @@ function SkillRunner:endSkill(cancel)
    			if self.skill.callbacks.onCancel(self.skill, self:BuildContext()) == false then return end --Permita que somente a ação ocorra sem parar a skill.
 		end
 	end	
-
-	if self.state == STATES.Ended then return end
-	self.state = STATES.Ended
 
 
 	--Sequência de finalização padrão
