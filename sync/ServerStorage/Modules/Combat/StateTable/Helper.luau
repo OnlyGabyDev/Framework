@@ -59,7 +59,7 @@ function Helper.IsState(stateTable, meta)
 	
 	if stateTable.States[meta.name] then return true end
 	
-	for _, group in pairs(stateTable.PlayerStates) do
+	for _, group in pairs(stateTable.ActionStates) do
 		if type(group) == "table" then
 			for _, state in pairs(group) do
 				if state.data and state.data.name == meta.name then
@@ -71,7 +71,7 @@ function Helper.IsState(stateTable, meta)
 		end
 	end
 
-	if meta.category == Enum.Categories.PlayerState then
+	if meta.category == Enum.Categories.ActionState then
 		return true
 	end
 	

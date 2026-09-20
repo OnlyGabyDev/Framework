@@ -1,7 +1,7 @@
 
 --=====TIPAGEM=====--
 
-type PlayerStatesType = {
+type ActionStatesType = {
     Self: {
         selfCast: any,
         globalCast: any,
@@ -53,7 +53,7 @@ function CombatComponent.new(entity, config)
 	self.baseStats = {}
 
 	--Estado de cast
-	self.PlayerState = {
+	self.ActionState = {
 		name = nil,
 		runner = nil
 	}
@@ -245,26 +245,26 @@ function CombatComponent:ResetAllCooldowns()
 end
 
 --=============================================================================
---  PLAYER STATE (Cast, GlobalCast, SelfCast, LockedCast)
+--  ACTION STATE (Cast, GlobalCast, SelfCast, LockedCast)
 --=============================================================================
 
 --[[
-Retorna o PlayerState atual
+Retorna o ActionState atual
 ]]
-function CombatComponent:GetPlayerState()
-	return self.PlayerState
+function CombatComponent:GetActionState()
+	return self.ActionState
 end
 
-function CombatComponent:SetPlayerState(state,runner)
+function CombatComponent:SetActionState(state,runner)
 
-	if not self.PlayerState then self.PlayerState = {name = state, runner} end
+	if not self.ActionState then self.ActionState = {name = state, runner} end
 
-	self.PlayerState.name = state.data.name
-	self.PlayerState.runner = runner
+	self.ActionState.name = state.data.name
+	self.ActionState.runner = runner
 end
 
-function CombatComponent:RemovePlayerState()
-	self.PlayerState = nil
+function CombatComponent:RemoveActionState()
+	self.ActionState = nil
 end
 
 
@@ -273,13 +273,13 @@ Cancelamento interno de skills buscando por estados do tipo SelfCast
 @return sucesso BOOLEAN
 ]]
 function CombatComponent:TrySelfCancel() : boolean
-		if self.PlayerState and next(self.PlayerState) then
-			local playerStates = StateTable.PlayerStates :: PlayerStatesType
+		if self.ActionState and next(self.ActionState) then
+			local actionStates = StateTable.ActionStates :: ActionStatesType
 
 			-- Checa se é Self
-			for _, v in pairs(playerStates.Self) do
-				if self.PlayerState.name == v.data.name then
-					local runner = self.PlayerState.runner 
+			for _, v in pairs(actionStates.Self) do
+				if self.ActionState.name == v.data.name then
+					local runner = self.ActionState.runner 
 					if runner and typeof(runner) == "table" then
 						runner:Stop(true)
 						return true 
@@ -287,9 +287,9 @@ function CombatComponent:TrySelfCancel() : boolean
 				end
 			end
 			warn("Skill não pode rodar!")
-			return false -- Encontrou PlayerState mas não é Self
+			return false -- Encontrou ActionState mas não é Self
 		end
-	return true -- Nenhum PlayerState ativo
+	return true -- Nenhum ActionState ativo
 end
 
 
@@ -696,10 +696,10 @@ local ExposeAPI = {
 	CanContinue = function(component,...) return component:CanContinue(...) end,
 	TrySelfCancel = function(component,...) return component:TrySelfCancel(...) end,     
 
-	--PlayerState
-	GetPlayerState = function(component,...) return component:GetPlayerState(...)end,
-	SetPlayerState = function(component,...) return component:SetPlayerState(...)end,
-	RemovePlayerState = function(component,...) return component:RemovePlayerState(...)end,
+	--ActionState
+	GetActionState = function(component,...) return component:GetActionState(...)end,
+	SetActionState = function(component,...) return component:SetActionState(...)end,
+	RemoveActionState = function(component,...) return component:RemoveActionState(...)end,
 
 	GetCharFolders = function(component,...) return component:GetCharFolders(...)end,
 	

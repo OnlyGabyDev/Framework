@@ -4,7 +4,7 @@ local Enum = require(script.Parent.Parent.Enum)
 	
 	return {
 		data = {
-			category = Enum.Categories.Player,
+			category = Enum.Categories.ActionState,
 			exclusive = true,
 			name = "LockedCast",
 		},

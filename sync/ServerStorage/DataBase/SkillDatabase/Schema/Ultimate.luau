@@ -22,14 +22,14 @@ local Skill = {
 			self.control = statsTable.States.NoControl
 			self.stateID = self.Entity.ApplyStatus(self.control, self.data.duration, self)
 
-			self.Entity.SetPlayerState(statsTable.PlayerStates.Self.selfCast, self)
+			self.Entity.SetActionState(statsTable.ActionStates.Self.selfCast, self)
 
 			self.cleanUp = function()
 				if self.stateID then
 					self.Entity.RemoveStatusByID(self.stateID)
 					self.stateID = nil
 				end
-				self.Entity.RemovePlayerState()
+				self.Entity.RemoveActionState()
 			end
 
 			self.forceID = self.Entity.AddForce({

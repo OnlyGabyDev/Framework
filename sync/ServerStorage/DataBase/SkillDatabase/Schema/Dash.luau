@@ -14,14 +14,14 @@ callbacks = {
 
         --=========CLEANUP=========--
         	self.cleanUp = function()
-                 self.Entity.RemovePlayerState()
+                 self.Entity.RemoveActionState()
                  if self.stateID then
                      self.Entity.RemoveStatusByID(self.stateID)
                  end
                  if self.dashForceID then
                      self.Entity.RemoveForce(self.dashForceID)
                  end
-                 self.Entity.RemovePlayerState()
+                 self.Entity.RemoveActionState()
 			end
 
 
@@ -31,10 +31,10 @@ callbacks = {
 		local speed = self.data.speed
         local statsTable = self.statusTable
         local control = statsTable.States.NoControl
-        local state = statsTable.PlayerStates.Self.selfCast
+        local state = statsTable.ActionStates.Self.selfCast
             
 
-        self.Entity.SetPlayerState(state, self)
+        self.Entity.SetActionState(state, self)
         self.stateID = self.Entity.ApplyStatus(control, self.data.duration, self)
         
 

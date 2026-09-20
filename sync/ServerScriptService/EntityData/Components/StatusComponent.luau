@@ -127,8 +127,8 @@ function StatusComponent:ApplyStatus(statusData, duration : number?, sourceSkill
     data.ChainHistory = nextChainHistory
 	data.data.Entity = sourceSkill and sourceSkill.Entity or nil
 	
-	if data.data.category == "PlayerState" then
-		warn("[StatusComponent] PlayerState settado com função errada!")
+	if data.data.category == "ActionState" then
+		warn("[StatusComponent] ActionState settado com função errada!")
 		return nil
 	end
 

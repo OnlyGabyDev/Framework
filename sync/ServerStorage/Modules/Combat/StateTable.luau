@@ -13,11 +13,11 @@ StateTable.reactTags  = Enum.reactTags
 
 StateTable.Status = {}       -- Buffs, Debuffs
 StateTable.States = {}       -- Stun, Root, Silence
-StateTable.PlayerStates = {} -- SelfCast, GlobalCast, LockedCast
+StateTable.ActionStates = {} -- SelfCast, GlobalCast, LockedCast
 
 Helper.LoadModules(script, "States", StateTable.States) 
 Helper.LoadModules(script, "Status", StateTable.Status)
-Helper.LoadModules(script, "PlayerStates", StateTable.PlayerStates)
+Helper.LoadModules(script, "ActionStates", StateTable.ActionStates)
 
 
 

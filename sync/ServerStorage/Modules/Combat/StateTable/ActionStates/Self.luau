@@ -4,7 +4,7 @@
 	return {
 		selfCast = {
 			data = {
-				category = Enum.Categories.Player,
+				category = Enum.Categories.ActionState,
 				exclusive = true,
 				name = "SelfCast",
 			},
@@ -14,7 +14,7 @@
 			},
 		globalCast = {
 			data = {
-				category = Enum.Categories.Player,
+				category = Enum.Categories.ActionState,
 				exclusive = true,
 				name = "GlobalCast"
 			},

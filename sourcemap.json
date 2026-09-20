@@ -3530,37 +3530,6 @@
                       ]
                     },
                     {
-                      "name": "PlayerStates",
-                      "className": "Folder",
-                      "guid": "13170",
-                      "children": [
-                        {
-                          "name": "LockedCast",
-                          "className": "ModuleScript",
-                          "guid": "14244",
-                          "filePaths": [
-                            "sync/ServerStorage/Modules/Combat/StateTable/PlayerStates/LockedCast.luau"
-                          ]
-                        },
-                        {
-                          "name": "Out",
-                          "className": "ModuleScript",
-                          "guid": "14243",
-                          "filePaths": [
-                            "sync/ServerStorage/Modules/Combat/StateTable/PlayerStates/Out.luau"
-                          ]
-                        },
-                        {
-                          "name": "Self",
-                          "className": "ModuleScript",
-                          "guid": "14245",
-                          "filePaths": [
-                            "sync/ServerStorage/Modules/Combat/StateTable/PlayerStates/Self.luau"
-                          ]
-                        }
-                      ]
-                    },
-                    {
                       "name": "States",
                       "className": "Folder",
                       "guid": "13171",
@@ -3648,6 +3617,37 @@
                                 "sync/ServerStorage/Modules/Combat/StateTable/Status/Debuffs/Bleed.luau"
                               ]
                             }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "ActionStates",
+                      "className": "Folder",
+                      "guid": "13170",
+                      "children": [
+                        {
+                          "name": "LockedCast",
+                          "className": "ModuleScript",
+                          "guid": "14244",
+                          "filePaths": [
+                            "sync/ServerStorage/Modules/Combat/StateTable/ActionStates/LockedCast.luau"
+                          ]
+                        },
+                        {
+                          "name": "Out",
+                          "className": "ModuleScript",
+                          "guid": "14243",
+                          "filePaths": [
+                            "sync/ServerStorage/Modules/Combat/StateTable/ActionStates/Out.luau"
+                          ]
+                        },
+                        {
+                          "name": "Self",
+                          "className": "ModuleScript",
+                          "guid": "14245",
+                          "filePaths": [
+                            "sync/ServerStorage/Modules/Combat/StateTable/ActionStates/Self.luau"
                           ]
                         }
                       ]

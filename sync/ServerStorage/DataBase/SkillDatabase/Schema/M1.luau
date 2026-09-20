@@ -18,7 +18,7 @@ local Skill = {
 		clearControl = function(runner,stateID)
 			runner.Entity.StopAllAnimations(0.2)
 			runner.Entity.RemoveStatusByID(stateID)
-			runner.Entity.RemovePlayerState()
+			runner.Entity.RemoveActionState()
 		end,
 			
 
@@ -57,9 +57,9 @@ local Skill = {
 
 			self.control = statsTable.States.NoControl
 
-			self.PlayerState = statsTable.PlayerStates.Out.cast			 
+			self.actionState = statsTable.ActionStates.Out.cast			 
 
-			self.Entity.SetPlayerState(self.PlayerState, self)
+			self.Entity.SetActionState(self.actionState, self)
 
 			self.stateID = self.Entity.ApplyStatus(self.control,9999,self)			
 			
@@ -76,7 +76,7 @@ local Skill = {
 				self.Entity.RemoveStatusByID(self.stateID)
 				if self.shieldID then self.Entity.RemoveStatusByID(self.shieldID) end
 				if self.bleedID then self.Entity.RemoveStatusByID(self.bleedID) end
-				self.Entity.RemovePlayerState()
+				self.Entity.RemoveActionState()
 				self.Entity.StopHitbox()
 			end
 
@@ -109,7 +109,7 @@ local Skill = {
 				self.track = self.Entity.PlayAnimation(self.M1S2)
 				self.track.Looped = false
 				
-				self.Entity.SetPlayerState(self.PlayerState, self)
+				self.Entity.SetActionState(self.actionState, self)
 
 				self.Entity.ApplyStatus(self.control, 9999, self, self.stateID)
 				
@@ -122,7 +122,7 @@ local Skill = {
 					self.Entity.RemoveStatusByID(self.stateID)
 					if self.shieldID then self.Entity.RemoveStatusByID(self.shieldID) end
 					if self.bleedID then self.Entity.RemoveStatusByID(self.bleedID) end
-					self.Entity.RemovePlayerState()
+					self.Entity.RemoveActionState()
 					self.Entity.StopHitbox()
 				end
 

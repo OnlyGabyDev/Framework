@@ -9,7 +9,7 @@ enum.Categories = {
         Buff = "Buff",          --Buff
         Hybrid = "Hybrid",      --Status relacionado com buff e debuff
         Debuff = "Debuff",      --Debuff
-        Player = "PlayerState", --Uso interno
+        ActionState = "ActionState", --Trava de execução de ação (Self/Out/Locked)
         Internal = "Internal",  --Categoria interna pra impedir interações inesperadas
     }
 
