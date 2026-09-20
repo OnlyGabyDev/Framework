@@ -155,8 +155,7 @@ function DataManager.CreateID(Entity)
 		--Gera um ID baseado no UserID do Player
 		local id = "Player_" .. Entity.Player.UserId
 			if entityMap.players[id] then
-				warn("[DataManager]ID já existe para o jogador:", Entity.Player.Name)
-				return nil
+				warn("[DataManager]ID já existe para o jogador:", Entity.Player.Name, "- Sobrescrevendo.")
 			end
 		return id,"Player"
 			

@@ -34,8 +34,8 @@ local function onAction(actionName, inputState, _)
 
 	if inputState == Enum.UserInputState.Begin then
 		activeInputs[actionName] = true
-		LastPressed = actionName
-		LastVector = inputConfig[actionName].vector
+		lastPressed = actionName
+		lastVector = inputConfig[actionName].vector
 	elseif inputState == Enum.UserInputState.End then
 		activeInputs[actionName] = false
 	end
@@ -63,9 +63,9 @@ end
 return {
 	GetCurrentDirection = getCurrentDirection,
 	GetLastPressedDirection = function()
-		return LastVector
+		return lastVector
 	end,
 	GetLastPressed = function()
-		return LastPressed
+		return lastPressed
 	end
 }

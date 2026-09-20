@@ -301,31 +301,14 @@ valida se a entidade pode continuar a ação
 function CombatComponent:CanContinue(skill) : boolean
 
 	--Busca por tag de impedimento
-	local statusComp = self.Entity:HasComponent(self.Entity.ComponentKey.Status)
-	
-	--existem estados ativos?
-	if statusComp then
-		local rawState = self.Entity.GetActiveStates()
-			if #rawState == 0 then
-				return true 
-			end
-
-		--Existe alguma tag de silence?
+	if self.Entity:HasComponent(self.Entity.ComponentKey.Status) then
 		local tags = self.Entity.GetActiveTags()
 		if tags["canCast"] == false then
 			return false
 		end
 	end
-
-	local playerStates = StateTable.PlayerStates :: PlayerStatesType
-	-- Checa se o estado de player atual é selfCancel
-	for _, stateDef in pairs(playerStates.Self) do
-		if self.PlayerState and self.PlayerState.name == stateDef.data.name then
-			return true
-		end
-	end
 	
-	return false
+	return true
 end
 
 

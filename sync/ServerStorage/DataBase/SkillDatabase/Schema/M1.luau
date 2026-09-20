@@ -66,15 +66,17 @@ local Skill = {
 			
 			self.Entity.StartHitbox(self.data.duration)
 		
-			self.Entity.ApplyStatus(shield,9999,self)
+			self.shieldID = self.Entity.ApplyStatus(shield,9999,self)
 
 			--self.blockID = self.Entity.ApplyStatus(block,9999,self)
 
-			self.Entity.ApplyStatus(statsTable.Status.Bleed,9999,self)
+			self.bleedID = self.Entity.ApplyStatus(statsTable.Status.Bleed,9999,self)
 
 			self.cleanUp = function()
 				self.Entity.StopAnimation(self.M1Start,0.2)
 				self.Entity.RemoveStatusByID(self.stateID)
+				if self.shieldID then self.Entity.RemoveStatusByID(self.shieldID) end
+				if self.bleedID then self.Entity.RemoveStatusByID(self.bleedID) end
 				self.Entity.RemovePlayerState()
 				self.Entity.StopHitbox()
 			end
@@ -119,6 +121,8 @@ local Skill = {
 				self.cleanUp = function()
 					self:Stop(false)
 					self.Entity.RemoveStatusByID(self.stateID)
+					if self.shieldID then self.Entity.RemoveStatusByID(self.shieldID) end
+					if self.bleedID then self.Entity.RemoveStatusByID(self.bleedID) end
 					self.Entity.RemovePlayerState()
 					self.Entity.StopHitbox()
 				end

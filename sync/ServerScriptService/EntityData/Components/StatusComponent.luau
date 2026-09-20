@@ -20,8 +20,8 @@ function StatusComponent.new(entity, config)
 	
 	-- Effects ativos
 	self.Effects = {
-		status = {}, -- Buffs/debuffs 
-		state = {}   -- Estados 
+		[StateTable.Enum.Types.Status] = {}, -- Buffs/debuffs 
+		[StateTable.Enum.Types.State] = {}   -- Estados 
 	}
 	
 	-- Cache de tags combinadas
@@ -140,7 +140,7 @@ function StatusComponent:ApplyStatus(statusData, duration : number?, sourceSkill
 	
 	-- Determina se é estado ou status
 	local isState = StateTable:IsState(meta)
-	local group = isState and self.Effects.state or self.Effects.status
+	local group = isState and self.Effects[StateTable.Enum.Types.State] or self.Effects[StateTable.Enum.Types.Status]
 
 	
 	-- Verifica cooldown (se aplicável)
@@ -382,7 +382,7 @@ function StatusComponent:RemoveAmount(name: string, amount: number): boolean
 	local removed = false
 
 	-- busca por status
-	local group = self.Effects.status
+	local group = self.Effects[StateTable.Enum.Types.Status]
 	local entry = group[name]
 	if not entry then
 		return false
@@ -433,14 +433,14 @@ function StatusComponent:RemoveStatusByID(id : string) : boolean
 	local removed = false
 	
 	for groupName, group in pairs(self.Effects) do
-		if groupName == "state" then
+		if groupName == StateTable.Enum.Types.State then
 			for name, entry in pairs(group) do
 				if entry.ID == id then
 					self:RemoveStatus(name)
 					removed = true
 				end
 			end
-		elseif groupName == StateTable.Enum.Status then
+		elseif groupName == StateTable.Enum.Types.Status then
 			for name, list in pairs(group) do
 				-- single entry
 				if list.ID == id then
@@ -482,7 +482,7 @@ Limpa referências ao runner finalizar
 @param runner - SkillRunner que finalizou SkillRunner
 ]]
 function StatusComponent:_OnRunnerFinished(name : string, runner)
-	for _, groupName in ipairs({"status", "state"}) do
+	for _, groupName in ipairs({StateTable.Enum.Types.Status, StateTable.Enum.Types.State}) do
 		local group = self.Effects[groupName]
 		local entry = group[name]
 		if not entry then continue end
@@ -606,7 +606,7 @@ function StatusComponent:_GetShields()
 	local shields = {}
 	local effectRunner
 
-	for _,effect in pairs(self.Effects.status) do
+	for _,effect in pairs(self.Effects[StateTable.Enum.Types.Status]) do
 		effectRunner = effect.runner     
 		if effect.data.data.ShieldsFrom ~= nil then 
 			for _,StatusName in pairs(effect.data.data.ShieldsFrom) do
@@ -628,7 +628,7 @@ Retorna um status especifico por nome
 @return lista de entradas do status TABLE ou nil se não encontrado
 ]]
 function StatusComponent:GetStatus(name : string) : {}?
-	local entry = self.Effects.status[name] or self.Effects.state[name]
+	local entry = self.Effects[StateTable.Enum.Types.Status][name] or self.Effects[StateTable.Enum.Types.State][name]
 	if not entry then return nil end
 	
 	if entry.runner or entry.data then
@@ -658,7 +658,7 @@ end
 Busca por um estado especifico
 ]]
 function StatusComponent:GetState(stateName : string)
-	return self.Effects.state[stateName]
+	return self.Effects[StateTable.Enum.Types.State][stateName]
 end
 
 --[[
@@ -666,7 +666,7 @@ end
 @return Tabela de estados ativos { [Nome] = Dados }
 ]]
 function StatusComponent:GetActiveStates()
-	return self.Effects.state
+	return self.Effects[StateTable.Enum.Types.State]
 end
 
 --[[
@@ -675,7 +675,7 @@ Verifica se a entidade possui algum estado de uma categoria específica.
 @return boolean
 ]]
 function StatusComponent:HasStateCategory(category : string) : boolean
-	for _, entry in pairs(self.Effects.state) do
+	for _, entry in pairs(self.Effects[StateTable.Enum.Types.State]) do
 		local items = (entry.runner or entry.data) and {entry} or entry
 		
 		for _, item in ipairs(items) do

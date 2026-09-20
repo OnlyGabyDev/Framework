@@ -120,8 +120,6 @@ function SkillRunner.new(skillModule,Entity,name,SRtype,ChainHistory) --Instanci
 		self.ChainHistory.tempDepth += 1
 	end
 
-	self.data.ChainHistory = self.ChainHistory
-
 
 	if self.ChainHistory.tempDepth >= self.statusTable.Enum.MAX_RECURSION then
 		return nil
