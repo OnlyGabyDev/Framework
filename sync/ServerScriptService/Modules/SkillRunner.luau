@@ -18,7 +18,7 @@ local STATES = {  				--Breakpoints do ciclo de vida da skill
 }
 
 
-function SkillRunner.new(skillModule,Entity,name,SRtype,ChainHistory) --Instancia o SkillRunner como um objeto responsável de criar a habilidade junto do EntityData para as skills utilizarem
+function SkillRunner.new(skillModule,Entity,name,SRtype,ChainHistory,input) --Instancia o SkillRunner como um objeto responsável de criar a habilidade junto do EntityData para as skills utilizarem
 
 
 	--================VÁRIAVEIS(FACILITAÇÃO DE ACESSO)===================--
@@ -54,7 +54,7 @@ function SkillRunner.new(skillModule,Entity,name,SRtype,ChainHistory) --Instanci
 	self.skill.counter = 1      		--Pode ser utilizado por skills e/ou status pra manter controle de dados de runtime internos, como número de balas, stage, ou stacks aplicados
 	self.type = runnerType		 		--Tipo de SR, Skill, Status
 	self.skillName = name  		 		--Guarda o nome da skill pra controle de runners ativos
-
+	self.input = input					--Input/intenção que originou o chamado (permitindo hold e release)
 
 
 	--=====FACILITADORES DE ACESSO=====--
@@ -141,6 +141,7 @@ function SkillRunner:BuildContext()
 		history = self.ChainHistory and self.ChainHistory.history or {},
 		rootOrigin = self.ChainHistory and self.ChainHistory.rootOrigin or nil,
 		sourceRunner = self,
+		input = self.input,
 		inherited = {}
 	}
 end
@@ -224,13 +225,15 @@ end
 
 
 --[[Recast de runner]]
-function SkillRunner:Recast(checkOnly : boolean?)
+function SkillRunner:Recast(checkOnly : boolean?,input)
 	
 	--Procura se tem onRecast, se tiver, roda e fala que encontrou
 	if self.skill.callbacks.onRecast ~= nil then
 		
 		--Se for um pedido de teste, retorna antes de rodar o recast
 		if checkOnly then return true end
+		
+		if input then self.input = input end
 		
 		--roda o onRecast com contexto pra permitir informar o motivo/origem do recast
 		self.skill.callbacks.onRecast(self.skill, self:BuildContext())
@@ -239,6 +242,22 @@ function SkillRunner:Recast(checkOnly : boolean?)
 	return false
 end
 
+
+--[[
+Release do botão que startou a skill, se existir onRelease, executa, se não, finaliza a skill
+@param input - InputEvent (Kind = Release, HeldTime = segundos segurado)
+@return rodou onRelease BOOLEAN
+]]
+function SkillRunner:Release(input)
+	if self.state == STATES.Ended then return false end
+
+	local callback = self.skill.callbacks.onRelease
+	if not callback then return false end
+
+	self.input = input
+	callback(self.skill, self:BuildContext())
+	return true
+end
 
 --[[
 Trigger externo, usado especialmente mas não exclusivamente por blocks e shields de efeitos

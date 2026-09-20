@@ -850,16 +850,24 @@
           ]
         },
         {
-          "name": "Modules",
+          "name": "Input",
           "className": "Folder",
-          "guid": "13147",
+          "guid": "1009828",
           "children": [
             {
-              "name": "MoveInputHandler",
+              "name": "GestureResolver",
               "className": "ModuleScript",
-              "guid": "14210",
+              "guid": "1010047",
               "filePaths": [
-                "sync/ReplicatedStorage/Modules/MoveInputHandler.luau"
+                "sync/ReplicatedStorage/Input/GestureResolver.luau"
+              ]
+            },
+            {
+              "name": "Intents",
+              "className": "ModuleScript",
+              "guid": "1009468",
+              "filePaths": [
+                "sync/ReplicatedStorage/Input/Intents.luau"
               ]
             }
           ]
@@ -904,14 +912,14 @@
               "guid": "22314"
             },
             {
+              "name": "RequestIntent",
+              "className": "RemoteEvent",
+              "guid": "797544"
+            },
+            {
               "name": "RequestLook",
               "className": "UnreliableRemoteEvent",
               "guid": "22483"
-            },
-            {
-              "name": "RequestSkill",
-              "className": "RemoteEvent",
-              "guid": "22313"
             },
             {
               "name": "SkillFired",
@@ -3682,7 +3690,7 @@
     {
       "name": "SoundService",
       "className": "SoundService",
-      "guid": "8201"
+      "guid": "8254"
     },
     {
       "name": "StarterGui",
@@ -3967,21 +3975,6 @@
               "filePaths": [
                 "sync/StarterPlayer/StarterCharacterScripts/HealthUIController.client.luau"
               ]
-            },
-            {
-              "name": "Input",
-              "className": "Folder",
-              "guid": "13144",
-              "children": [
-                {
-                  "name": "InputHandler",
-                  "className": "LocalScript",
-                  "guid": "14102",
-                  "filePaths": [
-                    "sync/StarterPlayer/StarterCharacterScripts/Input/InputHandler.client.luau"
-                  ]
-                }
-              ]
             }
           ]
         },
@@ -3990,6 +3983,22 @@
           "className": "StarterPlayerScripts",
           "guid": "22378",
           "children": [
+            {
+              "name": "InputController",
+              "className": "LocalScript",
+              "guid": "1010917",
+              "filePaths": [
+                "sync/StarterPlayer/StarterPlayerScripts/InputController.client.luau"
+              ]
+            },
+            {
+              "name": "InputService",
+              "className": "ModuleScript",
+              "guid": "1010742",
+              "filePaths": [
+                "sync/StarterPlayer/StarterPlayerScripts/InputService.luau"
+              ]
+            },
             {
               "name": "LookDirectionBroadcaster",
               "className": "LocalScript",
@@ -5039,17 +5048,17 @@
         {
           "name": "Camera",
           "className": "Camera",
-          "guid": "271848",
+          "guid": "236407",
           "children": [
             {
               "name": "ShapecastHitboxHelper",
               "className": "Folder",
-              "guid": "271849",
+              "guid": "236408",
               "children": [
                 {
                   "name": "CurrentObject",
                   "className": "ObjectValue",
-                  "guid": "271850"
+                  "guid": "236409"
                 }
               ]
             }

@@ -16,6 +16,7 @@ local ServerStorage = game:GetService("ServerStorage")
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
 local SkillData = require(ServerStorage.DataBase.SkillDatabase)
 local CharData = require(ServerStorage.DataBase.CharacterDatabase)
+local Intents = require(game:GetService("ReplicatedStorage").Input.Intents)
 
 local CombatComponent = {}
 CombatComponent.__index = CombatComponent
@@ -42,6 +43,9 @@ function CombatComponent.new(entity, config)
 
 	-- Skills ativas (runners)
 	self.ActiveSkills = {} -- [skillName] = {runner1, runner2, ...}
+	
+	-- Runner que cada intent está segurando (ver SkillHandler.track). Dá ao Release o runner CERTO.
+	self.IntentRunners = {} -- [intent] = runner
 
 	-- Personagem e modo
 	self.ChosenChar = config.ChosenChar or "Schema"
@@ -371,9 +375,7 @@ Retorna a quantidade de runners ativos para uma skill específica
 @return quantidade de runners NUMBER
 ]]
 function CombatComponent:GetActiveSkillCount(skillName : string) : number
-	print(skillName)
 	local list = self.ActiveSkills[skillName]
-	print(self.ActiveSkills)
 	return list and #list or 0
 end
 
@@ -425,7 +427,6 @@ function CombatComponent:_ApplyLoadout(loadoutData)
 	if isList then
 		warn(loadoutData)
 		for _, skillKey in ipairs(loadoutData.List) do
-			warn("oi")
 			self:AddSkill(skillKey) -- Salva no próximo slot livre
 		end
 	else
@@ -439,13 +440,12 @@ end
 Adiciona uma nova skill no loadout que ocupará o próximo slot livre
 ]]
 function CombatComponent:AddSkill(skillKey)
-	warn("hohoho")
-	local slot = 1
-	while self.Loadout[slot] ~= nil do
-		slot += 1
+	for _, slot in ipairs(Intents.SkillOrder) do
+		if self.Loadout[slot] == nil then
+			return self:EquipSkill(slot, skillKey) and slot or nil
+		end
 	end
-	warn(self.Loadout)
-	if self:EquipSkill(slot, skillKey) then return slot end
+	warn("[CombatComponent] Loadout cheio, skill ignorada:", skillKey)
 	return nil
 end
 
@@ -454,6 +454,12 @@ end
 Equipa uma skill em um slot dedicado/especificado.
 ]]
 function CombatComponent:EquipSkill(slotIndex, skillKey)
+	
+	if not Intents.IsButton(slotIndex) then
+		warn("[CombatComponent] Slot inválido (use Intents.Id):", slotIndex)
+		return false
+	end
+	
 	local skillPointer
 
 	-- Se for string, procura no database
@@ -512,6 +518,28 @@ Retorna a skill no slot caso presente
 function CombatComponent:GetSkillFromSlot(slot)
 	return self.Loadout[slot] or nil
 end
+
+
+--[[
+Guarda o runner que a intent ativou/reciclou, para o Release chegar no runner certo
+(e não em "todos os runners da skill"), mesmo que o slot mude no meio do gesto.
+@param intent - Intents.Id STRING
+@param runner - SkillRunner
+]]
+function CombatComponent:SetIntentRunner(intent : string, runner)
+	self.IntentRunners[intent] = runner
+end
+
+--[[
+Devolve E limpa o runner da intent.
+@return SkillRunner ou nil
+]]
+function CombatComponent:TakeIntentRunner(intent : string)
+	local runner = self.IntentRunners[intent]
+	self.IntentRunners[intent] = nil
+	return runner
+end
+
 --=============================================================================
 --  CHARACTER E FORMAS
 --=============================================================================
@@ -623,6 +651,7 @@ function CombatComponent:Destroy()
 	table.clear(self.ActiveSkills)
 	table.clear(self.Loadout)
 	table.clear(self.SkillCache)
+	table.clear(self.IntentRunners)
 	self.Entity = nil
 end
 
@@ -674,7 +703,11 @@ local ExposeAPI = {
 	RemovePlayerState = function(component,...) return component:RemovePlayerState(...)end,
 
 	GetCharFolders = function(component,...) return component:GetCharFolders(...)end,
-
+	
+	
+	--Intents (hold, release) (NÃO é obrigação desse component, mas por precisar do redirect pra skill mantivemos aqui)
+	TakeIntentRunner = function(component,...) return component:TakeIntentRunner(...)end,
+	SetIntentRunner = function(component,...) return component:SetIntentRunner(...)end,
 }
 
 

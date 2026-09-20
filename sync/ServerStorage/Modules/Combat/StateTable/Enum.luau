@@ -1,3 +1,5 @@
+local Intents = require(game:GetService("ReplicatedStorage").Input.Intents)
+
 enum = {}
 
              --=====ENUM PRINCIPAL=====-
@@ -55,7 +57,8 @@ enum.reactTags = {
 enum.SkillBreakpoints = {
         onTrigger = "onTrigger",
         onRecast = "onRecast",
-        onHit = "onHit",
+		onHit = "onHit",
+		onRelease = "onRelease",
         onEnd = "onEnd"
     }
 
@@ -131,6 +134,8 @@ enum.BlockIgnore = {
 enum.BlockBreak = {
     [enum.Traits.BlockBreak] = enum.Traits.BlockBreak,
 }
+
+enum.Gestures = Intents.Gesture
 
 return enum 
 

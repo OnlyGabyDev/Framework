@@ -1,21 +1,28 @@
---Esse script permite futura opção de troca de teclas controlada pelo usuário!
+--[[
+	InputConfig — tabela única de bindings. Intent -> códigos físicos
+
+	- Qualquer dispositivo, qualquer quantidade: teclado, mouse e gamepad convivem na mesma lista.
+	  (KeyCode e UserInputType são valores de enum distintos, então não precisa separar por dispositivo.)
+	- Troca de teclas pelo usuário: InputService.Rebind(intent, codes)
+	- Botões de tela (mobile) não entram aqui: qualquer GuiButton com a tag `ButtonTag` e o atributo
+	  `ButtonIntentAttribute` vira fonte da intent, sem código.
+
+	Os defaults de gamepad são um ponto de partida: ButtonA/ButtonR3 etc. já têm uso no PlayerModule padrão.
+]]
+
+local Intents = require(script.Parent.Parent.Input.Intents)
+local Id = Intents.Id
 
 return {
-	
-	InputMap = {
-		input0 = Enum.UserInputType.MouseButton1,
-		input1 = Enum.KeyCode.LeftShift,
-		input2 = Enum.KeyCode.One,
-		input3 = Enum.KeyCode.Two,
-		input4 = Enum.KeyCode.Three,
-		input5 = Enum.KeyCode.Four,
+	Bindings = {
+		[Id.Primary] = { Enum.UserInputType.MouseButton1, Enum.KeyCode.ButtonR2 },
+		[Id.Dash] = { Enum.KeyCode.LeftShift, Enum.KeyCode.ButtonB },
+		[Id.Ability1] = { Enum.KeyCode.One, Enum.KeyCode.ButtonX },
+		[Id.Ability2] = { Enum.KeyCode.Two, Enum.KeyCode.ButtonY },
+		[Id.Ability3] = { Enum.KeyCode.Three, Enum.KeyCode.ButtonL1 },
+		[Id.Ultimate] = { Enum.KeyCode.Four, Enum.KeyCode.ButtonR1 },
 	},
-	InputToSkill = {
-		input0 = 1, --m1
-		input1 = 2, --dash
-		input2 = 3, --skill1
-		input3 = 4, --skill2
-		input4 = 5, --skill3
-		input5 = 6  --ult
-	}
+
+	ButtonTag = "InputButton",
+	ButtonIntentAttribute = "Intent",
 }

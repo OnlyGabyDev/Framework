@@ -1,6 +1,5 @@
 
 
-
 --====================== GLOBAL ANTI CHEAT ======================--
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -8,60 +7,63 @@ local Server = game:GetService("ServerScriptService")
 local DataManager = require(Server.EntityData.DataManager)
 local RunService = game:GetService("RunService")
 
+local MIN_INPUT_INTERVAL = 0.015 -- 1 Frame = 0,0166... secs
+
 local AntiCheat = {}
 local TrackedPlayers = {}
 local connection
-local valid
 
 function AntiCheat.Init()
-    if not connection then
+	if not connection then
 		connection = RunService.Heartbeat:Connect(function(dt)
 			AntiCheat._Update(dt)
 		end)
-	print("[AntiCheat] Iniciado")
+		print("[AntiCheat] Iniciado")
 	end
 end
 
 --=====REGISTRO DE PLAYERS=====--
 
 function AntiCheat.Register(Player)
-    local ID = Player.Character and Player.Character:GetAttribute("EntityID")
-    if not ID then return end
-    local entityCore = DataManager.Get(ID)
-    if not entityCore then return end
+	local ID = Player.Character and Player.Character:GetAttribute("EntityID")
+	if not ID then return end
+	local entityCore = DataManager.Get(ID)
+	if not entityCore then return end
 
-    TrackedPlayers[Player] = {
-        LastPosition = nil,
-        ID = ID
-    }
+	TrackedPlayers[Player] = {
+		LastPosition = nil,
+		ID = ID
+	}
 
 end
 
 function AntiCheat.Unregister(Player)
-    TrackedPlayers[Player] = nil
+	TrackedPlayers[Player] = nil
 end
 
 --=====FUNÇÕES UTILITARIAS=====--
 
 --[[
-Valida a diferença entre último input de movimento e o atual
+Devolve o ID da entidade do player (nil se ainda não registrado)
+Único caminho de "player -> ID" para a camada de input.
 @param Player - dono do input
-@return ID - ID do player
+@return ID STRING ou nil
 ]]
-function AntiCheat.CheckMovementInput(Player,LastInput)
-    valid = tick() - LastInput >= 0.015 -- 1 Frame = 0,0166... secs
-    return valid and TrackedPlayers[Player].ID
+function AntiCheat.GetEntityID(Player)
+	local tracked = TrackedPlayers[Player]
+	return tracked and tracked.ID
 end
 
-
 --[[
-Valida a diferença entre último input de skill e o atual
+Valida o intervalo mínimo entre dois inputs do mesmo tipo (o chamador decide o que é "mesmo tipo":
+movimento, ou uma intent específica).
 @param Player - dono do input
-@return ID - ID do player
+@param LastInput - os.clock() do último input aceito desse tipo
+@return ID do player, ou nil se rejeitado
 ]]
-function AntiCheat.CheckSkillInput(Player,LastInput)
-    valid = tick() - LastInput >= 0.015 -- 1 Frame = 0,0166... secs
-    return valid and TrackedPlayers[Player].ID
+function AntiCheat.CheckInput(Player, LastInput)
+	if os.clock() - LastInput < MIN_INPUT_INTERVAL then return nil end
+	return AntiCheat.GetEntityID(Player)
 end
 
 

@@ -1,5 +1,7 @@
 local ServerStorage = game:GetService("ServerStorage")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SkillDB = require(ServerStorage.DataBase.SkillDatabase)
+local Intents = require(ReplicatedStorage.Input.Intents).Id
 local Keys = SkillDB.Keys
 
 return {
@@ -10,9 +12,9 @@ return {
 	},
 	Loadout = {
 		Slots = {
-			[1] = Keys.Schema.M1,
-			[2] = Keys.Schema.Dash,
-			[3] = Keys.Schema.Ultimate
+			[Intents.Primary] = Keys.Schema.M1,
+			[Intents.Dash] = Keys.Schema.Dash,
+			[Intents.Ultimate] = Keys.Schema.Ultimate,
 		}
 	},
 
