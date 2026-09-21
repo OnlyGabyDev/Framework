@@ -9,7 +9,8 @@ local Skill = {
 
 	callbacks = {
 		onStart = function(self)
-			print("S2 RODANDO")
+			self.Entity.TakeDamage(50, self)
+			self:Stop(false)
 		end,
 
 		onStep = function(self, dt)

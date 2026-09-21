@@ -158,13 +158,13 @@ end
 
 function Helper.BuildContext(source,amount)
 	local context = {
-		damage = 0,
+		damage = amount or 0,
 		source = source,
 		sourceEntity = nil,
 		traits = {},
 		effects = {},
 	}
-
+	
 	if source then
 		if source.Entity then
 			context.sourceEntity = source.Entity
@@ -177,6 +177,7 @@ function Helper.BuildContext(source,amount)
 			context.secondaryType = source.secondaryType or nil
 		end
 	end
+	
 	return context
 end
 

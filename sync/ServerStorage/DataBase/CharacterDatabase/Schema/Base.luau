@@ -15,6 +15,7 @@ return {
 			[Intents.Primary] = Keys.Schema.M1,
 			[Intents.Dash] = Keys.Schema.Dash,
 			[Intents.Ultimate] = Keys.Schema.Ultimate,
+			[Intents.Ability1] = Keys.Schema.Skill2
 		}
 	},
 

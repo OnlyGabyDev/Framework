@@ -25,7 +25,7 @@ function HealthComponent.new(entity, config)
 	local self = setmetatable({}, HealthComponent)
 	
 	self.Entity = entity
-	self.MaxHP = config.MaxHP or 10
+	self.MaxHP = config.MaxHP or 100
 	self.HP = config.StartHP or self.MaxHP
 	self.Subscription = config.Events or false
 	self.IsDead = false
@@ -192,7 +192,6 @@ end
 
 
 
--- Removido Subscribe e _Trigger manual, substituído pelo pub/sub da entidade.
 
 
 --[[
@@ -209,6 +208,8 @@ function HealthComponent:Heal(amount : number) : number
 	local oldHP = self.HP
 	self.HP = math.min(self.MaxHP, self.HP + context.damage)
 	local actualHeal = self.HP - oldHP
+	
+	if self.Entity:IsPlayer() then UpdateHPBar:FireClient(self.Entity.Player,self.HP,self.MaxHP) end
 	
 	return actualHeal
 end
@@ -258,7 +259,7 @@ end
 function HealthComponent:GetMaxHP()
 	self.MaxHP = self.Entity.GetStat("MaxHP", 100)
 	--warn(self.Entity.GetStat("MaxHP",100))
-	return self.maxHP
+	return self.MaxHP
 end
 
 function HealthComponent:SetHP(value)
@@ -273,6 +274,8 @@ function HealthComponent:SetHP(value)
 		local context = StateTable.BuildContext(nil, self.HP - oldHP)
 		self.Entity:Emit("IN", StateTable.Breakpoints.OnHeal, context)
 	end
+	
+	if self.Entity:IsPlayer() then UpdateHPBar:FireClient(self.Entity.Player,self.HP,self.MaxHP) end
 end
 
 function HealthComponent:SetMaxHP(value)

@@ -1,3 +1,5 @@
+local ServerStorage = game:GetService("ServerStorage")
+local StateTable = require(ServerStorage.Modules.Combat.StateTable)
 
 local Skill = {
 
@@ -58,6 +60,79 @@ callbacks = {
             IgnoreGravity = true, 
             Priority = 10,
         })
+        
+        -- === PUB/SUB TEST ===
+		self.accumulatedBleedDamage = 0
+		self.isUltActive = false
+		local comboOwner = "DashCombo_" .. tostring(tick())
+		
+		self.Entity:Listen({
+			Role = "OUT",
+			Breakpoint = StateTable.Enum.Breakpoints.onHit,
+			Query = { Any = {"Melee"} }, 
+			Priority = 0,
+			Owner = comboOwner .. "_hit",
+			Action = function(context)
+				local targetEntity = context.targetEntity
+				
+				if not targetEntity then 
+					return 
+				end
+				
+				self.comboTarget = targetEntity
+				local result = targetEntity.ApplyStatus(self.statusTable.Status.Bleed, nil, self.Runner)
+				
+				targetEntity:Listen({
+					Role = "IN",
+					Breakpoint = StateTable.Enum.Breakpoints.OnDamage,
+					Priority = 0,
+					Owner = comboOwner,
+					Action = function(tgtContext)
+						if tgtContext.source and tgtContext.source.data and tgtContext.source.data.name == "Bleed" then
+							if self.isUltActive then
+								local extraHeal = tgtContext.damage * 3
+								local curado = self.Entity.Heal(extraHeal)
+							else
+								self.accumulatedBleedDamage += tgtContext.damage
+							end
+						end
+					end
+				})
+				
+				-- Limpa o listener de Hit pra não aplicar infinitamente
+				self.Entity:UnsubscribeByOwner(comboOwner .. "_hit")
+			end
+		})
+		
+		-- 2. Ouve a ativação da Ult pra curar com o dano
+		self.Entity:Listen({
+			Role = "OUT",
+			Breakpoint = "OnUlt",
+			Priority = 0,
+			Owner = comboOwner,
+			Action = function(context)
+				self.isUltActive = true
+				local curado = self.Entity.Heal(self.accumulatedBleedDamage)
+				self.accumulatedBleedDamage = 0
+			end
+		})
+
+		-- 3. Ouve o fim da Ult pra limpar tudo
+		self.Entity:Listen({
+			Role = "OUT",
+			Breakpoint = "OnUltEnd",
+			Priority = 0,
+			Owner = comboOwner,
+			Action = function(context)
+				self.isUltActive = false
+				print("[DASH COMBO] ULT ENCERRADA! Removendo listeners.")
+				self.Entity:UnsubscribeByOwner(comboOwner)
+				if self.comboTarget then
+					self.comboTarget:UnsubscribeByOwner(comboOwner)
+				end
+			end
+		})
+
 	end,    
 
 	onEnd = function(self)

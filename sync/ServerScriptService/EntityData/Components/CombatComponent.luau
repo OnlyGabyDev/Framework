@@ -617,14 +617,15 @@ function CombatComponent:ApplyDamage(amount: number, source: any, targetEntity: 
 	
 	-- Monta contexto base da ação ofensiva
 	local context = StateTable.BuildContext(source, amount)
+	context.targetEntity = targetEntity
 	
-	-- 1. Emite OUT antes do hit conectar (ex: buffs de dano, encantar arma)
+	-- 1. Emite OUT antes do hit conectar
 	self.Entity:Emit("OUT", StateTable.Breakpoints.onHit, context)
 	
-	-- 2. Aplica o dano real no alvo (que roda o IN pipeline do alvo e devolve o actualDamage)
+	-- 2. Aplica o dano no alvo 
 	local success, actualDamage, outContext = targetEntity.TakeDamage(context.damage, source)
 	
-	-- 3. Emite OUT após o hit conectar (ex: Lifesteal, onKill)
+	-- 3. Emite OUT após o hit conectar
 	if success and outContext then
 		outContext.actualDamage = actualDamage
 		self.Entity:Emit("OUT", StateTable.Breakpoints.OnDamage, outContext)

@@ -1,5 +1,6 @@
 local ServerStorage = game:GetService("ServerStorage")
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
+
 local Skill = {
 
 	data = {
@@ -7,149 +8,90 @@ local Skill = {
 		duration = 5,
 		castTime = 0,
 		tags = {[StateTable.Enum.Tags.block] = true},
-		--effects = {StateTable.Status.Bleed}
+		traits = {"Melee"},
 	},
 
 	callbacks = {
 
-	
---		# Local Utils
-
-		clearControl = function(runner,stateID)
-			runner.Entity.StopAllAnimations(0.2)
-			runner.Entity.RemoveStatusByID(stateID)
-			runner.Entity.RemoveActionState()
-		end,
-			
-
-		
---		# Eventos
-		
 		onStart = function(self)
-
-   
-   
+			self.damage = 1
 			
---		#Referencias/vars
-
-			--Prepara status
 			local statsTable = self.statusTable
-			
-
-			local shield = statsTable:BuildEffect(statsTable.Status.StatusShield,
-			StateTable.Enum.Breakpoints.onTrigger,
-		    function(runner,context) warn("SHIELD ATINGIDO"); return self:TriggerAction(context)
-			end)
-
-			local block = statsTable:BuildEffect(statsTable.Status.GenericBlock,
-			StateTable.Enum.Breakpoints.onTrigger,
-			function(runner,context) return self:TriggerAction(context) 
-			end)
-
-			self.damage = 2
+			self.control = statsTable.States.NoControl
+			self.stateID = self.Entity.ApplyStatus(self.control, self.data.duration, self.Runner)
+			self.Entity.SetActionState(statsTable.ActionStates.Out.cast, self.Runner)
 			
 			self.M1Start = self.charLib.M1.M1Start
 			self.M1S2 = self.charLib.M1.M1S2
-
 			
 			self.track = self.Entity.PlayAnimation(self.M1Start)
 			self.track.Looped = false
-
-			self.control = statsTable.States.NoControl
-
-			self.actionState = statsTable.ActionStates.Out.cast			 
-
-			self.Entity.SetActionState(self.actionState, self)
-
-			self.stateID = self.Entity.ApplyStatus(self.control,9999,self)			
 			
 			self.Entity.StartHitbox(self.data.duration)
-		
-			self.shieldID = self.Entity.ApplyStatus(shield,9999,self)
-
-			--self.blockID = self.Entity.ApplyStatus(block,9999,self)
-
-			self.bleedID = self.Entity.ApplyStatus(statsTable.Status.Bleed,9999,self)
-
+			
 			self.cleanUp = function()
-				self.Entity.StopAnimation(self.M1Start,0.2)
-				self.Entity.RemoveStatusByID(self.stateID)
-				if self.shieldID then self.Entity.RemoveStatusByID(self.shieldID) end
-				if self.bleedID then self.Entity.RemoveStatusByID(self.bleedID) end
+				if self.stateID then
+					self.Entity.RemoveStatusByID(self.stateID)
+					self.stateID = nil
+				end
 				self.Entity.RemoveActionState()
+				self.Entity.StopAnimation(self.M1Start, 0.2)
 				self.Entity.StopHitbox()
 			end
 
 			self.Entity.OnMarker(tostring(self.M1Start), "End", function()
-  			  self.cleanUp()
+				self.cleanUp()
 			end)
-			
 		end,
 		
 		
-		onHit = function(self,hitResult)
+		onHit = function(self, hitResult)
 			local targetEntity = hitResult.target
 			self.Entity.ApplyDamage(self.damage, self, targetEntity)
 		end,
 		
-
 		onStep = function(self, dt)
 			if self.trigger then
 				self.cleanUp()
 			end
 		end,
 		
-		
 		onRecast = function(self)
 			self.counter += 1
 			if self.counter == 2 then
+				local statsTable = self.statusTable
+				self.stateID = self.Entity.ApplyStatus(self.control, self.data.duration, self.Runner)
+				self.Entity.SetActionState(statsTable.ActionStates.Out.cast, self.Runner)
+				
 				self.track = self.Entity.PlayAnimation(self.M1S2)
 				self.track.Looped = false
 				
-				self.Entity.SetActionState(self.actionState, self)
-
-				self.Entity.ApplyStatus(self.control, 9999, self, self.stateID)
-				
-				self.Entity.StartHitbox(self.data.duration,function(hitResult) self:onHit(hitResult)end)
-				
-				self.damage = 3
+				self.Entity.StartHitbox(self.data.duration, function(hitResult) self:onHit(hitResult) end)
+				self.damage = 2
 
 				self.cleanUp = function()
-					self:Stop(false)
-					self.Entity.RemoveStatusByID(self.stateID)
-					if self.shieldID then self.Entity.RemoveStatusByID(self.shieldID) end
-					if self.bleedID then self.Entity.RemoveStatusByID(self.bleedID) end
+					if self.stateID then
+						self.Entity.RemoveStatusByID(self.stateID)
+						self.stateID = nil
+					end
 					self.Entity.RemoveActionState()
+					self:Stop(false)
 					self.Entity.StopHitbox()
 				end
 
-					self.Entity.OnMarker(tostring(self.M1S2), "End", function()
-  					  self.cleanUp()
-					end)
-				
+				self.Entity.OnMarker(tostring(self.M1S2), "End", function()
+  				  self.cleanUp()
+				end)
 			end
 		end,
 
-
-		onTrigger = function(self,context)
-			local dmg = context.damage
-			dmg = 0 
-			self.Entity.RemoveStatusByID(self.blockID)
-			--task.wait(2)
-			--task.defer(function()
-				--context.sourceEntity.TakeDamage(5, self)
-			--end)
-			return dmg
-		end,
-
 		onEnd = function(self)
-			self.callbacks.clearControl(self,self.stateID)
+			if self.track then self.track:Stop() end
 		end,
 		
 		onCancel = function(self)
-			self.callbacks.clearControl(self,self.stateID)
+			if self.track then self.track:Stop() end
 		end,
-		
 	}
 
 }

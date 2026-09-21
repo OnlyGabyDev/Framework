@@ -16,6 +16,7 @@ local Skill = {
 
 	callbacks = {
 		onStart = function(self)
+			self.Entity:Emit("OUT", "OnUlt", {})
 			local statsTable = self.statusTable
 
 
@@ -53,6 +54,7 @@ local Skill = {
 
 				OnEnd = function()
 					self.cleanUp()
+					self.Entity:Emit("OUT", "OnUltEnd", {})
 					self:Stop(false)
 				end,
 			})
@@ -63,6 +65,7 @@ local Skill = {
 				self.Entity.RemoveForce(self.forceID)
 			end
 			self.cleanUp()
+			self.Entity:Emit("OUT", "OnUltEnd", {})
 		end,
 	}
 }

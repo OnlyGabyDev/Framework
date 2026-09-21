@@ -6,8 +6,8 @@ local Bleed = {
 		category = Enum.Categories.Debuff,
 		stackOnSelf = true, 
 		maxStacks = 10,
-		duration = 5, 
-		tickRate = 0.5, 
+		duration = 100, 
+		tickRate = 0.3, 
 		damage = 1,
 		
 		traits = {
@@ -22,16 +22,15 @@ local Bleed = {
 			self._tickTimer = 0
 		end,
 
-		onStep = function(self, dt)
-
+		onStep = function(self, dt, context)
 			self._tickTimer += dt
-			local tickRate = self.skillData.data.tickRate or 1 
+			local tickRate = self.data.tickRate or 1 
 			
 			if self._tickTimer >= tickRate then
 				self._tickTimer = 0
 				
-				local damage = self.skillData.data.damage * self.counter
-				self.Entity.TakeDamage(damage, self) 
+				local damage = self.data.damage * (self.counter or 1)
+				self.Entity.TakeDamage(damage, self.Runner) 
 			end
 		end,
 	}

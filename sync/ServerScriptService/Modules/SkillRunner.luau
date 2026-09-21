@@ -172,7 +172,8 @@ function SkillRunner:_internalUpdate(dt)
 
 	--Se estiver castando algo, confere se já terminou a duração do cast, se sim, mude o estado para "rodando"
 	if self.state == STATES.Casting then
-		if self.skill.data.castTime and self.elapsedTime >= self.skill.data.castTime then
+		local castTime = self.skill.data.castTime or 0
+		if self.elapsedTime >= castTime then
 			self.state  = STATES.Running 
 			self.elapsedTime = 0
 		end
