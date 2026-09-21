@@ -3498,14 +3498,6 @@
                   ]
                 },
                 {
-                  "name": "ModifierController",
-                  "className": "ModuleScript",
-                  "guid": "14235",
-                  "filePaths": [
-                    "sync/ServerStorage/Modules/Combat/ModifierController.luau"
-                  ]
-                },
-                {
                   "name": "StateTable",
                   "className": "ModuleScript",
                   "guid": "14236",
@@ -3652,6 +3644,14 @@
                         }
                       ]
                     }
+                  ]
+                },
+                {
+                  "name": "Types",
+                  "className": "ModuleScript",
+                  "guid": "9476882",
+                  "filePaths": [
+                    "sync/ServerStorage/Modules/Combat/Types.luau"
                   ]
                 }
               ]

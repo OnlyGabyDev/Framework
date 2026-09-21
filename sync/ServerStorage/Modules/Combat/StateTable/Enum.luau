@@ -45,21 +45,21 @@ enum.Traits = {
         --====BREAKPOINTS=====--
 
 
-        --Breakpoints do healthComponent (interações internas na entidade)
-enum.reactTags = {
-	    onHeal = "OnHeal",              --Ativa o status quando o alvo recebe cura
-	    onDamage = "OnDamage",          --Ativa o status quando o alvo recebe dano
-	    onDeath = "OnDeath",            --Ativa o status quando o alvo morre
-    }
-
-
-    --Breakpoints de runners
-enum.SkillBreakpoints = {
+        --Breakpoints unificados do ciclo de vida (Pub/Sub)
+enum.Breakpoints = {
+        OnHeal = "OnHeal",
+        OnDamage = "OnDamage",
+        OnDeath = "OnDeath",
+        OnRevive = "OnRevive",
+        
+        onStart = "onStart",
         onTrigger = "onTrigger",
         onRecast = "onRecast",
-		onHit = "onHit",
-		onRelease = "onRelease",
-        onEnd = "onEnd"
+        onHit = "onHit",
+        onRelease = "onRelease",
+        onEnd = "onEnd",
+        
+        OnForceIncoming = "OnForceIncoming" -- Preparação futura
     }
 
 

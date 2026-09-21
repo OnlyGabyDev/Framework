@@ -5,6 +5,15 @@ local Enum = require(script.Parent.Enum)
 
 
 
+local function DeepFreeze(tbl)
+	for k, v in pairs(tbl) do
+		if type(v) == "table" then
+			DeepFreeze(v)
+		end
+	end
+	return table.freeze(tbl)
+end
+
 function Helper.LoadModules(rootScript, folderName, targetTable)
 	local folder = rootScript:FindFirstChild(folderName) 
 
@@ -19,6 +28,8 @@ function Helper.LoadModules(rootScript, folderName, targetTable)
 				if data.data and not data.data.name then
 					data.data.name = module.Name
 				end
+				if data.data then DeepFreeze(data.data) end
+				if data.callbacks then DeepFreeze(data.callbacks) end
 			else
 				warn("[StateTable] Erro ao carregar " .. module.Name .. ": " .. tostring(data))
 			end
@@ -34,6 +45,8 @@ function Helper.LoadModules(rootScript, folderName, targetTable)
 							if data.data and not data.data.name then
 								data.data.name = module.name
 							end
+							if data.data then DeepFreeze(data.data) end
+							if data.callbacks then DeepFreeze(data.callbacks) end
 						else
 							warn("[StateTable] Erro ao carregar " .. module.Name .. ": " .. tostring(data))
 						end
@@ -167,17 +180,14 @@ function Helper.BuildContext(source,amount)
 end
 
 function Helper.BuildHistory(data)
-    local History = {
-        rootOrigin = data.Entity and data.Entity or "Unknown",
-        rootSkill = data.name or "Unknown",
-        history = {data.name or "Uknown"},
-        depth = data.depth or 1,
-        uniqueChainID = data.uniqueChainID or data.name and data.name .. tostring(tick()) or "SYSTEM_" .. tostring(tick()),
-		chainStart = data.chainStart or tick(),
-		lastInteraction = data.lastInteraction or tick(),
-		tempDepth = data.tempDepth or 0,
-    }
-	return History
+	local lineage = {
+		Parent = data.ParentLineage,
+		Depth = data.ParentLineage and (data.ParentLineage.Depth + 1) or 1,
+		Origin = data.ParentLineage and data.ParentLineage.Origin or (data.Entity or "Unknown"),
+		Cause = data.name or "Unknown"
+	}
+	lineage.Root = lineage.Parent and lineage.Parent.Root or lineage
+	return lineage
 end
 
 return Helper

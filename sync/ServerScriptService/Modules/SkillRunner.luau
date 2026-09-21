@@ -18,7 +18,7 @@ local STATES = {  				--Breakpoints do ciclo de vida da skill
 }
 
 
-function SkillRunner.new(skillModule,Entity,name,SRtype,ChainHistory,input) --Instancia o SkillRunner como um objeto responsável de criar a habilidade junto do EntityData para as skills utilizarem
+function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input) --Instancia o SkillRunner como um objeto responsável de criar a habilidade junto do EntityData para as skills utilizarem
 
 
 	--================VÁRIAVEIS(FACILITAÇÃO DE ACESSO)===================--
@@ -33,9 +33,9 @@ function SkillRunner.new(skillModule,Entity,name,SRtype,ChainHistory,input) --In
 	self.weaponHitboxModule = require(Storage.Modules.Combat.Hitbox.ShapecastHitbox)   --Prepara o modulo do shapecast para facil acesso e criação de hitboxes
 
 
-	--Remove ChainHistory antes de copiar os dados.
-    local originalChainHistory = skillModule.ChainHistory
-    skillModule.ChainHistory = nil
+	--Remove Lineage antes de copiar os dados.
+    local originalLineage = skillModule.Lineage
+    skillModule.Lineage = nil
 
 	--=====DADOS VITAIS=====--
 
@@ -92,38 +92,15 @@ function SkillRunner.new(skillModule,Entity,name,SRtype,ChainHistory,input) --In
 
 	--=====HISTÓRICO DE INTERAÇÕES SEQUENCIAIS=====--
 
-	--Retorna o ChainHistory
-	skillModule.ChainHistory = originalChainHistory
+	skillModule.Lineage = originalLineage
+	local parentLineage = Lineage or originalLineage
 
-	--Se a skill já tem um histórico, então salve no runner e adicione mais no contexto
-    if skillModule.ChainHistory then
-		skillModule.ChainHistory.depth += 1
-		table.insert(skillModule.ChainHistory.history,name)
-        self.ChainHistory = skillModule.ChainHistory
-	elseif ChainHistory then -- se não tiver mas foi fornecido, salve na skill aqui
-		skillModule.ChainHistory = ChainHistory
-		self.ChainHistory = ChainHistory
-	else
-     -- Por fim, se não existe ChainHistory e nem foi fornecido, crie um aqui
-        local data = {
-			rootOrigin = Entity and Entity or nil,
-			rootSkill = name or nil,
-		}
-		self.ChainHistory = StateTable.BuildHistory(data)
-
-    end
-
-	if tick() - self.ChainHistory.lastInteraction >= 1 then
-		self.ChainHistory.lastInteraction = tick()
-		self.ChainHistory.tempDepth = 1 
-	else
-		self.ChainHistory.tempDepth += 1
-	end
-
-
-	if self.ChainHistory.tempDepth >= self.statusTable.Enum.MAX_RECURSION then
-		return nil
-	end
+	local lineageData = {
+		Entity = Entity,
+		name = name,
+		ParentLineage = parentLineage
+	}
+	self.Lineage = self.statusTable.BuildHistory(lineageData)
 
 	return self
 end
@@ -137,13 +114,20 @@ end
 
 function SkillRunner:BuildContext()
 	return {
-		depth = self.ChainHistory and self.ChainHistory.tempDepth or 1,
-		history = self.ChainHistory and self.ChainHistory.history or {},
-		rootOrigin = self.ChainHistory and self.ChainHistory.rootOrigin or nil,
+		depth = self.Lineage and self.Lineage.Depth or 1,
+		history = {}, -- mantido por compatibilidade temporária
+		rootOrigin = self.Lineage and self.Lineage.Root.Origin or nil,
 		sourceRunner = self,
 		input = self.input,
 		inherited = {}
 	}
+end
+
+function SkillRunner:_fire(breakpoint, context, ...)
+	if self.skill.callbacks[breakpoint] then
+		return self.skill.callbacks[breakpoint](self.skill, context, ...)
+	end
+	return nil
 end
 
 function SkillRunner:start()
@@ -166,9 +150,7 @@ function SkillRunner:start()
 
 	
 	--Confere se existe onStart na skill, se sim, roda
-	if self.skill.callbacks.onStart then
-		self.skill.callbacks.onStart(self.skill, self:BuildContext()) --Executa onStart tendo acesso a propria classe e o contexto
-	end
+	self:_fire("onStart", self:BuildContext())
 	
 end
 
@@ -178,10 +160,7 @@ Controla o tempo de execução do SkillRunner (atualizado pelo Heartbeat global)
 ]]
 function SkillRunner:_internalUpdate(dt)
 
-	--Se muitas interações acontecerem em pouco tempo, corta a execução
-	if self.ChainHistory.tempDepth >= self.statusTable.Enum.MAX_RECURSION then
-		self:endSkill(false)
-	end
+	-- TODO: reintroduzir Pipeline/Limites de fila aqui em vez do MAX_RECURSION global
 
 	--Se a skill não tiver onStep, nao rode heartbeat
 	if self.connection == nil then return end
@@ -200,10 +179,7 @@ function SkillRunner:_internalUpdate(dt)
 
 	--Se estiver running:
 	elseif self.state == STATES.Running then
-		if self.skill.callbacks.onStep then  --confere  se o skill tem onStep para rodar scripts em frames/tempos especificos, se tiver, rode o onStep do frame atual
-			self.skill.callbacks.onStep(self.skill, dt, self:BuildContext())
-		end
-	
+		self:_fire("onStep", dt, self:BuildContext())
 	end
 
 	local duration = self.skill.runtimeDuration or self.skill.data.duration
@@ -217,26 +193,20 @@ end
 
 --[[Callback ao atingir algo]]
 function SkillRunner:onHit(data)
-	if self.skill.callbacks.onHit then
-		self.skill.callbacks.onHit(self.skill, data, self:BuildContext())
-	end
-	
+	self:_fire("onHit", data, self:BuildContext())
 end
 
 
 --[[Recast de runner]]
 function SkillRunner:Recast(checkOnly : boolean?,input)
 	
-	--Procura se tem onRecast, se tiver, roda e fala que encontrou
 	if self.skill.callbacks.onRecast ~= nil then
 		
-		--Se for um pedido de teste, retorna antes de rodar o recast
 		if checkOnly then return true end
 		
 		if input then self.input = input end
 		
-		--roda o onRecast com contexto pra permitir informar o motivo/origem do recast
-		self.skill.callbacks.onRecast(self.skill, self:BuildContext())
+		self:_fire("onRecast", self:BuildContext())
 		return true
 	end
 	return false
@@ -251,11 +221,10 @@ Release do botão que startou a skill, se existir onRelease, executa, se não, f
 function SkillRunner:Release(input)
 	if self.state == STATES.Ended then return false end
 
-	local callback = self.skill.callbacks.onRelease
-	if not callback then return false end
+	if not self.skill.callbacks.onRelease then return false end
 
 	self.input = input
-	callback(self.skill, self:BuildContext())
+	self:_fire("onRelease", self:BuildContext())
 	return true
 end
 
@@ -274,7 +243,7 @@ function SkillRunner:TriggerAction(context)
     end
 											--Então cancela o trigger
 		if self.skill.callbacks.onTrigger then
-    	    return self.skill.callbacks.onTrigger(self.skill, context, self:BuildContext())
+    	    return self:_fire("onTrigger", context, self:BuildContext())
     	end
     
     return nil
@@ -297,16 +266,12 @@ function SkillRunner:endSkill(cancel)
 
 	--Se foi cancelada externamente
 	if cancel then
-		if self.skill.callbacks.onCancel then
-   			if self.skill.callbacks.onCancel(self.skill, self:BuildContext()) == false then return end --Permita que somente a ação ocorra sem parar a skill.
-		end
+		if self:_fire("onCancel", self:BuildContext()) == false then return end --Permita que somente a ação ocorra sem parar a skill.
 	end	
 
 
 	--Sequência de finalização padrão
-	if self.skill.callbacks.onEnd then
-		self.skill.callbacks.onEnd(self.skill, self:BuildContext())
-	end
+	self:_fire("onEnd", self:BuildContext())
 	
 	if self.Entity and self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then
 		self.Entity.RemoveActiveSkill(self.skillName, self)

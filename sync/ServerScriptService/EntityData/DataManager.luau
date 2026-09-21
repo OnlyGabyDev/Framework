@@ -16,7 +16,7 @@ Caso Player, passar o Player Character (modelo do player), caso NPC, passar o mo
 @param components - tabela de componentes a serem adicionados {}
 @return void
 ]]
-function DataManager.Create(Entity,components : {})
+function DataManager.Create(Entity, components : {}, configs : {[string]: any}?)
 
 
 	warn("===========VITALS============")
@@ -51,7 +51,7 @@ function DataManager.Create(Entity,components : {})
 
 	--Adiciona os componentes recebidos como argumento
 	for _,comp in pairs(components) do
-		core:AddComponent(comp)
+		core:AddComponent(comp, configs and configs[comp] or {})
 		compList[#compList + 1] = comp
 	end
 	warn("[DataManager] Componentes adicionados:", compList)

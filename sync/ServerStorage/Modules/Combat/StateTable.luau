@@ -8,8 +8,8 @@ local Helper = require(script.Helper)
 
 
 StateTable.Enum = Enum
-StateTable.Categories = Enum.categories
-StateTable.reactTags  = Enum.reactTags
+StateTable.Categories = Enum.Categories
+StateTable.Breakpoints = Enum.Breakpoints
 
 StateTable.Status = {}       -- Buffs, Debuffs
 StateTable.States = {}       -- Stun, Root, Silence
