@@ -104,7 +104,7 @@ function MovementController.ProcessEntity(comp, dt)
 	
 	local gravityScale = 1
 	if entity:HasComponent(entity.ComponentKey.Attributes) then
-		gravityScale = entity.GetStat("GravityScale", 1)
+		gravityScale = entity.GetStat(StateTable.Enum.Stats.GravityScale, 1)
 	end
 	wrapper:SetAmbientGravityScale(gravityScale)
 

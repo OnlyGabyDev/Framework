@@ -77,7 +77,7 @@ Retorna a tabela de Stats do personagem
 @return tabela de Stats TABLE
 ]]
 function AttributeComponents:GetStats() : {}
-	if not self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then return {Speed = 16, JumpForce = 20} end
+	if not self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then return {Speed = 16, JumpForce = 20, GravityScale = 1} end
 	local char = self.Entity.GetChosenChar()
 	local mode = self.Entity.GetCharMode()
 	local charData = DB[char][mode]
