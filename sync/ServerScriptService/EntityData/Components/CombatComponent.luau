@@ -601,6 +601,44 @@ function CombatComponent:SetCharMode(charName : string, modeName : string)
 end
 
 
+--=============================================================================
+--  OUT/DAMAGE PIPELINE
+--=============================================================================
+
+--[[
+Aplica dano a uma entidade alvo, acionando o pipeline OUT do atacante antes e depois do hit
+@param amount - Quantidade de dano base NUMBER
+@param source - Fonte do dano (ex: SkillRunner) ANY
+@param targetEntity - Entidade alvo (EntityCore)
+@return sucesso BOOLEAN, actualDamage NUMBER
+]]
+function CombatComponent:ApplyDamage(amount: number, source: any, targetEntity: any)
+	if not targetEntity or type(targetEntity.TakeDamage) ~= "function" then return false, 0 end
+	
+	-- Monta contexto base da ação ofensiva
+	local context = StateTable.BuildContext(source, amount)
+	
+	-- 1. Emite OUT antes do hit conectar (ex: buffs de dano, encantar arma)
+	self.Entity:Emit("OUT", StateTable.Breakpoints.onHit, context)
+	
+	-- 2. Aplica o dano real no alvo (que roda o IN pipeline do alvo e devolve o actualDamage)
+	local success, actualDamage, outContext = targetEntity.TakeDamage(context.damage, source)
+	
+	-- 3. Emite OUT após o hit conectar (ex: Lifesteal, onKill)
+	if success and outContext then
+		outContext.actualDamage = actualDamage
+		self.Entity:Emit("OUT", StateTable.Breakpoints.OnDamage, outContext)
+		
+		-- Se o hit matou, emite OnDeath no canal OUT
+		if targetEntity.IsDead and targetEntity.IsDead() then
+			self.Entity:Emit("OUT", StateTable.Breakpoints.OnDeath, outContext)
+		end
+	end
+	
+	return success, actualDamage
+end
+
+
 function CombatComponent:GetCharMode()
 	return self.Mode
 end
@@ -695,6 +733,7 @@ local ExposeAPI = {
 	--Validação
 	CanContinue = function(component,...) return component:CanContinue(...) end,
 	TrySelfCancel = function(component,...) return component:TrySelfCancel(...) end,     
+	ApplyDamage = function(component, ...) return component:ApplyDamage(...) end,
 
 	--ActionState
 	GetActionState = function(component,...) return component:GetActionState(...)end,

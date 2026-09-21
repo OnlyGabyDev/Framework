@@ -31,13 +31,6 @@ function HealthComponent.new(entity, config)
 	self.IsDead = false
 	self._lastDamageTime = 0
 	
-	-- Callbacks de eventos
-	self.OnDamage = self:_Trigger(self, StateTable.reactTags.onDamage)
-	self.OnHeal = self:_Trigger(self, StateTable.reactTags.onHeal)
-	self.OnDeath = self:_Trigger(self, StateTable.reactTags.onDeath)
-	self.OnRevive = self:_Trigger(self, StateTable.reactTags.onRevive)
-
-
 	-- Histórico de dano
 	self.DamageHistory = {}
 	self.MaxHistorySize = 10
@@ -162,13 +155,8 @@ function HealthComponent:TakeDamage(amount : number, source : any)
 		end
 	end
 
-			-- Alterações de dano pós block
-	if self.OnDamage then
-		local preMitigationAmount = self.OnDamage(self, context.damage, source)
-		if preMitigationAmount then
-			context.damage = preMitigationAmount
-		end
-	end
+			-- Alterações de dano pós block (via canal IN)
+	self.Entity:Emit("IN", StateTable.Breakpoints.OnDamage, context)
 
 	
 	-- Aplica dano
@@ -198,45 +186,13 @@ function HealthComponent:TakeDamage(amount : number, source : any)
 		end
 	end
 	
-	return true, context
+	context.actualDamage = actualDamage
+	return true, actualDamage, context
 end
 
 
 
---[[
-Inscreve um listener para um evento específico
-@param eventType - Tipo do evento ("OnDamage", "OnHeal", "OnDeath") STRING,
-@param callback - Função callback a ser chamada quando o evento ocorrer FUNCTION
-@return função de cancelamento da inscrição FUNCTION
-]]
-function HealthComponent:Subscribe(eventType: string, callback: (...any) -> ()): () -> ()
-	if not self.EventListeners then
-		self.EventListeners = {}
-	end
-	if not self.EventListeners[eventType] then
-		self.EventListeners[eventType] = {}
-	end
-	table.insert(self.EventListeners[eventType], callback)
-
-	return function()
-		self:Unsubscribe(eventType, callback)
-	end
-end
-
---[[
-Função para ativar listeners inscritos em um evento específico
-@param breakPoint - Tipo do evento a ser disparado STRING]]
-function HealthComponent:_Trigger(breakPoint : string)
-
-	if not self.EventListeners or not self.EventListeners[breakPoint] then
-		return
-	end
-	
-	for _, callback in ipairs(self.EventListeners[breakPoint]) do
-		 return task.spawn(callback, self) 
-	end
-	return false
-end
+-- Removido Subscribe e _Trigger manual, substituído pelo pub/sub da entidade.
 
 
 --[[
@@ -247,13 +203,12 @@ Cura a entidade por uma quantidade específica
 function HealthComponent:Heal(amount : number) : number
 	if self.IsDead or amount <= 0 then return 0 end
 	
-	local oldHP = self.HP
-	self.HP = math.min(self.MaxHP, self.HP + amount)
-	local actualHeal = self.HP - oldHP
+	local context = StateTable.BuildContext(nil, amount)
+	self.Entity:Emit("IN", StateTable.Breakpoints.OnHeal, context)
 	
-	if actualHeal > 0 and self.OnHeal then
-		task.spawn(self.OnHeal, self, actualHeal)
-	end
+	local oldHP = self.HP
+	self.HP = math.min(self.MaxHP, self.HP + context.damage)
+	local actualHeal = self.HP - oldHP
 	
 	return actualHeal
 end
@@ -268,9 +223,8 @@ function HealthComponent:Die(killer : any)
 	self.IsDead = true
 	self.HP = 0
 	
-	if self.OnDeath then
-		task.spawn(self.OnDeath, self, killer)
-	end
+	local context = StateTable.BuildContext(killer, 0)
+	self.Entity:Emit("IN", StateTable.Breakpoints.OnDeath, context)
 
 end
 
@@ -285,9 +239,8 @@ function HealthComponent:Revive(hpAmount : number) : boolean
 	self.IsDead = false
 	self.HP = math.min(hpAmount or self.MaxHP, self.MaxHP)
 	
-	if self.OnRevive then
-		task.spawn(self.OnRevive, self)
-	end
+	local context = StateTable.BuildContext(nil, 0)
+	self.Entity:Emit("IN", StateTable.Breakpoints.OnRevive, context)
 	
 	return true
 end
@@ -316,8 +269,9 @@ function HealthComponent:SetHP(value)
 	
 	if self.HP <= 0 then
 		self:Die(nil)
-	elseif self.HP > oldHP and self.OnHeal then
-		task.spawn(self.OnHeal, self, self.HP - oldHP)
+	elseif self.HP > oldHP then
+		local context = StateTable.BuildContext(nil, self.HP - oldHP)
+		self.Entity:Emit("IN", StateTable.Breakpoints.OnHeal, context)
 	end
 end
 
@@ -384,8 +338,13 @@ Registra os callbacks recebidos pro pub/sub de eventos reativos
 ]]
 function HealthComponent:OnAdded()
 	if self.Subscription then
-		for key,callback in pairs(self.Subscription) do
-			self:Subscribe(key,callback)
+		for key, callback in pairs(self.Subscription) do
+			self.Entity:Listen({
+				Role = "IN",
+				Breakpoint = StateTable.Breakpoints[key] or key,
+				Priority = 0,
+				Action = callback
+			})
 		end
 	end
 
@@ -397,10 +356,6 @@ Destroi o componente, limpando referências e parando processos
 ]]
 function HealthComponent:Destroy()
 	self.Entity = nil
-	self.OnDamage = nil
-	self.OnHeal = nil
-	self.OnDeath = nil
-	self.OnRevive = nil
 	table.clear(self.DamageHistory)
 end
 

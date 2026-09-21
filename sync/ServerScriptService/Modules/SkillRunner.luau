@@ -277,8 +277,8 @@ function SkillRunner:endSkill(cancel)
 		self.Entity.RemoveActiveSkill(self.skillName, self)
 		if self.Entity:HasComponent(self.Entity.ComponentKey.Weapon) then
 			self.Entity.RemoveHitboxOwner(self) --Limpa a hitbox
+		end
 	end
-end
 
 
 	if self.connection then

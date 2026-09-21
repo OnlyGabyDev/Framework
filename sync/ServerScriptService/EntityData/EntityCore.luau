@@ -6,6 +6,8 @@ local EntityCore = {}
 EntityCore.ComponentKey = {}
 EntityCore.Events = {}
 
+local Storage = game:GetService("ServerStorage")
+local TriggerSet = require(Storage.Modules.Combat.TriggerSet)
 
 EntityCore.__index = EntityCore
 local ComponentRegistry = {}
@@ -49,6 +51,27 @@ function EntityCore.new(instance : Model, entityType : string, entityID : string
 	end
 
 	return self
+end
+
+--=============================================================================
+--  TRIGGERS E PUB/SUB (IN/OUT)
+--=============================================================================
+
+function EntityCore:Listen(sub: any)
+	if not self._triggerSet then
+		self._triggerSet = TriggerSet.new()
+	end
+	return self._triggerSet:Subscribe(sub)
+end
+
+function EntityCore:Emit(role: string, breakpoint: string, context: any, ...)
+	if not self._triggerSet then return end
+	self._triggerSet:Emit(role, breakpoint, context, ...)
+end
+
+function EntityCore:UnsubscribeByOwner(owner: any)
+	if not self._triggerSet then return end
+	self._triggerSet:UnsubscribeByOwner(owner)
 end
 
 --=============================================================================

@@ -88,11 +88,8 @@ local Skill = {
 		
 		
 		onHit = function(self,hitResult)
-
 			local targetEntity = hitResult.target
-			
-			targetEntity.TakeDamage(self.damage,self)
-
+			self.Entity.ApplyDamage(self.damage, self, targetEntity)
 		end,
 		
 

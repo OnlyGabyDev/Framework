@@ -3653,6 +3653,30 @@
                   "filePaths": [
                     "sync/ServerStorage/Modules/Combat/Types.luau"
                   ]
+                },
+                {
+                  "name": "TraitQuery",
+                  "className": "ModuleScript",
+                  "guid": "9595990",
+                  "filePaths": [
+                    "sync/ServerStorage/Modules/Combat/TraitQuery.luau"
+                  ]
+                },
+                {
+                  "name": "Lineage",
+                  "className": "ModuleScript",
+                  "guid": "9596205",
+                  "filePaths": [
+                    "sync/ServerStorage/Modules/Combat/Lineage.luau"
+                  ]
+                },
+                {
+                  "name": "TriggerSet",
+                  "className": "ModuleScript",
+                  "guid": "9596516",
+                  "filePaths": [
+                    "sync/ServerStorage/Modules/Combat/TriggerSet.luau"
+                  ]
                 }
               ]
             }
