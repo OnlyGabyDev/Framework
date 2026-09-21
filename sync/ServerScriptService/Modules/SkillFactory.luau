@@ -50,7 +50,7 @@ end
 
 
 
-function SkillFactory.GetStatus(data)
+function SkillFactory.GetStatus(originalData)
 	local defaults = {
 		onStart = function() end,
 		onStep = function() end,
@@ -60,33 +60,41 @@ function SkillFactory.GetStatus(data)
 		onRecast = function() return false end, -- fallback
 	}
 
-	if not data.callbacks then
-		data.callbacks = {}
-	end
-	if not data.data.castTime then 
-		data.data.castTime = 0
-	end
+	-- Criamos um novo container superficial para não mutar a tabela estática congelada
+	local status = {
+		data = originalData.data,
+		ID = originalData.ID,
+		StatusController = originalData.StatusController
+	}
 
-	data.callbacks.onEnd = function(selfRunner)
-		if data.StatusController then
-			data.StatusController:RemoveById(data.ID)
-			print("[StatusController] Status removido ao final:", data.ID)
+	local originalCallbacks = originalData.callbacks or {}
+	local newCallbacks = {}
+
+	newCallbacks.onEnd = function(selfRunner)
+		if originalCallbacks.onEnd then originalCallbacks.onEnd(selfRunner) end
+		if status.StatusController then
+			status.StatusController:RemoveById(status.ID)
 		end
 	end
 	
-
-	data.callbacks.onCancel = function(selfRunner)
-		if data.StatusController then
-			data.StatusController:RemoveById(data.ID)
-			print("[StatusController] Status removido por cancelamento:", data.ID)
+	newCallbacks.onCancel = function(selfRunner)
+		if originalCallbacks.onCancel then originalCallbacks.onCancel(selfRunner) end
+		if status.StatusController then
+			status.StatusController:RemoveById(status.ID)
 		end
 	end
 
+	-- Delega chamadas não interceptadas para o original, ou depois pros fallbacks
+	setmetatable(newCallbacks, {
+		__index = function(t, key)
+			if originalCallbacks[key] then return originalCallbacks[key] end
+			return defaults[key]
+		end
+	})
 
-	-- Garantir que todos os callbacks sejam injetados
-	setmetatable(data.callbacks, { __index = defaults })
+	status.callbacks = newCallbacks
 
-	return data
+	return status
 end
 
 

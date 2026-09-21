@@ -85,7 +85,6 @@ Aplica um status à entidade
 @return ID do status STRING ou nil se não aplicado
 ]]
 function StatusComponent:ApplyStatus(statusData, duration : number?, sourceSkill : any?, ID : string?,targetEntity: {}?) : string?
-	statusData["Entity"] = sourceSkill.Entity or nil
 	local canApply= self:_ValidateApplication(statusData, sourceSkill)
 
 	if not canApply then
@@ -95,7 +94,7 @@ function StatusComponent:ApplyStatus(statusData, duration : number?, sourceSkill
 
 	-- Gera ID único se não fornecido
 	if not ID then
-		ID = self:GenerateUniqueEffectID(statusData.data.name or "Generic")
+		ID = self:GenerateUniqueEffectID(statusData.data and statusData.data.name or "Generic")
 	end
 
 	local factoryData = SkillFactory.GetStatus(statusData)
@@ -111,7 +110,7 @@ function StatusComponent:ApplyStatus(statusData, duration : number?, sourceSkill
 		nextChainHistory = ch
     else
     -- Se não tiver sourceSkill, cria novo
-    data = {
+    local data = {
         rootSkill = factoryData.data.name,
         history = {factoryData.data.name},
         depth = 1,
@@ -123,9 +122,7 @@ function StatusComponent:ApplyStatus(statusData, duration : number?, sourceSkill
 	-- Prepara dados
 	local data = table.clone(factoryData)
 	data.ID = ID
-	data.data.castTime = 0
     data.ChainHistory = nextChainHistory
-	data.data.Entity = sourceSkill and sourceSkill.Entity or nil
 	
 	if data.data.category == "ActionState" then
 		warn("[StatusComponent] ActionState settado com função errada!")

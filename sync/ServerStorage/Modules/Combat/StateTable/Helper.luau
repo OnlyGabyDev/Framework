@@ -6,6 +6,7 @@ local Enum = require(script.Parent.Enum)
 
 
 local function DeepFreeze(tbl)
+	if table.isfrozen(tbl) then return tbl end
 	for k, v in pairs(tbl) do
 		if type(v) == "table" then
 			DeepFreeze(v)

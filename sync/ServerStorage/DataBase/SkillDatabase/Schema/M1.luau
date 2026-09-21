@@ -37,12 +37,12 @@ local Skill = {
 			
 
 			local shield = statsTable:BuildEffect(statsTable.Status.StatusShield,
-			StateTable.Enum.SkillBreakpoints.onTrigger,
+			StateTable.Enum.Breakpoints.onTrigger,
 		    function(runner,context) warn("SHIELD ATINGIDO"); return self:TriggerAction(context)
 			end)
 
 			local block = statsTable:BuildEffect(statsTable.Status.GenericBlock,
-			StateTable.Enum.SkillBreakpoints.onTrigger,
+			StateTable.Enum.Breakpoints.onTrigger,
 			function(runner,context) return self:TriggerAction(context) 
 			end)
 
