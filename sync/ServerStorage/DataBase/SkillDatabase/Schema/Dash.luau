@@ -40,8 +40,7 @@ callbacks = {
         self.stateID = self.Entity.ApplyStatus(control, self.data.duration, self)
         
 
-        -- Invocando AddForce que injetamos na entidade no MovementComponent
-        local dir = self.Entity.GetDirection()
+            local dir = self.Entity.GetDirection()
         if dir.Magnitude < 0.1 then
             local look = self.Entity.GetLookDirection()
             if look.Magnitude > 0.1 then
@@ -80,7 +79,7 @@ callbacks = {
 				end
 				
 				self.comboTarget = targetEntity
-				local result = targetEntity.ApplyStatus(self.statusTable.Status.Bleed, nil, self.Runner)
+				targetEntity.ApplyStatus(self.statusTable.Status.Bleed, nil, self.Runner)
 				
 				targetEntity:Listen({
 					Role = "IN",
@@ -91,7 +90,7 @@ callbacks = {
 						if tgtContext.source and tgtContext.source.data and tgtContext.source.data.name == "Bleed" then
 							if self.isUltActive then
 								local extraHeal = tgtContext.damage * 3
-								local curado = self.Entity.Heal(extraHeal)
+                                self.Entity.Heal(extraHeal)
 							else
 								self.accumulatedBleedDamage += tgtContext.damage
 							end
@@ -99,12 +98,10 @@ callbacks = {
 					end
 				})
 				
-				-- Limpa o listener de Hit pra não aplicar infinitamente
 				self.Entity:UnsubscribeByOwner(comboOwner .. "_hit")
 			end
 		})
 		
-		-- 2. Ouve a ativação da Ult pra curar com o dano
 		self.Entity:Listen({
 			Role = "OUT",
 			Breakpoint = "OnUlt",
@@ -112,12 +109,10 @@ callbacks = {
 			Owner = comboOwner,
 			Action = function(context)
 				self.isUltActive = true
-				local curado = self.Entity.Heal(self.accumulatedBleedDamage)
 				self.accumulatedBleedDamage = 0
 			end
 		})
 
-		-- 3. Ouve o fim da Ult pra limpar tudo
 		self.Entity:Listen({
 			Role = "OUT",
 			Breakpoint = "OnUltEnd",
@@ -125,7 +120,6 @@ callbacks = {
 			Owner = comboOwner,
 			Action = function(context)
 				self.isUltActive = false
-				print("[DASH COMBO] ULT ENCERRADA! Removendo listeners.")
 				self.Entity:UnsubscribeByOwner(comboOwner)
 				if self.comboTarget then
 					self.comboTarget:UnsubscribeByOwner(comboOwner)

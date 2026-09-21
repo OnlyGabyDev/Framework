@@ -16,10 +16,8 @@ function Solver:Cast(segment: Types.Segment, raycastParams: RaycastParams?): Ray
 		raycastParams
 	)
 
-	-- Since Blockcast has an offset, we'll need to defer the lastCFrame position to determine where it is at
-	task.defer(function()
-		segment.CastData._LastCFrameBlockCast = segment.Instance.WorldCFrame
-	end)
+	-- Removed task.defer as it caused the LastCFrame to not persist properly, leading to tunneling
+	segment.CastData._LastCFrameBlockCast = segment.Instance.WorldCFrame
 
 	return result, direction
 end

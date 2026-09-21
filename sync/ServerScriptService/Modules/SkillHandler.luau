@@ -165,4 +165,22 @@ function SkillHandler.HandleIntent(ID, event)
 	return activate(entityCore, event)
 end
 
+function SkillHandler.HandleMovementInput(ID, direction)
+	local entityCore = DataManager.Get(ID)
+	if not entityCore then return end
+	
+	if entityCore.SetDirection then
+		entityCore.SetDirection(direction)
+	end
+end
+
+function SkillHandler.HandleLookInput(ID, look)
+	local entityCore = DataManager.Get(ID)
+	if not entityCore then return end
+	
+	if entityCore.SetLookDirection then
+		entityCore.SetLookDirection(look)
+	end
+end
+
 return SkillHandler
