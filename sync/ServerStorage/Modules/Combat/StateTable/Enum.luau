@@ -62,6 +62,11 @@ enum.Breakpoints = {
         OnForceIncoming = "OnForceIncoming" -- Preparação futura
     }
 
+enum.Roles = {
+    IN = "IN",
+    OUT = "OUT"
+}
+
 
 
 

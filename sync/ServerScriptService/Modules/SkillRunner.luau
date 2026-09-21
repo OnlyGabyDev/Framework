@@ -152,6 +152,9 @@ function SkillRunner:start()
 	--Confere se existe onStart na skill, se sim, roda
 	self:_fire("onStart", self:BuildContext())
 	
+	if self.Entity then
+		self.Entity:Emit(StateTable.Enum.Roles.OUT, StateTable.Enum.Breakpoints.onStart, self:BuildContext())
+	end
 end
 
 
@@ -279,6 +282,8 @@ function SkillRunner:endSkill(cancel)
 		if self.Entity:HasComponent(self.Entity.ComponentKey.Weapon) then
 			self.Entity.RemoveHitboxOwner(self) --Limpa a hitbox
 		end
+		
+		self.Entity:Emit(StateTable.Enum.Roles.OUT, StateTable.Enum.Breakpoints.onEnd, self:BuildContext())
 	end
 
 

@@ -3,6 +3,9 @@
 
 	Mostra como usar os 3 campos novos de Force juntos]]--
 
+local ServerStorage = game:GetService("ServerStorage")
+local StateTable = require(ServerStorage.Modules.Combat.StateTable)
+
 local Skill = {
 
 	data = {
@@ -12,11 +15,11 @@ local Skill = {
 		Speed = 90,
 		TurnRateDegrees = 50,  
 		anim = "anim",
+        Tags = { "Ultimate" },
 	},
 
 	callbacks = {
 		onStart = function(self)
-			self.Entity:Emit("OUT", "OnUlt", {})
 			local statsTable = self.statusTable
 
 
@@ -54,7 +57,6 @@ local Skill = {
 
 				OnEnd = function()
 					self.cleanUp()
-					self.Entity:Emit("OUT", "OnUltEnd", {})
 					self:Stop(false)
 				end,
 			})
@@ -65,7 +67,6 @@ local Skill = {
 				self.Entity.RemoveForce(self.forceID)
 			end
 			self.cleanUp()
-			self.Entity:Emit("OUT", "OnUltEnd", {})
 		end,
 	}
 }

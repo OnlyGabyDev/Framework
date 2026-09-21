@@ -66,7 +66,7 @@ callbacks = {
 		local comboOwner = "DashCombo_" .. tostring(tick())
 		
 		self.Entity:Listen({
-			Role = "OUT",
+			Role = StateTable.Enum.Roles.OUT,
 			Breakpoint = StateTable.Enum.Breakpoints.onHit,
 			Query = { Any = {"Melee"} }, 
 			Priority = 0,
@@ -82,7 +82,7 @@ callbacks = {
 				targetEntity.ApplyStatus(self.statusTable.Status.Bleed, nil, self.Runner)
 				
 				targetEntity:Listen({
-					Role = "IN",
+					Role = StateTable.Enum.Roles.IN,
 					Breakpoint = StateTable.Enum.Breakpoints.OnDamage,
 					Priority = 0,
 					Owner = comboOwner,
@@ -103,26 +103,32 @@ callbacks = {
 		})
 		
 		self.Entity:Listen({
-			Role = "OUT",
-			Breakpoint = "OnUlt",
+			Role = StateTable.Enum.Roles.OUT,
+			Breakpoint = StateTable.Enum.Breakpoints.onStart,
 			Priority = 0,
 			Owner = comboOwner,
 			Action = function(context)
-				self.isUltActive = true
-				self.accumulatedBleedDamage = 0
+				local runner = context.sourceRunner
+				if runner and runner.skill.data.Tags and table.find(runner.skill.data.Tags, "Ultimate") then
+					self.isUltActive = true
+					self.accumulatedBleedDamage = 0
+				end
 			end
 		})
 
 		self.Entity:Listen({
-			Role = "OUT",
-			Breakpoint = "OnUltEnd",
+			Role = StateTable.Enum.Roles.OUT,
+			Breakpoint = StateTable.Enum.Breakpoints.onEnd,
 			Priority = 0,
 			Owner = comboOwner,
 			Action = function(context)
-				self.isUltActive = false
-				self.Entity:UnsubscribeByOwner(comboOwner)
-				if self.comboTarget then
-					self.comboTarget:UnsubscribeByOwner(comboOwner)
+				local runner = context.sourceRunner
+				if runner and runner.skill.data.Tags and table.find(runner.skill.data.Tags, "Ultimate") then
+					self.isUltActive = false
+					self.Entity:UnsubscribeByOwner(comboOwner)
+					if self.comboTarget then
+						self.comboTarget:UnsubscribeByOwner(comboOwner)
+					end
 				end
 			end
 		})
