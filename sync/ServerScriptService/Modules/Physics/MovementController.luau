@@ -123,7 +123,19 @@ function MovementController.ProcessEntity(comp, dt)
 	local faceResponsiveness: number? = nil
 
 	if tags.canDisplace then
-		for forceId, forceEntry in pairs(comp.ActiveForces) do
+		-- Ordem determinística por criação (ID = "F_<contador>"): empate de Priority
+		-- entre duas Forces Hard sempre resolve pra mais recente, nunca pela ordem
+		-- arbitrária do pairs().
+		local orderedForceIds = {}
+		for forceId in pairs(comp.ActiveForces) do
+			table.insert(orderedForceIds, forceId)
+		end
+		table.sort(orderedForceIds, function(a, b)
+			return (tonumber(a:match("_(%d+)$")) or 0) < (tonumber(b:match("_(%d+)$")) or 0)
+		end)
+
+		for _, forceId in orderedForceIds do
+			local forceEntry = comp.ActiveForces[forceId]
 			local data = forceEntry.Data
 			local hard = data.Hard == true
 

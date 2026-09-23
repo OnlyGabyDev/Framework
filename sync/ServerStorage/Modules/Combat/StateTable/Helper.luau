@@ -2,6 +2,7 @@
 local Helper = {}
 
 local Enum = require(script.Parent.Enum)
+local LineageModule = require(script.Parent.Parent.Lineage)
 
 
 
@@ -32,6 +33,26 @@ function Helper.ResolveRunner(runnerOrProxy)
 		return runnerOrProxy.Runner
 	end
 	return runnerOrProxy
+end
+
+--[[
+Disjuntor de recursão SÍNCRONA. Cadeias dano->status->dano (ex: parry devolvendo
+dano na hora) não tinham nenhum limite real — MAX_RECURSION existia no Enum mas
+nada olhava pra ele. Isso é global (não por entidade) de propósito: o risco é
+estouro de call stack do SERVIDOR inteiro, não só de uma entidade.
+]]
+local activeChainDepth = 0
+
+function Helper.TryEnterChain(): boolean
+	if activeChainDepth >= Enum.MAX_RECURSION then
+		return false
+	end
+	activeChainDepth += 1
+	return true
+end
+
+function Helper.ExitChain()
+	activeChainDepth = math.max(0, activeChainDepth - 1)
 end
 
 local function registerModule(module, targetTable)
@@ -163,7 +184,41 @@ function Helper.CheckBlockFilter(runner, context)
     return true 
 end
 
-function Helper.BuildContext(source,amount)
+--[[
+Monta o mapa de imunidades (tag -> quais traits furam ela) a partir de TODOS os
+Status cadastrados. É dado ESTÁTICO (não muda por entidade nem em runtime), então
+isso deve rodar UMA VEZ pro servidor inteiro — antes, cada entidade recomputava
+isso a cada hit que sofria (StatusComponent:GetImmunityRules era chamado, mas o
+cache que ele preenchia nunca era lido de volta).
+]]
+function Helper.BuildImmunityRules(stateTable)
+	local rules = {}
+
+	for name, def in pairs(stateTable.Status) do
+		local data = def.data or def
+		local tags = data.tags or {}
+
+		for tagName, isTrue in pairs(tags) do
+			if isTrue and data.bypassBy then
+				rules[tagName] = {
+					name = name,
+					bypassableBy = data.bypassBy,
+				}
+			end
+		end
+	end
+
+	return table.freeze(rules)
+end
+
+--[[
+@param source - Runner (ou proxy de skill) responsável pela ação
+@param amount - dano/cura base
+@param parentContext - Context de quem originou esta ação (opcional). Sem isso,
+	a lineage é forkada a partir de `source.Lineage`, que já é o caso comum
+	(um Runner de skill/status sempre carrega sua própria Lineage).
+]]
+function Helper.BuildContext(source, amount, parentContext)
 	source = Helper.ResolveRunner(source)
 
 	local context = {
@@ -172,35 +227,35 @@ function Helper.BuildContext(source,amount)
 		sourceEntity = nil,
 		traits = {},
 		effects = {},
-		runner = nil,
+		cancelled = false,
+		reason = nil,
 	}
-	
+
 	if source then
 		if source.Entity then
 			context.sourceEntity = source.Entity
 		end
-		if source.data then
-			context.damage = amount or source.damage or 0
-			context.traits = table.clone(source.data.traits or {})
-			context.effects = table.clone(source.data.effects or {})
+		local data = source.skill and source.skill.data or source.data
+		if data then
+			context.damage = amount or data.damage or 0
+			context.traits = table.clone(data.traits or {})
+			context.effects = table.clone(data.effects or {})
 			context.type = source.type
 			context.secondaryType = source.secondaryType or nil
 		end
-		context.runner = Helper.ResolveRunner(source)
 	end
-	
+
+	-- Lineage: dono único é Combat/Lineage.luau (antes essa função não trackeava nada disso)
+	local parentLineage = (parentContext and parentContext.Lineage) or (source and source.Lineage)
+	context.Lineage = LineageModule.Fork(parentLineage, context.sourceEntity, (source and source.skillName) or "Unknown")
+
 	return context
 end
 
+
+
 function Helper.BuildHistory(data)
-	local lineage = {
-		Parent = data.ParentLineage,
-		Depth = data.ParentLineage and (data.ParentLineage.Depth + 1) or 1,
-		Origin = data.ParentLineage and data.ParentLineage.Origin or (data.Entity or "Unknown"),
-		Cause = data.name or "Unknown"
-	}
-	lineage.Root = lineage.Parent and lineage.Parent.Root or lineage
-	return lineage
+	return LineageModule.Fork(data.ParentLineage, data.Entity, data.name)
 end
 
 

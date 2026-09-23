@@ -1,4 +1,4 @@
 --================================Centralização do enum de componentes==============================
-core = require(script.Parent.EntityCore)
+local core = require(script.Parent.EntityCore)
 
 return core.ComponentKey

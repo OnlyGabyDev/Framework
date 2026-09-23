@@ -19,6 +19,9 @@ Helper.LoadModules(script, "States", StateTable.States)
 Helper.LoadModules(script, "Status", StateTable.Status)
 Helper.LoadModules(script, "ActionStates", StateTable.ActionStates)
 
+-- Calculado uma única vez pro servidor inteiro (dado estático — ver Helper.BuildImmunityRules)
+StateTable.ImmunityRules = Helper.BuildImmunityRules(StateTable)
+
 
 
 --[[
@@ -56,8 +59,8 @@ function StateTable.CheckBlockFilter(runner,context)
 	return Helper.CheckBlockFilter(runner,context)
 end 
 
-function StateTable.BuildContext(source,amount)
-	return Helper.BuildContext(source,amount)
+function StateTable.BuildContext(source, amount, parentContext)
+	return Helper.BuildContext(source, amount, parentContext)
 end
 
 function StateTable.BuildHistory(data)
@@ -71,6 +74,14 @@ end
 
 function StateTable.ResolveRunner(runnerOrProxy)
 	return Helper.ResolveRunner(runnerOrProxy)
+end
+
+function StateTable.TryEnterChain()
+	return Helper.TryEnterChain()
+end
+
+function StateTable.ExitChain()
+	Helper.ExitChain()
 end
 
 return StateTable

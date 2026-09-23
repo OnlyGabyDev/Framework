@@ -1,4 +1,3 @@
---!strict
 local TraitQuery = require(script.Parent.TraitQuery)
 
 local TriggerSet = {}
@@ -22,6 +21,11 @@ function TriggerSet:Subscribe(sub: any)
 	-- Estado de contagem compartilhado por referência (escopo "Tree" depende disso)
 	if not sub._sharedState then
 		sub._sharedState = { Count = 0 }
+	end
+	
+	-- TTD (Time To Die): expiração por tempo (avaliação preguiçosa)
+	if sub.TTD then
+		sub._expirationTime = os.clock() + sub.TTD
 	end
 
 	sub._removed = nil
@@ -81,8 +85,15 @@ function TriggerSet:Emit(role: string, breakpoint: string, context: any, ...)
 	for _, sub in table.clone(list) do
 		if sub._removed then continue end
 
+		-- 0. TTD (Time To Die) - Avaliação Preguiçosa
+		if sub._expirationTime and os.clock() >= sub._expirationTime then
+			self:Unsubscribe(sub)
+			continue
+		end
+
 		-- 1. Traits
-		if not TraitQuery.Match(sub.Query, context.traits) then continue end
+		local matched = TraitQuery.Match(sub.Query, context.traits)
+		if not matched then continue end
 
 		-- 2. Limites
 		local limit = sub.Limit
@@ -124,7 +135,8 @@ function TriggerSet:Fork()
 						Priority = sub.Priority,
 						Owner = sub.Owner,
 						Limit = sub.Limit,
-						Inherit = { Generations = sub.Inherit.Generations - 1 }
+						Inherit = { Generations = sub.Inherit.Generations - 1 },
+						TTD = sub.TTD,
 					}
 
 					if inheritedSub.Limit and inheritedSub.Limit.Scope == "Branch" then

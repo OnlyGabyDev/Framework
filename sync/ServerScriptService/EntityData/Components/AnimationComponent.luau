@@ -584,4 +584,5 @@ local ExposeAPI = {
 return {
 	new = AnimationComponent.new,
 	ExposeAPI = ExposeAPI,
+	Requires = { "Character" }, -- sem isso, _Initialize não tem wrapper de char pra usar
 }

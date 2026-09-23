@@ -59,48 +59,46 @@ callbacks = {
             Priority = 10,
         })
         
-        -- === PUB/SUB TEST ===
 		self.accumulatedBleedDamage = 0
 		self.isUltActive = false
-		local comboOwner = "DashCombo_" .. tostring(tick())
-		
+		local comboOwner = "DashBleedCombo"
+
+		-- Limpa combos residuais de Dashes anteriores para não vazar memória
+		self.Entity:UnsubscribeByOwner(comboOwner)
+
 		self.Entity:Listen({
 			Role = StateTable.Enum.Roles.OUT,
 			Breakpoint = StateTable.Enum.Breakpoints.onHit,
-			Query = { Any = {"Melee"} }, 
+			Query = { Any = { StateTable.Enum.Traits.Melee } },
 			Priority = 0,
-			Owner = comboOwner .. "_hit",
+			Owner = comboOwner,
+			Limit = { Max = 1, OnExhaust = "Remove" },
 			Action = function(context)
 				local targetEntity = context.targetEntity
-				
-				if not targetEntity then 
-					return 
-				end
-				
+				if not targetEntity then return end
+
 				self.comboTarget = targetEntity
-				targetEntity.ApplyStatus(self.statusTable.Status.Bleed, nil, self.Runner)
-				
+				self:ApplyStatus(self.statusTable.Status.Bleed, { Target = targetEntity })
+
+				targetEntity:UnsubscribeByOwner(comboOwner)
 				targetEntity:Listen({
 					Role = StateTable.Enum.Roles.IN,
-					Breakpoint = StateTable.Enum.Breakpoints.OnDamage,
+					Breakpoint = StateTable.Enum.Breakpoints.PostDamage,
 					Priority = 0,
 					Owner = comboOwner,
 					Action = function(tgtContext)
-						if tgtContext.source and tgtContext.source.data and tgtContext.source.data.name == "Bleed" then
+						if tgtContext.source and tgtContext.source.skill and tgtContext.source.skill.data and tgtContext.source.skill.data.name == "Bleed" then
 							if self.isUltActive then
-								local extraHeal = tgtContext.damage * 3
-                                self.Entity.Heal(extraHeal)
+								self.Entity.Heal(tgtContext.damage * 3)
 							else
 								self.accumulatedBleedDamage += tgtContext.damage
 							end
 						end
 					end
 				})
-				
-				self.Entity:UnsubscribeByOwner(comboOwner .. "_hit")
 			end
 		})
-		
+
 		self.Entity:Listen({
 			Role = StateTable.Enum.Roles.OUT,
 			Breakpoint = StateTable.Enum.Breakpoints.onStart,
@@ -108,7 +106,7 @@ callbacks = {
 			Owner = comboOwner,
 			Action = function(context)
 				local runner = context.sourceRunner
-				if runner and runner.skill.data.Tags and table.find(runner.skill.data.Tags, "Ultimate") then
+				if runner and StateTable.HasTrait(runner.skill.data, StateTable.Enum.Traits.Ultimate) then
 					self.isUltActive = true
 					self.accumulatedBleedDamage = 0
 				end
@@ -122,12 +120,12 @@ callbacks = {
 			Owner = comboOwner,
 			Action = function(context)
 				local runner = context.sourceRunner
-				if runner and runner.skill.data.Tags and table.find(runner.skill.data.Tags, "Ultimate") then
+				if runner and StateTable.HasTrait(runner.skill.data, StateTable.Enum.Traits.Ultimate) then
 					self.isUltActive = false
-					self.Entity:UnsubscribeByOwner(comboOwner)
 					if self.comboTarget then
 						self.comboTarget:UnsubscribeByOwner(comboOwner)
 					end
+					self.Entity:UnsubscribeByOwner(comboOwner)
 				end
 			end
 		})

@@ -1060,6 +1060,14 @@
               "filePaths": [
                 "sync/ServerScriptService/EntityData/EntityWrapper.luau"
               ]
+            },
+            {
+              "name": "ComponentUtils",
+              "className": "ModuleScript",
+              "guid": "7599648",
+              "filePaths": [
+                "sync/ServerScriptService/EntityData/ComponentUtils.luau"
+              ]
             }
           ]
         },

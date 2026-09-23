@@ -17,6 +17,11 @@ function AttributeComponents.new(entity, config)
     -- Ex: table["Speed"]["BuffID"] = { Type = "Flat", Value = -0.5 }
     self.Modifiers = {} 
 
+    -- Cache por atributo: sem isso, GetStat recomputa a soma de modificadores em
+    -- TODA leitura, e o MovementController lê Speed/JumpForce/GravityScale todo Heartbeat.
+    self._cache = {}
+    self._dirty = {}
+
     return self
 end
 
@@ -25,13 +30,20 @@ end
 --=============================================================================
 
 function AttributeComponents:GetStat(AttributeName, default)
-    
+
+    if not self._dirty[AttributeName] and self._cache[AttributeName] ~= nil then
+        return self._cache[AttributeName]
+    end
+
     local base = self.BaseStats[AttributeName] or default or 0
     local mods = self.Modifiers[AttributeName]
 
-
-    --Se não for um status complexo, retorne apenas o valor encontrado no DB
-    if not mods then return base end
+    --Se não for um status complexo, o próprio base já é o resultado final
+    if not mods then
+        self._cache[AttributeName] = base
+        self._dirty[AttributeName] = nil
+        return base
+    end
 
     local finalBase = base
     local flatSum = 0
@@ -63,13 +75,16 @@ function AttributeComponents:GetStat(AttributeName, default)
 
 
     -- Fórmula: ((Base + Flat) * (1 + %Add)) * %Mult)
-    local result = ((finalBase + flatSum) * (1 + AddPercentSum)) * MultPercentTotal
-    
-    return math.max(0, result) -- Impede que atributos fiquem negativos
+    local result = math.max(0, ((finalBase + flatSum) * (1 + AddPercentSum)) * MultPercentTotal) -- Impede que atributos fiquem negativos
+
+    self._cache[AttributeName] = result
+    self._dirty[AttributeName] = nil
+    return result
 end
 
 function AttributeComponents:SetStat(AttributeName, value)
     self.BaseStats[AttributeName] = value
+    self._dirty[AttributeName] = true
 end
 
 --[[
@@ -100,6 +115,7 @@ function AttributeComponents:AddModifier(AttributeName, sourceID, type, value)
         self.Modifiers[AttributeName] = {}
     end
     self.Modifiers[AttributeName][sourceID] = { Type = type, Value = value }
+    self._dirty[AttributeName] = true
 end
 
 --Remove o modificador pelo ID da origem
@@ -107,6 +123,7 @@ function AttributeComponents:RemoveModifier(AttributeName, sourceID)
     if self.Modifiers[AttributeName] then
         self.Modifiers[AttributeName][sourceID] = nil
     end
+    self._dirty[AttributeName] = true
 end
 
 

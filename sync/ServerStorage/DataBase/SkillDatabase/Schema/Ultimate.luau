@@ -15,7 +15,7 @@ local Skill = {
 		Speed = 90,
 		TurnRateDegrees = 50,  
 		anim = "anim",
-        Tags = { "Ultimate" },
+        traits = { StateTable.Enum.Traits.Ultimate },
 	},
 
 	callbacks = {

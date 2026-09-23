@@ -28,6 +28,8 @@ enum.Traits = {
         DOT = "DamageOverTime",         --Dot
         EffectShield = "EffectShield",  --Escudo de efeito (ignora pre entrada)
         Stackable = "stackable",        --Status pode stackar.
+        Melee = "Melee",                --Dono único da trait usada por M1/Dash (era string solta em 2 arquivos)
+        Ultimate = "Ultimate",          --Substitui o campo ad-hoc `Tags = {"Ultimate"}` de Ultimate.luau
 
         
         --BLOCKS
@@ -48,7 +50,9 @@ enum.Traits = {
         --Breakpoints unificados do ciclo de vida (Pub/Sub)
 enum.Breakpoints = {
         OnHeal = "OnHeal",
-        OnDamage = "OnDamage",
+        OnDamage = "OnDamage",   -- canal OUT (atacante), disparado depois do hit já ter acontecido
+        PreDamage = "PreDamage", -- canal IN (alvo), ANTES do HP mudar — ponto de extensão pra cancelar/mutar
+        PostDamage = "PostDamage", -- canal IN (alvo), DEPOIS do HP mudar — reação do lado de quem apanhou
         OnDeath = "OnDeath",
         OnRevive = "OnRevive",
         
@@ -137,7 +141,9 @@ enum.StatDefaults = table.freeze({
     GravityScale = 1,
 })
 
-enum.MAX_RECURSION = 50 -- limite de ações recursivas de uma chain em um segundo
+-- Limite de profundidade SÍNCRONA de uma cadeia dano<->status (TakeDamage/ApplyStatus se
+-- recusam a continuar acima disso). Ver StateTable.TryEnterChain/ExitChain.
+enum.MAX_RECURSION = 50
 
 
 --Lista de traits que ignoram block

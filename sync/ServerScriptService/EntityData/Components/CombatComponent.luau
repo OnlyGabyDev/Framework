@@ -661,7 +661,7 @@ function CombatComponent:_ApplyStats(stats)
 	if stats.Speed then self.Entity.SetSpeed(stats.Speed) end
 	if stats.JumpPower then self.Entity.SetJumpForce(stats.JumpPower) end
 	
-	local health = self.Entity:GetComponent("Health")
+	local health = self.Entity:GetComponent(self.Entity.ComponentKey.Health)
 	if health and stats.MaxHP then
 		local ratio = self.Entity.GetHealthRatio()
 		self.Entity.SetMaxHP(stats.MaxHP)

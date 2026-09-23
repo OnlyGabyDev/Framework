@@ -8,7 +8,7 @@ local Skill = {
 		duration = 5,
 		castTime = 0,
 		tags = {[StateTable.Enum.Tags.block] = true},
-		traits = {"Melee"},
+		traits = { StateTable.Enum.Traits.Melee },
 	},
 
 	callbacks = {
@@ -47,7 +47,7 @@ local Skill = {
 		
 		onHit = function(self, hitResult)
 			local targetEntity = hitResult.target
-			self.Entity.ApplyDamage(self.damage, self, targetEntity)
+			self:Damage(targetEntity, self.damage)
 		end,
 		
 

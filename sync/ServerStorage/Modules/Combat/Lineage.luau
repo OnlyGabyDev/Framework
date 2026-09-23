@@ -1,17 +1,22 @@
 --!strict
 local Lineage = {}
 
--- Cria um novo nó na árvore de histórico
-function Lineage.Fork(parent: any?, origin: any, cause: string): any
+--[[
+Cria um novo nó na árvore de histórico.
+Origin SEMPRE propaga a partir da raiz (quem começou a cadeia), nunca do elo
+imediato — assim um dano causado por um DoT aplicado por uma skill ainda
+atribui corretamente ao personagem que lançou a skill original.
+]]
+function Lineage.Fork(parent: any?, origin: any, cause: string?): any
 	local newNode = {
 		Parent = parent,
 		Depth = parent and (parent.Depth + 1) or 1,
-		Origin = origin,
-		Cause = cause
+		Origin = (parent and parent.Origin) or origin,
+		Cause = cause or "Unknown",
 	}
-	
+
 	newNode.Root = parent and parent.Root or newNode
-	
+
 	return newNode
 end
 

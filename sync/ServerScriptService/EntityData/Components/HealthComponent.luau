@@ -60,34 +60,7 @@ end
 FUNÇÃO INTERNA!
 Valida se um ataque pode afetar a entidade baseado em suas tags de imunidade
 @return sucesso BOOLEAN, razão STRING (nome da imunidade que bloqueou o hit)]]
-function HealthComponent:_ValidateHit(context)
 
-	--Se não tiver componente de status, não existem tags de ivulnerabilidade e valida o hit.
-	if not self.Entity:HasComponent(self.Entity.ComponentKey.Status) then return true end
-
-	local targetTags = self.Entity.GetActiveTags()
-	local immunityRules = self._immunityRules or self.Entity.GetImmunityRules() 
-	local attackTraits = context.traits
-	
-	for immunityName, rule in pairs(immunityRules) do
-		if targetTags[immunityName] and immunityName ~= StateTable.Enum.Tags.block then
-			local allowed = false
-			
-			for _, trait in ipairs(attackTraits or {}) do
-				if table.find(rule.bypassableBy, trait) then
-					allowed = true
-					break
-				end
-			end
-			
-			if not allowed then
-				return false, immunityName
-			end
-		end
-	end
-	
-	return true
-end
 
 --=============================================================================
 --  DANO
@@ -102,79 +75,43 @@ Aplica dano à entidade
 function HealthComponent:TakeDamage(amountOrContext : number | {}, source : any?)
 	if self.IsDead then return false end
 
-	-- Aceita um context pronto (vindo do pipeline OUT do atacante) ou (amount, source)
+	if not StateTable.TryEnterChain() then
+		warn("[HealthComponent] MAX_RECURSION excedido, dano recusado. Entidade:", tostring(self.Entity.ID))
+		return false, "MaxRecursion"
+	end
+
+	local success, actualDamage, context = self:_TakeDamageInner(amountOrContext, source)
+	StateTable.ExitChain()
+
+	return success, actualDamage, context
+end
+
+function HealthComponent:_TakeDamageInner(amountOrContext, source)
 	local context
 	if type(amountOrContext) == "table" then
 		context = amountOrContext
 	else
 		context = StateTable.BuildContext(source, amountOrContext)
 	end
-	source = context.source -- já normalizado (Runner) pelo BuildContext
 
 	if context.damage <= 0 then return false, 0 end
 
-	-- Se tem StatusComponent, valida o hit e aplica modificadores
+	-- Se tem StatusComponent, valida imunidades e aplica mitigação (block/parry).
+	-- Toda a lógica de "o que é block/iFrame" mora no StatusComponent agora (Regra 20).
 	local statusComp = self.Entity:HasComponent(self.Entity.ComponentKey.Status)
 	if statusComp then
-		local ignore
-		local canHit, reason = self:_ValidateHit(context)
+		local canHit, reason = self.Entity.ValidateHit(context)
 		if not canHit then
 			return false, reason
 		end
-
-		--busca por todas as TAGS ativas na entidade
-		local ActiveTags,owner = self.Entity.GetActiveTags()
-		local blockTag = StateTable.Enum.Tags.block
-
-		--se encontrar a tag de block ativa, e se a source não ignorar block 
-		--então roda o trigger do runner do block
-		if ActiveTags[blockTag] then
-			for _,value in pairs(context.traits) do
-				if StateTable.Enum.BlockIgnore[value] then
-					ignore = true
-					break
-				end
-				ignore = false
-			end
-
-			local blockRunner = owner[blockTag]
-
-			--Skippa o block se tiver trait de ignorar block e o block não for TrueBlock
-			local skipBlock = (
-				not (blockRunner.data.traits and table.find(blockRunner.data.traits, StateTable.Enum.Traits.TrueBlock))
-				and ignore
-		)
-
-			--se não encontrou trait de ignore block e se o block não é TrueBlock
-			if not skipBlock then
-				if blockRunner then
-					local canInteract = StateTable.CheckBlockFilter(blockRunner, context)
-					local blockBreak
-					local broke
-					if context.source and context.traits and canInteract then
-						for _,trait in context.traits do	--busca por algum trait que se encaixe em BlockBreak
-							blockBreak = StateTable.Enum.BlockBreak[trait]
-							if blockBreak then break end
-						end
-						local unbreakable = blockRunner.data.traits and table.find(blockRunner.data.traits, StateTable.Enum.Traits.Unbreakable)
-						--Se o block não for inquebravel e eu tiver a intenção de quebrar, quebre/finalize o runner
-						if blockBreak and not unbreakable then
-							blockRunner:Stop(true)
-							broke = true
-						end
-					end
-					
-					if not broke and canInteract then
-						local resultDamage = blockRunner:TriggerAction(context)
-						if resultDamage then context.damage = resultDamage end
-					end
-				end
-			end
-		end
+		self.Entity.ApplyMitigation(context) -- pode reduzir/zerar context.damage
 	end
 
-			-- Alterações de dano pós block (via canal IN)
-	self.Entity:Emit(StateEnum.Roles.IN, StateEnum.Breakpoints.OnDamage, context)
+	-- Ponto de extensão declarativo (novo): cancelamento/mutação simples ANTES do HP mudar.
+	self.Entity:Emit(StateEnum.Roles.IN, StateEnum.Breakpoints.PreDamage, context)
+	if context.cancelled then
+		return false, context.reason or "Cancelled"
+	end
 	context.damage = math.max(0, context.damage) -- listener não pode transformar dano em cura
 
 	-- Aplica dano
@@ -182,28 +119,25 @@ function HealthComponent:TakeDamage(amountOrContext : number | {}, source : any?
 	self.HP = math.max(0, self.HP - context.damage)
 	self:_SyncClient()
 	local actualDamage = lastHP - self.HP
-	
-	-- Registra no histórico
-	self:_RecordDamage(actualDamage, source)
-	
-	-- Marca tempo do último dano 
+
+	self:_RecordDamage(actualDamage, context.source)
 	self._lastDamageTime = tick()
-	
-	
-	-- Checa morte
+
 	if self.HP <= 0 and not self.IsDead then
-		self:Die(source)
+		self:Die(context.source)
 	end
 
-	if context.effects ~= nil then
-		if statusComp then
-			for _, effectData in ipairs(context.effects) do
-				self.Entity.ApplyStatus(effectData,nil, source)
-			end
+	if context.effects ~= nil and statusComp then
+		for _, effectData in ipairs(context.effects) do
+			self.Entity.ApplyStatus(effectData, { Source = context.source })
 		end
 	end
-	
+
 	context.actualDamage = actualDamage
+
+	-- Hook reativo do lado do ALVO (novo): dispara DEPOIS do HP já ter mudado
+	self.Entity:Emit(StateEnum.Roles.IN, StateEnum.Breakpoints.PostDamage, context)
+
 	return true, actualDamage, context
 end
 

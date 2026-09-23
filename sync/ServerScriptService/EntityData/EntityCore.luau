@@ -8,9 +8,18 @@ EntityCore.Events = {}
 
 local Storage = game:GetService("ServerStorage")
 local TriggerSet = require(Storage.Modules.Combat.TriggerSet)
+local ComponentUtils = require(script.Parent.ComponentUtils)
 
-EntityCore.__index = EntityCore
 local ComponentRegistry = {}
+local ComponentStubs = {} -- [funcName] = função de warn COMPARTILHADA entre todas as entidades
+
+EntityCore.__index = function(instance, key)
+	local classMethod = rawget(EntityCore, key)
+	if classMethod ~= nil then
+		return classMethod
+	end
+	return ComponentStubs[key]
+end
 
 --=============================================================================
 --  CONSTRUCTOR
@@ -38,17 +47,7 @@ function EntityCore.new(instance : Model, entityType : string, entityID : string
 	self.Active = true
 	self.CreatedAt = tick()
 
-	for compName, compData in pairs(ComponentRegistry) do
-		if compData.ExposeAPI then
-			for funcName,_ in pairs(compData.ExposeAPI) do
-				if not self[funcName] then
-					self[funcName] = function(...)
-						warn("[EntityCore]Componente ignorado: ",compName,"| Func: ",funcName)
-					end
-				end
-			end
-		end
-	end
+	-- Stubs de API vêm do __index compartilhado (ComponentStubs) — nada a fazer por instância.
 
 	return self
 end
@@ -128,6 +127,14 @@ Função chamada após todos os componentes serem carregados.
 function EntityCore:ComponentsLoaded()
 	local highPriority = {}
 	local normalPriority = {}
+
+	-- Regra 16: dependência declarada vira warn IMEDIATO, não um erro descoberto sprints depois
+	for name in pairs(self.Components) do
+		local registryData = ComponentRegistry[name]
+		if registryData and registryData.Requires then
+			ComponentUtils.CheckRequires(self, name, registryData.Requires)
+		end
+	end
 
 	for name, component in pairs(self.Components) do
 		local registryData = ComponentRegistry[name]
@@ -263,7 +270,8 @@ function EntityCore.RegisterComponent(name : string, componentModule : {[string]
 	ComponentRegistry[name] = {
 		new = componentModule.new,
 		ExposeAPI = componentModule.ExposeAPI,
-		InitPriority = componentModule.InitPriority
+		InitPriority = componentModule.InitPriority,
+		Requires = componentModule.Requires,
 	}
 
 	print("[EntityCore] Componente registrado:", name)
@@ -318,13 +326,11 @@ local function AutoRegisterComponents()
 																			--Pra cada módulo na pasta de componentes, registra automaticamente
 	for _, componentModule in ipairs(componentsFolder:GetChildren()) do
 		if componentModule:IsA("ModuleScript") then                         --Se for um modulo
-			local success, component = pcall(require, componentModule)		--Tenta requisitar o módulo
+			local success, component = ComponentUtils.SafeRequire(componentModule) --Tenta requisitar o módulo (loga o ERRO real)
 			if success then													--Se conseguiu
 				local name = componentModule.Name:gsub("Component", "")		--Pega o nome do componente sem o sufixo "Component" (gsub substitui a string)
 				EntityCore.RegisterComponent(name, component)				--Registra o componente no EntityCore
 				EntityCore.ComponentKey[name] = name						--Adiciona o nome do componente no enum  EntityCore.Components
-			else
-				warn("[EntityCore] Erro ao carregar componente:", componentModule.Name)
 			end
 		end
 	end
@@ -346,7 +352,8 @@ local function AutoRegisterComponents()
 	end
 
 	EntityCore.ComponentKey = table.freeze(EntityCore.ComponentKey)			--Freeze o enum pra eviltar alterações em runtime
-	
+
+	ComponentUtils.BuildStubs(ComponentRegistry, ComponentStubs) -- popula os stubs UMA vez, com o registro já completo
 end
 
 -- Chama auto-registro

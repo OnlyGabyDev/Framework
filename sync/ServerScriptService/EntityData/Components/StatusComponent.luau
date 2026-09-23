@@ -7,6 +7,7 @@
 local ServerStorage = game:GetService("ServerStorage")
 local ServerScript = game:GetService("ServerScriptService")
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
+local StateEnum = StateTable.Enum
 local SkillRunner = require(game.ServerScriptService.Modules.SkillRunner)
 local SkillFactory = require(ServerScript.Modules.SkillFactory)
 
@@ -31,9 +32,6 @@ function StatusComponent.new(entity, config)
 	-- Cache de tags combinadas
 	self._cachedTags = nil
 	self._tagsDirty = true
-	
-	-- Cache de regras de imunidade
-	self._immunityRules = nil
 
 	--Cooldown de status
 	self.StatusCooldowns = {} -- [statusName] = timestamp
@@ -88,46 +86,56 @@ Aplica um status à entidade
 @param ID - ID único do status STRING (opcional)
 @return ID do status STRING ou nil se não aplicado
 ]]
-function StatusComponent:ApplyStatus(statusData, duration : number?, sourceSkill : any?, ID : string?,targetEntity: {}?) : string?
-	local canApply= self:_ValidateApplication(statusData, sourceSkill)
+--[[
+Aplica um status à entidade.
+@param statusData - Dados do status TABLE
+@param durationOrOpts - NUMBER (duração, estilo legado) OU TABLE de opções:
+	{ Duration: number?, Source: Runner|SkillProxy?, ID: string?, Target: EntityCore? }
+@param sourceSkill - (só no estilo legado) Runner ou proxy de skill responsável
+@param ID - (só no estilo legado) ID único do status
+@param targetEntity - (só no estilo legado) EntityCore alvo, se != self.Entity
+@return ID do status STRING ou nil se não aplicado
+]]
+function StatusComponent:ApplyStatus(statusData, durationOrOpts, sourceSkill, ID, targetEntity)
+	if not StateTable.TryEnterChain() then
+		warn("[StatusComponent] MAX_RECURSION excedido, aplicação recusada. Entidade:", tostring(self.Entity.ID))
+		return nil
+	end
 
+	local resultID = self:_ApplyStatusInner(statusData, durationOrOpts, sourceSkill, ID, targetEntity)
+	StateTable.ExitChain()
+
+	return resultID
+end
+
+function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSkill, ID, targetEntity)
+	-- Aceita opts (estilo novo) OU os parâmetros posicionais antigos (compatibilidade)
+	local opts
+	if type(durationOrOpts) == "table" then
+		opts = durationOrOpts
+	else
+		opts = { Duration = durationOrOpts, Source = sourceSkill, ID = ID, Target = targetEntity }
+	end
+
+	local duration = opts.Duration
+	local source = StateTable.ResolveRunner(opts.Source)
+	local target = opts.Target
+	local suppliedID = opts.ID
+
+	local canApply = self:_ValidateApplication(statusData, source)
 	if not canApply then
 		return nil
 	end
 
-
-	-- Gera ID único se não fornecido
-	if not ID then
-		ID = self:GenerateUniqueEffectID(statusData.data and statusData.data.name or "Generic")
+	if not suppliedID then
+		suppliedID = self:GenerateUniqueEffectID(statusData.data and statusData.data.name or "Generic")
 	end
 
 	local factoryData = SkillFactory.GetStatus(statusData)
 
-
-	-- Preparação do Contexto para o novo Status
-    local nextChainHistory
-    if sourceSkill and sourceSkill.ChainHistory then
-		local ch = sourceSkill.ChainHistory
-		table.insert(ch.history, factoryData.data.name or "Unknown")
-		ch.depth += 1
-
-		nextChainHistory = ch
-    else
-    -- Se não tiver sourceSkill, cria novo
-    local data = {
-        rootSkill = factoryData.data.name,
-        history = {factoryData.data.name},
-        depth = 1,
-    }
-	nextChainHistory = StateTable.BuildHistory(data)
-    end
-
-
-	-- Prepara dados
 	local data = table.clone(factoryData)
-	data.ID = ID
-    data.ChainHistory = nextChainHistory
-	
+	data.ID = suppliedID
+
 	if data.data.category == "ActionState" then
 		warn("[StatusComponent] ActionState settado com função errada!")
 		return nil
@@ -138,12 +146,10 @@ function StatusComponent:ApplyStatus(statusData, duration : number?, sourceSkill
 		warn("[StatusComponent] Status sem nome ou .data")
 		return nil
 	end
-	
-	-- Determina se é estado ou status
-	local isState = StateTable:IsState(meta)
-	local group = isState and self.Effects[StateTable.Enum.Types.State] or self.Effects[StateTable.Enum.Types.Status]
 
-	
+	local isState = StateTable:IsState(meta)
+	local group = isState and self.Effects[StateEnum.Types.State] or self.Effects[StateEnum.Types.Status]
+
 	-- Verifica cooldown de re-aplicação (se o status declarar data.cooldown)
 	if meta.cooldown and meta.cooldown > 0 then
 		if self:HasStatusCooldown(meta.name) then
@@ -151,66 +157,52 @@ function StatusComponent:ApplyStatus(statusData, duration : number?, sourceSkill
 		end
 		self:SetStatusCooldown(meta.name, meta.cooldown)
 	end
-	
-	-- ===== STACK NA MESMA INSTÂNCIA =====
 
-	if StateTable.HasTrait(meta, StateTable.Enum.Traits.Stackable) and meta.stackOnSelf then
+	-- ===== STACK NA MESMA INSTÂNCIA =====
+	if StateTable.HasTrait(meta, StateEnum.Traits.Stackable) and meta.stackOnSelf then
 		local existing = group[meta.name]
 		if existing then
 			if existing.runner.skill.counter >= (meta.maxStacks or math.huge) then
-				return ID -- Limite atingido
+				return suppliedID
 			end
 
-			
 			existing.runner.skill.counter += 1
 
 			if existing.runner then
-				existing.runner.elapsedTime = 0 -- Reset timer
+				existing.runner.elapsedTime = 0
 				if existing.runner.Recast then
 					existing.runner:Recast()
 				end
 			end
-			return ID
+			return suppliedID
 		end
-		
-		-- Cria novo runner
-		local runner = self:_CreateRunner(data, meta.name, duration,targetEntity)
-		group[meta.name] = {
-			data = data,
-			counter = 1,
-			runner = runner,
-			sourceSkill = sourceSkill,
-			ID = ID,
-		}
-		
+
+		local runner = self:_CreateRunner(data, meta.name, duration, target, source)
+		group[meta.name] = { data = data, counter = 1, runner = runner, sourceSkill = source, ID = suppliedID }
+
 		self:_MarkTagsDirty()
-		return ID
+		return suppliedID
 	end
-	
+
 	-- ===== STACK EM INSTÂNCIAS DIFERENTES =====
-	if StateTable.HasTrait(meta, StateTable.Enum.Traits.Stackable) and not meta.stackOnSelf then
-   	 if not group[meta.name] then
-      	  group[meta.name] = {}
-    	end
-    
-    local list = group[meta.name]
-    if #list >= (meta.maxStacks or math.huge) then
-        return nil
-    end
-		
-		local runner = self:_CreateRunner(data, meta.name, duration,targetEntity)
-		table.insert(list, {
-			data = data,
-			runner = runner,
-			sourceSkill = sourceSkill,
-			ID = ID,
-		})
-		
+	if StateTable.HasTrait(meta, StateEnum.Traits.Stackable) and not meta.stackOnSelf then
+		if not group[meta.name] then
+			group[meta.name] = {}
+		end
+
+		local list = group[meta.name]
+		if #list >= (meta.maxStacks or math.huge) then
+			return nil
+		end
+
+		local runner = self:_CreateRunner(data, meta.name, duration, target, source)
+		table.insert(list, { data = data, runner = runner, sourceSkill = source, ID = suppliedID })
+
 		group[meta.name] = list
 		self:_MarkTagsDirty()
-		return ID
+		return suppliedID
 	end
-	
+
 	-- ===== EXCLUSIVO (substitui outros da mesma categoria) =====
 	if meta.exclusive then
 		for name, entry in pairs(group) do
@@ -220,24 +212,18 @@ function StatusComponent:ApplyStatus(statusData, duration : number?, sourceSkill
 			end
 		end
 	end
-	
+
 	-- ===== STATUS ÚNICO =====
-	-- O novo substitui o antigo: encerra o runner anterior (senão ele vira órfão e tica até o fim)
 	local previous = group[meta.name]
 	if previous and previous.runner then
 		previous.runner:endSkill(true)
 	end
 
-	local runner = self:_CreateRunner(data, meta.name, duration,targetEntity)
-	group[meta.name] = {
-		data = data,
-		runner = runner,
-		sourceSkill = sourceSkill,
-		ID = ID,
-	}
-	
+	local runner = self:_CreateRunner(data, meta.name, duration, target, source)
+	group[meta.name] = { data = data, runner = runner, sourceSkill = source, ID = suppliedID }
+
 	self:_MarkTagsDirty()
-	return ID
+	return suppliedID
 end
 
 --[[
@@ -247,19 +233,25 @@ Cria um SkillRunner para o status
 @param duration - Duração do status NUMBER (opcional)
 @return SkillRunner criado SkillRunner
 ]]
-function StatusComponent:_CreateRunner(data : {[string]: any}, name : string, duration : number?,target)
-	
-	-- Injeta duração se fornecida
+--[[
+Cria um SkillRunner para o status.
+@param source - Runner original que aplicou o status (opcional). Vira runner.Source
+	(acessível como self.Source dentro dos callbacks) e alimenta a Lineage do novo
+	runner, corrigindo Lineage.Origin (antes sempre virava o portador, nunca o caster).
+]]
+function StatusComponent:_CreateRunner(data, name, duration, target, source)
+
 	if duration then
 		data.runtimeDuration = duration
 	end
-	
 
 	local targetEntity = target and target.Entity or self.Entity
-	local runner = SkillRunner.new(data, targetEntity, name,StateTable.Enum.Types.Status)
-	
-	-- Callback de finalização
+	local runner = SkillRunner.new(data, targetEntity, name, StateEnum.Types.Status, source and source.Lineage)
+
 	if runner then
+		runner.Source = source
+		runner.skill.Source = source -- Opção A: acesso direto por self.Source dentro dos callbacks
+
 		runner.onFinish = function()
 			self:_OnRunnerFinished(name, runner)
 			self:_MarkTagsDirty()
@@ -582,24 +574,92 @@ Inicializa e retorna as regras de imunidade baseadas na StateTable
 @return tabela de regras TABLE
 ]]
 function StatusComponent:GetImmunityRules()
-	local rules = {}
-	
-	for name, def in pairs(StateTable.Status) do
-		local data = def.data or def
-		local tags = data.tags or {}
-		
-		for tagName, isTrue in pairs(tags) do
-			if isTrue and data.bypassBy then
-				rules[tagName] = {
-					name = name,
-					bypassableBy = data.bypassBy,
-				}
+	-- Calculado uma única vez pro servidor inteiro em StateTable.luau (dado estático)
+	return StateTable.ImmunityRules
+end
+
+--[[
+Valida se um ataque pode afetar a entidade baseado em suas tags de imunidade (iFrame e afins).
+Relocado de HealthComponent: Health não deveria conhecer o conceito de imunidade.
+@return sucesso BOOLEAN, razão STRING (nome da imunidade que bloqueou o hit)
+]]
+function StatusComponent:ValidateHit(context)
+	local targetTags = self:GetActiveTags()
+	local immunityRules = self:GetImmunityRules()
+	local attackTraits = context.traits
+
+	for immunityName, rule in pairs(immunityRules) do
+		if targetTags[immunityName] and immunityName ~= StateEnum.Tags.block then
+			local allowed = false
+
+			for _, trait in ipairs(attackTraits or {}) do
+				if table.find(rule.bypassableBy, trait) then
+					allowed = true
+					break
+				end
+			end
+
+			if not allowed then
+				return false, immunityName
 			end
 		end
 	end
-	
-	self._immunityRules = rules
-	return rules
+
+	return true
+end
+
+--[[
+Aplica a mitigação de block/parry (se a entidade tiver a tag `block` ativa).
+Comportamento IDÊNTICO ao que estava em HealthComponent:TakeDamage — só relocado.
+Pode reduzir/zerar context.damage; não retorna nada (muta o context).
+]]
+function StatusComponent:ApplyMitigation(context)
+	local activeTags, owners = self:GetActiveTags()
+	local blockTag = StateEnum.Tags.block
+
+	if not activeTags[blockTag] then return end
+
+	local ignore = false
+	for _, value in pairs(context.traits or {}) do
+		if StateEnum.BlockIgnore[value] then
+			ignore = true
+			break
+		end
+	end
+
+	local blockRunner = owners[blockTag]
+	if not blockRunner then return end
+
+	local skipBlock = (
+		not (blockRunner.data.traits and table.find(blockRunner.data.traits, StateEnum.Traits.TrueBlock))
+		and ignore
+	)
+	if skipBlock then return end
+
+	local canInteract = StateTable.CheckBlockFilter(blockRunner, context)
+	if not canInteract then return end
+
+	local broke = false
+	if context.source and context.traits then
+		local blockBreak = nil
+		for _, trait in context.traits do
+			blockBreak = StateEnum.BlockBreak[trait]
+			if blockBreak then break end
+		end
+
+		local unbreakable = blockRunner.data.traits and table.find(blockRunner.data.traits, StateEnum.Traits.Unbreakable)
+		if blockBreak and not unbreakable then
+			blockRunner:Stop(true)
+			broke = true
+		end
+	end
+
+	if not broke then
+		local resultDamage = blockRunner:TriggerAction(context)
+		if resultDamage then
+			context.damage = resultDamage
+		end
+	end
 end
 
 --[[
@@ -736,6 +796,8 @@ local ExposeAPI = {
 
 	--Tags
 	GetImmunityRules = function(component) return component:GetImmunityRules() end,
+	ValidateHit = function(component, ...) return component:ValidateHit(...) end,
+	ApplyMitigation = function(component, ...) return component:ApplyMitigation(...) end,
 	GetActiveTags = function(component) return component:GetActiveTags() end,               
 	GetStatusCounter = function(component, ...) return component:GetStatusCounter(...) end,
 	GenerateUniqueEffectID = function(component, ...) return component:GenerateUniqueEffectID(...) end,         

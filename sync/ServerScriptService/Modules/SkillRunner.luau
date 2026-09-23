@@ -90,6 +90,14 @@ function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input) --Instanc
 	self.skill.Recast = function(_, ...) return self:Recast(...) end
 	self.skill.endSkill = function(_, ...) return self:endSkill(...) end
 
+	-- Ownership automático (Regra 2): a skill registra limpezas/inscrições aqui em vez de
+	-- montar seu próprio "self.cleanUp" chamado à mão em onEnd E onCancel.
+	self._ownedCleanups = {}
+	self.skill.Own = function(_, cleanupFn) return self:Own(cleanupFn) end
+	self.skill.Listen = function(_, sub) return self:Listen(sub) end
+	self.skill.Damage = function(_, targetEntity, amount) return self:Damage(targetEntity, amount) end
+	self.skill.ApplyStatus = function(_, statusData, opts) return self:ApplyStatus(statusData, opts) end
+
 	--=====HISTÓRICO DE INTERAÇÕES SEQUENCIAIS=====--
 
 	skillModule.Lineage = originalLineage
@@ -261,6 +269,50 @@ function SkillRunner:IsEnded()
 	return self.state == STATES.Ended
 end
 
+--[[
+Registra uma função de limpeza que roda automaticamente em endSkill (onEnd OU onCancel).
+]]
+function SkillRunner:Own(cleanupFn: () -> ())
+	table.insert(self._ownedCleanups, cleanupFn)
+end
+
+--[[
+Atalho pra Entity:Listen que já marca Owner = este runner: a inscrição é removida
+sozinha quando a skill terminar (UnsubscribeByOwner em endSkill), sem precisar de
+um "comboOwner" montado à mão pelo autor da skill.
+]]
+function SkillRunner:Listen(sub: any)
+	sub.Owner = sub.Owner or self
+	if self.Entity then
+		return self.Entity:Listen(sub)
+	end
+	return function() end
+end
+
+--[[
+Aplica dano com ESTE runner como source. Existe pra acabar com a inconsistência de
+skills passando `self` (o proxy) em vez de `self.Runner` — o que fazia ShieldsFromType
+e outras checagens de trait nunca casarem (source.type não existia no proxy).
+]]
+function SkillRunner:Damage(targetEntity, amount)
+	if not self.Entity or not self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then
+		warn("[SkillRunner] Damage chamado sem CombatComponent na entidade de origem:", self.skillName)
+		return false, 0
+	end
+	return self.Entity.ApplyDamage(amount, self, targetEntity)
+end
+
+--[[
+Aplica um status com Source = este runner por padrão (a skill pode sobrescrever via
+opts.Source, ou opts.Target pra mirar outra entidade).
+]]
+function SkillRunner:ApplyStatus(statusData, opts)
+	opts = opts or {}
+	opts.Source = opts.Source or self
+	local target = opts.Target or self.Entity
+	return target.ApplyStatus(statusData, opts.Duration, opts.Source, opts)
+end
+
 function SkillRunner:Stop(cancel : boolean?)
 	self:endSkill(cancel)
 end
@@ -286,6 +338,18 @@ function SkillRunner:endSkill(cancel)
 	end
 
 	self.state = STATES.Ended
+
+	-- Ownership automático: desinscreve os Listen() e roda os Own() antes do onEnd
+	if self.Entity then
+		self.Entity:UnsubscribeByOwner(self)
+	end
+	for _, cleanupFn in self._ownedCleanups do
+		local ok, err = pcall(cleanupFn)
+		if not ok then
+			warn("[SkillRunner] Erro num Own() cleanup:", self.skillName, err)
+		end
+	end
+	table.clear(self._ownedCleanups)
 
 	--Sequência de finalização padrão
 	self:_fire("onEnd", self:BuildContext())
