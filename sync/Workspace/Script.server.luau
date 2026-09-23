@@ -23,12 +23,8 @@ for i = 0,0,1 do
     part1.Anchored = false
     part1.BrickColor = BrickColor.new("Bright yellow")
     part1.Parent = model
-    
 
-    
     DataManager.Create(model, components)
-
-
 end
 
 

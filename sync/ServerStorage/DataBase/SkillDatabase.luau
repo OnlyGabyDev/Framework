@@ -11,11 +11,14 @@ local function GetOrCreateTable(parentTable, name)
 	return parentTable[name]
 end
 
+local IGNORED = { BaseSkills = true } -- módulos utilitários que vivem na pasta mas não são skills
+
 -- Scanner recursivo, busca por todos os filhos da hierarquia, enumera e salva o modulo
 local function ScanFolder(folder, currentKeyTable, prefixID)
 	for _, child in ipairs(folder:GetChildren()) do
 		
 		if child:IsA("ModuleScript") then
+			if IGNORED[child.Name] then continue end
 			local skillName = child.Name
 			
 			-- Cria um nome baseado na profundidade da pasta,com os prefixos sendo os nomes das pastas 

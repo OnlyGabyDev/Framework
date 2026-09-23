@@ -4,9 +4,6 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
 local DataManager = require(ServerScriptService.EntityData.DataManager)
-local Handler = ServerScriptService.Modules.SkillHandler
-local StatusTable = require(ServerStorage.Modules.Combat.StateTable)
-local DataManager = require(game.ServerScriptService.EntityData.DataManager)
 local component = require(ServerScriptService.EntityData.ComponentsExport)
 local AntiCheat = require(ServerScriptService.Modules.GlobalAntiCheat)
 
@@ -22,29 +19,44 @@ local PlayerComponents = {
 }
 
 
-Players.PlayerAdded:Connect(function(player)
+local handled = {} -- [Player] = true (evita registrar 2x: evento + varredura inicial)
 
-    local function onCharacterAdded(character)
-        DataManager.Create({
-            Model = character,
-            Player = player,
-        }, PlayerComponents)
+local function onPlayerAdded(player)
+	if handled[player] then return end
+	handled[player] = true
+
+	local function onCharacterAdded(character)
+		DataManager.Create({
+			Model = character,
+			Player = player,
+		}, PlayerComponents)
 		AntiCheat.Register(player)
-    end
+	end
 
-    -- primeiro spawn
-    if player.Character then
-        onCharacterAdded(player.Character)
-    end
+	-- primeiro spawn
+	if player.Character then
+		onCharacterAdded(player.Character)
+	end
 
-    -- respawns
-    player.CharacterAdded:Connect(onCharacterAdded)
-end)
+	-- respawns
+	player.CharacterAdded:Connect(onCharacterAdded)
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+
+-- players que entraram antes deste script conectar (requires com WaitForChild podem atrasar)
+for _, player in Players:GetPlayers() do
+	task.spawn(onPlayerAdded, player)
+end
 
 Players.PlayerRemoving:Connect(function(player)
-    DataManager.Remove(player)
+	handled[player] = nil
+	DataManager.Remove(player)
 	AntiCheat.Unregister(player)
 end)
+
+--[TEST] ============================================================
+
 
 
 --[[

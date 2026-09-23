@@ -64,4 +64,13 @@ function StateTable.BuildHistory(data)
 	return Helper.BuildHistory(data)
 end
 
+-- Forwarding helpers (LOTE 1)
+function StateTable.HasTrait(meta, trait)
+	return Helper.HasTrait(meta, trait)
+end
+
+function StateTable.ResolveRunner(runnerOrProxy)
+	return Helper.ResolveRunner(runnerOrProxy)
+end
+
 return StateTable

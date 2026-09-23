@@ -79,12 +79,23 @@ function MovementComponent:SetJumpForce(value)
 	end
 end
 
+-- Regra 16: dependência OPCIONAL de Attributes, declarada aqui num único ponto.
+-- Sem Attributes, usa StatDefaults (sem chamar o stub, que dava warn por frame).
+local function statOrDefault(self, stat)
+	local entity = self.Entity
+	local default = StateTable.Enum.StatDefaults[stat]
+	if not entity:HasComponent(entity.ComponentKey.Attributes) then
+		return default
+	end
+	return entity.GetStat(stat, default)
+end
+
 function MovementComponent:GetSpeed()
-	return self.Entity.GetStat(StateTable.Enum.Stats.Speed, 16)
+	return statOrDefault(self, StateTable.Enum.Stats.Speed)
 end
 
 function MovementComponent:GetJumpForce()
-	return self.Entity.GetStat(StateTable.Enum.Stats.JumpForce, 50)
+	return statOrDefault(self, StateTable.Enum.Stats.JumpForce)
 end
 
 function MovementComponent:GetDirection()

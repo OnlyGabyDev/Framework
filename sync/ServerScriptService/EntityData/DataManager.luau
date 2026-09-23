@@ -35,6 +35,13 @@ function DataManager.Create(Entity, components : {}, configs : {[string]: any}?)
 	
 	warn(entityType,"Registrado, ID:",id)
 	
+	-- Respawn reaproveita o ID do player: destrói a entidade anterior ANTES de sobrescrever
+	local previous = entityMap.players[id]
+	if previous then
+		previous:Destroy()
+		entityMap.players[id] = nil
+	end
+	
 	local Model
 	local Player
 
@@ -130,16 +137,15 @@ Remove o EntityCore da entidade
 @param Entity - Player ou entidade
 ]]
 function DataManager.Remove(Entity)
-	
-		if typeof(Entity) == "Instance" and Entity:IsA("Player") then
-			local ID = Entity:GetAttribute("EntityID")
-			entityMap.players[ID]:Destroy()
-			entityMap.players[ID] = nil
-		else
-			local ID = Entity:GetAttribute("EntityID")
-			entityMap.NPCs[ID]:Destroy()
-			entityMap.NPCs[ID] = nil
-		end
+	local isPlayer = typeof(Entity) == "Instance" and Entity:IsA("Player")
+	local map = isPlayer and entityMap.players or entityMap.NPCs
+
+	local ID = Entity:GetAttribute("EntityID")
+	local core = ID and map[ID]
+	if not core then return end -- player saiu antes de ter entidade, ou já removido
+
+	core:Destroy()
+	map[ID] = nil
 end
 
 --Cria os IDS pra redirecionamento ao ED
@@ -154,9 +160,6 @@ function DataManager.CreateID(Entity)
 
 		--Gera um ID baseado no UserID do Player
 		local id = "Player_" .. Entity.Player.UserId
-			if entityMap.players[id] then
-				warn("[DataManager]ID já existe para o jogador:", Entity.Player.Name, "- Sobrescrevendo.")
-			end
 		return id,"Player"
 			
 

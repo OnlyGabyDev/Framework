@@ -9,6 +9,7 @@
 
 local ServerStorage = game:GetService("ServerStorage")
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
+local StateEnum = StateTable.Enum
 local RS = game:GetService("ReplicatedStorage")
 local UpdateHPBar = RS.RemoteEvents:WaitForChild("UpdateHealthBar")
 
@@ -25,7 +26,7 @@ function HealthComponent.new(entity, config)
 	local self = setmetatable({}, HealthComponent)
 	
 	self.Entity = entity
-	self.MaxHP = config.MaxHP or 100
+	self.MaxHP = config.MaxHP or StateEnum.StatDefaults.MaxHP
 	self.HP = config.StartHP or self.MaxHP
 	self.Subscription = config.Events or false
 	self.IsDead = false
@@ -37,6 +38,16 @@ function HealthComponent.new(entity, config)
 
 	
 	return self
+end
+
+function HealthComponent:_UsesAttributes() : boolean
+	return self.Entity:HasComponent(self.Entity.ComponentKey.Attributes)
+end
+
+function HealthComponent:_SyncClient()
+	if self.Entity:IsPlayer() then
+		UpdateHPBar:FireClient(self.Entity.Player, self.HP, self:GetMaxHP())
+	end
 end
 
 
@@ -88,12 +99,19 @@ Aplica dano à entidade
 @param amount - Quantidade de dano a ser aplicada NUMBER
 @param source - Fonte do dano ANY
 @return sucesso BOOLEAN, quantidade real de dano aplicada NUMBER]]
-function HealthComponent:TakeDamage(amount : number, source : any)
+function HealthComponent:TakeDamage(amountOrContext : number | {}, source : any?)
 	if self.IsDead then return false end
 
-	if amount <= 0 then return false, 0 end
+	-- Aceita um context pronto (vindo do pipeline OUT do atacante) ou (amount, source)
+	local context
+	if type(amountOrContext) == "table" then
+		context = amountOrContext
+	else
+		context = StateTable.BuildContext(source, amountOrContext)
+	end
+	source = context.source -- já normalizado (Runner) pelo BuildContext
 
-	local context = StateTable.BuildContext(source,amount)
+	if context.damage <= 0 then return false, 0 end
 
 	-- Se tem StatusComponent, valida o hit e aplica modificadores
 	local statusComp = self.Entity:HasComponent(self.Entity.ComponentKey.Status)
@@ -156,14 +174,13 @@ function HealthComponent:TakeDamage(amount : number, source : any)
 	end
 
 			-- Alterações de dano pós block (via canal IN)
-	self.Entity:Emit("IN", StateTable.Breakpoints.OnDamage, context)
+	self.Entity:Emit(StateEnum.Roles.IN, StateEnum.Breakpoints.OnDamage, context)
+	context.damage = math.max(0, context.damage) -- listener não pode transformar dano em cura
 
-	
 	-- Aplica dano
 	local lastHP = self.HP
 	self.HP = math.max(0, self.HP - context.damage)
-	print(self.HP)
-	if self.Entity:IsPlayer() then UpdateHPBar:FireClient(self.Entity.Player,self.HP,self.MaxHP) end
+	self:_SyncClient()
 	local actualDamage = lastHP - self.HP
 	
 	-- Registra no histórico
@@ -201,17 +218,16 @@ Cura a entidade por uma quantidade específica
 ]]
 function HealthComponent:Heal(amount : number) : number
 	if self.IsDead or amount <= 0 then return 0 end
-	
+
 	local context = StateTable.BuildContext(nil, amount)
-	self.Entity:Emit("IN", StateTable.Breakpoints.OnHeal, context)
-	
+	self.Entity:Emit(StateEnum.Roles.IN, StateEnum.Breakpoints.OnHeal, context)
+	context.damage = math.max(0, context.damage)
+
 	local oldHP = self.HP
-	self.HP = math.min(self.MaxHP, self.HP + context.damage)
-	local actualHeal = self.HP - oldHP
-	
-	if self.Entity:IsPlayer() then UpdateHPBar:FireClient(self.Entity.Player,self.HP,self.MaxHP) end
-	
-	return actualHeal
+	self.HP = math.min(self:GetMaxHP(), self.HP + context.damage)
+	self:_SyncClient()
+
+	return self.HP - oldHP
 end
 
 --[[
@@ -225,24 +241,28 @@ function HealthComponent:Die(killer : any)
 	self.HP = 0
 	
 	local context = StateTable.BuildContext(killer, 0)
-	self.Entity:Emit("IN", StateTable.Breakpoints.OnDeath, context)
+	self.Entity:Emit(StateEnum.Roles.IN, StateEnum.Breakpoints.OnDeath, context)
+
+	-- Emite OUT.OnDeath no atacante (se killer for um Runner e tiver Entity associada)
+	if killer and type(killer) == "table" and killer.Entity then
+		local outContext = StateTable.BuildContext(killer, 0)
+		outContext.targetEntity = self.Entity
+		killer.Entity:Emit(StateEnum.Roles.OUT, StateEnum.Breakpoints.OnDeath, outContext)
+	end
 
 end
 
---[[
-Revive a entidade
-@param hpAmount - Quantidade de HP ao reviver NUMBER, se nil, revive com MaxHP
-@return sucesso BOOLEAN
-]]
-function HealthComponent:Revive(hpAmount : number) : boolean
+function HealthComponent:Revive(hpAmount : number?) : boolean
 	if not self.IsDead then return false end
-	
+
 	self.IsDead = false
-	self.HP = math.min(hpAmount or self.MaxHP, self.MaxHP)
-	
+	local maxHP = self:GetMaxHP()
+	self.HP = math.min(hpAmount or maxHP, maxHP)
+	self:_SyncClient()
+
 	local context = StateTable.BuildContext(nil, 0)
-	self.Entity:Emit("IN", StateTable.Breakpoints.OnRevive, context)
-	
+	self.Entity:Emit(StateEnum.Roles.IN, StateEnum.Breakpoints.OnRevive, context)
+
 	return true
 end
 
@@ -257,39 +277,48 @@ function HealthComponent:GetHP()
 end
 
 function HealthComponent:GetMaxHP()
-	self.MaxHP = self.Entity.GetStat("MaxHP", 100)
-	--warn(self.Entity.GetStat("MaxHP",100))
+	-- Com Attributes o teto vem do GetStat (inclui buffs); sem ele, self.MaxHP é a fonte
+	if self:_UsesAttributes() then
+		self.MaxHP = self.Entity.GetStat(StateEnum.Stats.MaxHP, self.MaxHP)
+	end
 	return self.MaxHP
 end
 
 function HealthComponent:SetHP(value)
 	if self.IsDead then return end
-	
+
 	local oldHP = self.HP
-	self.HP = math.clamp(value, 0, self.MaxHP)
-	
+	self.HP = math.clamp(value, 0, self:GetMaxHP())
+
 	if self.HP <= 0 then
 		self:Die(nil)
 	elseif self.HP > oldHP then
 		local context = StateTable.BuildContext(nil, self.HP - oldHP)
-		self.Entity:Emit("IN", StateTable.Breakpoints.OnHeal, context)
+		self.Entity:Emit(StateEnum.Roles.IN, StateEnum.Breakpoints.OnHeal, context)
 	end
-	
-	if self.Entity:IsPlayer() then UpdateHPBar:FireClient(self.Entity.Player,self.HP,self.MaxHP) end
+
+	self:_SyncClient()
 end
 
 function HealthComponent:SetMaxHP(value)
-	self.Entity.SetStat("MaxHP", value)
-	self:GetMaxHP()
+	value = math.max(1, value)
 
-	local ratio = self.HP / self.MaxHP
-	self.MaxHP = math.max(1, value)
-	self.HP = math.floor(self.MaxHP * ratio)
+	-- Ratio calculado ANTES de trocar o teto (bug antigo: ratio saía 2 e o HP ficava acima do MaxHP)
+	local ratio = self.HP / math.max(1, self:GetMaxHP())
+
+	if self:_UsesAttributes() then
+		self.Entity.SetStat(StateEnum.Stats.MaxHP, value)
+	end
+	self.MaxHP = value
+
+	local newMax = self:GetMaxHP() -- relê (com Attributes inclui modificadores ativos)
+	self.HP = math.clamp(math.floor(newMax * ratio), 0, newMax)
+	self:_SyncClient()
 end
 
 
 function HealthComponent:GetHealthRatio()
-	return self.HP / self.MaxHP
+	return self.HP / math.max(1, self:GetMaxHP())
 end
 
 
@@ -343,14 +372,13 @@ function HealthComponent:OnAdded()
 	if self.Subscription then
 		for key, callback in pairs(self.Subscription) do
 			self.Entity:Listen({
-				Role = "IN",
-				Breakpoint = StateTable.Breakpoints[key] or key,
+				Role = StateEnum.Roles.IN,
+				Breakpoint = StateEnum.Breakpoints[key] or key,
 				Priority = 0,
 				Action = callback
 			})
 		end
 	end
-
 end
 
 
@@ -379,11 +407,15 @@ local ExposeAPI = {
 	IsAlive = function(component) return component:IsAlive() end,
 	GetDamageHistory = function(component) return component:GetDamageHistory() end,
 	GetTotalDamageTaken = function(component) return component:GetTotalDamageTaken() end,
-	Subscribe = function(component, ...) return component:Subscribe(...) end,
 }
 
 return {
 	new = HealthComponent.new,
 	ExposeAPI = ExposeAPI,
-	EventKey = {onDamage = "onDamage",onHeal = "onHeal",onDeath = "onDeath",onRevive = "onRevive"}
+	EventKey = {
+		onDamage = StateEnum.Breakpoints.OnDamage,
+		onHeal = StateEnum.Breakpoints.OnHeal,
+		onDeath = StateEnum.Breakpoints.OnDeath,
+		onRevive = StateEnum.Breakpoints.OnRevive,
+	}
 }

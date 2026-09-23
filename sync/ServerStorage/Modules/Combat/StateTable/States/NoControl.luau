@@ -2,7 +2,7 @@ local Enum = require(script.Parent.Parent.Enum)
 
 return {
 	data = {
-		name = "noControl",
+		name = "NoControl",
 		category = Enum.States.NoControl,
 		
 		tags = {

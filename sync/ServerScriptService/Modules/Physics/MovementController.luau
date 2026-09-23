@@ -157,6 +157,9 @@ function MovementController.ProcessEntity(comp, dt)
 				})
 			end
 			rawDirection = (rawDirection :: Vector3?) or Vector3.zero
+			if rawDirection.Magnitude > 1e-4 then
+				rawDirection = rawDirection.Unit -- servidor nunca confia na magnitude vinda de skill/rede
+			end
 
 			local direction = rawDirection
 			if data.TurnRate and rawDirection.Magnitude > 1e-4 then

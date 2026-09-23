@@ -15,57 +15,68 @@ local function DeepFreeze(tbl)
 	return table.freeze(tbl)
 end
 
+--[[
+Verifica se o data de um efeito/skill declara a trait. `traits` é SEMPRE array de strings.
+(dono único dessa checagem: não use traits[Trait] em lugar nenhum)
+]]
+function Helper.HasTrait(meta, trait)
+	return meta ~= nil and meta.traits ~= nil and table.find(meta.traits, trait) ~= nil
+end
+
+--[[
+Skills recebem um proxy (`self`) que aponta pro SkillRunner via `.Runner`.
+Toda API que guarda/compara identidade de runner ou usa `source` normaliza aqui.
+]]
+function Helper.ResolveRunner(runnerOrProxy)
+	if type(runnerOrProxy) == "table" and runnerOrProxy.Runner then
+		return runnerOrProxy.Runner
+	end
+	return runnerOrProxy
+end
+
+local function registerModule(module, targetTable)
+	local success, data = pcall(require, module)
+	if not success then
+		warn("[StateTable] Erro ao carregar " .. module.Name .. ": " .. tostring(data))
+		return
+	end
+
+	targetTable[module.Name] = data
+	if type(data) ~= "table" then return end
+
+	if data.data and not data.data.name then
+		data.data.name = module.Name
+	end
+	if data.data then DeepFreeze(data.data) end
+	if data.callbacks then DeepFreeze(data.callbacks) end
+end
+
 function Helper.LoadModules(rootScript, folderName, targetTable)
-	local folder = rootScript:FindFirstChild(folderName) 
+	local folder = rootScript:FindFirstChild(folderName)
+	if not folder then
+		warn("[StateTable] Pasta não encontrada: " .. folderName)
+		return
+	end
 
-	
-	for _, module in ipairs(folder:GetChildren()) do
+	-- GetDescendants cobre módulos soltos E em subpastas (Buffs/Debuffs) numa única passada
+	for _, module in ipairs(folder:GetDescendants()) do
 		if module:IsA("ModuleScript") then
-			local success, data = pcall(require, module)
-			
-			if success then
-				targetTable[module.Name] = data
-				
-				if data.data and not data.data.name then
-					data.data.name = module.Name
-				end
-				if data.data then DeepFreeze(data.data) end
-				if data.callbacks then DeepFreeze(data.callbacks) end
-			else
-				warn("[StateTable] Erro ao carregar " .. module.Name .. ": " .. tostring(data))
-			end
-		else
-			for _,Folder in ipairs(folder:GetChildren()) do
-				for _,module in ipairs(Folder:GetChildren()) do
-					if module:IsA("ModuleScript") then
-						local success,data = pcall(require,module)
-
-						if success then
-							targetTable[module.name] = data
-
-							if data.data and not data.data.name then
-								data.data.name = module.name
-							end
-							if data.data then DeepFreeze(data.data) end
-							if data.callbacks then DeepFreeze(data.callbacks) end
-						else
-							warn("[StateTable] Erro ao carregar " .. module.Name .. ": " .. tostring(data))
-						end
-					end
-				end
-			end
+			registerModule(module, targetTable)
 		end
 	end
 end
 
 function Helper.GetTags(stateTable, stateName)
+	local tags = table.clone(Enum.tagsBase)
 	local state = stateTable.States[stateName] or stateTable.Status[stateName]
-	
-	if not state or not state.data.tags then 
-		return Enum.Defaults 
+
+	if state and state.data and state.data.tags then
+		for tagName, value in pairs(state.data.tags) do
+			tags[tagName] = value
+		end
 	end
 
-	return setmetatable(state.data.tags, { __index = Enum.Defaults })
+	return tags
 end
 
 function Helper.IsState(stateTable, meta)
@@ -113,7 +124,6 @@ end
 function Helper.CheckBlockFilter(runner, context)
 
     local data = (runner.data and runner.data.data) or (runner.skillData and runner.skillData.data)
-    
 
     if not data then return true end
     local source = context.source
@@ -122,26 +132,23 @@ function Helper.CheckBlockFilter(runner, context)
     if data.ShieldsFromType then
         local sourceType = source and source.type 
         local typeMatch = false
-        
-		--warn(data.ShieldsFromType)
         for _, Type in pairs(data.ShieldsFromType) do
             if sourceType == Type then
                 typeMatch = true
                 break 
             end
         end
-		
         if not typeMatch then
             return false 
         end
     end
 
-	local HasTraitFilter = next(data.ShieldsFrom)
-	
-    if HasTraitFilter then
+	local shieldsFrom = data.ShieldsFrom
+
+    if shieldsFrom and next(shieldsFrom) then
         local traitMatch = false
         
-        for _, requiredTrait in ipairs(data.ShieldsFrom) do
+        for _, requiredTrait in ipairs(shieldsFrom) do
             if table.find(incomingTraits, requiredTrait) then
                 traitMatch = true
                 break 
@@ -157,12 +164,15 @@ function Helper.CheckBlockFilter(runner, context)
 end
 
 function Helper.BuildContext(source,amount)
+	source = Helper.ResolveRunner(source)
+
 	local context = {
 		damage = amount or 0,
 		source = source,
 		sourceEntity = nil,
 		traits = {},
 		effects = {},
+		runner = nil,
 	}
 	
 	if source then
@@ -176,6 +186,7 @@ function Helper.BuildContext(source,amount)
 			context.type = source.type
 			context.secondaryType = source.secondaryType or nil
 		end
+		context.runner = Helper.ResolveRunner(source)
 	end
 	
 	return context
@@ -191,5 +202,7 @@ function Helper.BuildHistory(data)
 	lineage.Root = lineage.Parent and lineage.Parent.Root or lineage
 	return lineage
 end
+
+
 
 return Helper

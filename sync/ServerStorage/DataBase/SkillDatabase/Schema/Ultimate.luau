@@ -33,7 +33,7 @@ local Skill = {
 					self.Entity.RemoveStatusByID(self.stateID)
 					self.stateID = nil
 				end
-				self.Entity.RemoveActionState()
+				self.Entity.RemoveActionState(self.Runner)
 			end
 
 			self.forceID = self.Entity.AddForce({

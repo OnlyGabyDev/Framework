@@ -1,40 +1,55 @@
 -- ====================== O SCRIPT ABAIXO EXECUTA UM HEARTBEAT GLOBAL, TODAS AS REQUISIÇÕES DE UPDATE POR FRAME SERÃO DIRECIONADAS PRA CÁ==========
 
-
 local RunService = game:GetService("RunService")
 local ServerStorage = game:GetService("ServerStorage")
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
 
-local SkillScheduler = {}
+local Types = StateTable.Enum.Types
 
+local SkillScheduler = {}
 
 local activeSkills = {} -- SkillRunners
 local activeStatus = {} -- StatusRunners
-local activeTasks = {} -- Tasks genéricas
+local activeTasks  = {} -- Tasks genéricas (Types.State e outros)
 
 local connection = nil
 local frameCount = 0
+local statusAccumulator = 0 -- tempo REAL acumulado desde o último tick de status (roda a cada 2 frames)
+
+-- Único lugar que decide em qual lista cada tipo de runner vive
+local function listFor(runnerType)
+	if runnerType == Types.Status then
+		return activeStatus
+	elseif runnerType == Types.Skill then
+		return activeSkills
+	end
+	return activeTasks
+end
+
+local function updateList(list, dt, label)
+	for i = #list, 1, -1 do
+		local runner = list[i]
+
+		--Se o runner estiver no estado de finalização, remove da lista
+		if runner and runner.state ~= "Ended" then
+			local success, err = pcall(runner._internalUpdate, runner, dt)
+			if not success then
+				warn("[SkillScheduler] Erro em " .. label .. ":", runner.skillName, err)
+				runner:endSkill(true) -- Força término
+			end
+		else
+			table.remove(list, i)
+		end
+	end
+end
 
 -- Registra runner
 function SkillScheduler.Register(runner, runnerType)
-	runnerType = runnerType or StateTable.Enum.Types.Skill
+	local list = listFor(runnerType or Types.Skill)
 
-	-- Adiciona na lista certa
-	local list
-	if runnerType == StateTable.Enum.Types.Status then
-		list = activeStatus
-	elseif runnerType == StateTable.Enum.Types.Skill then
-		list = activeSkills
-	else
-		list = activeTasks
-	end
-
-
-	--Se ainda não estiver registrado, registre.
 	if not table.find(list, runner) then
 		table.insert(list, runner)
 	end
-
 
 	-- Inicia conexão se ainda não iniciada
 	if not connection then
@@ -46,23 +61,10 @@ function SkillScheduler.Register(runner, runnerType)
 	return true
 end
 
-
-
 -- Remove runner
 function SkillScheduler.Unregister(runner, runnerType)
-	runnerType = runnerType or StateTable.Enum.Types.Skill
+	local list = listFor(runnerType or Types.Skill)
 
-	local list
-	if runnerType == StateTable.Enum.Types.Status then
-		list = activeStatus
-	elseif runnerType == StateTable.Enum.Types.Skill then
-		list = activeSkills
-	else
-		list = activeTasks
-	end
-
-
-	--Se encontrar na lista, remove.
 	local index = table.find(list, runner)
 	if index then
 		table.remove(list, index)
@@ -76,50 +78,20 @@ function SkillScheduler.Unregister(runner, runnerType)
 	end
 end
 
-
 -- Update loop principal
 function SkillScheduler._Update(dt)
 	frameCount += 1
+	statusAccumulator += dt
 
-	-- Update de skills normais (todo frame)
-	-- Pra cada skill ativa executa a update
-	for i = #activeSkills, 1, -1 do
+	-- Skills e tasks: todo frame
+	updateList(activeSkills, dt, "skill")
+	updateList(activeTasks, dt, "task")
 
-		
-		--Busca o runner da skill atual
-		local runner = activeSkills[i]
-
-
-		--Se o runner estiver no estado de finalização, remove da lista
-		if runner and runner.state ~= "Ended" then
-			local success, err = pcall(runner._internalUpdate, runner, dt) --Executa a atualização, captura e retorna erros caso encontrados
-			if not success then
-				warn("[SkillScheduler] Erro em skill:", runner.skillName, err)
-				runner:endSkill(true) -- Força término
-			end
-		else
-			table.remove(activeSkills, i) 
-		end
-	end
-
-	-- Update de status (a cada 2 frames)
+	-- Status: a cada 2 frames, com o tempo real acumulado
 	if frameCount % 2 == 0 then
-		for i = #activeStatus, 1, -1 do
-			local runner = activeStatus[i]
-
-			if runner and runner.state ~= "Ended" then
-				local success, err = pcall(runner._internalUpdate, runner, dt*2)
-				if not success then
-					warn("[SkillScheduler] Erro em status:", runner.skillName, err)
-					runner:endSkill(true)
-				end
-			else
-				table.remove(activeStatus, i)
-			end
-		end
+		updateList(activeStatus, statusAccumulator, "status")
+		statusAccumulator = 0
 	end
-
-
 end
 
 -- Debug

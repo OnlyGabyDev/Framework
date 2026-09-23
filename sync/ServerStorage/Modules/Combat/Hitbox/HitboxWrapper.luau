@@ -39,8 +39,7 @@ type HitResult = {
 }
 
 --Inicializa a hitbox, podendo receber um excludeSelf como parâmetro, o padrão é True caso não declarado
-function HitboxWrapper.new(Entity,excludeSelf : boolean?)
-	
+function HitboxWrapper.new(Entity, excludeSelf: boolean?)
 	
 	--Se não receber nada informando se a hitbox deveria ou não excluir o usuário, então a hitbox vai ignorar o usuário por padrão
 	if excludeSelf == nil then
@@ -50,11 +49,9 @@ function HitboxWrapper.new(Entity,excludeSelf : boolean?)
 	local self = setmetatable({}, HitboxWrapper)
 	self.Entity = Entity
 	
-
 	self.weapon = Entity.GetWeapon()
-	self.activeHitboxes = {}
+	self.activeHitboxes = {} -- [nome] = hitbox ativo. "Ativo" é DERIVADO daqui (ver IsHitboxActive)
 	self.hitboxConfigs = {}
-	self.isActive = false
 	self.hitTargets = {}
 	
 	self.owners = {} --Será setado pelo SkillRunner, informando quem está rodando a skill
@@ -62,7 +59,11 @@ function HitboxWrapper.new(Entity,excludeSelf : boolean?)
 	-- RaycastParams, inicia a configuração de exclusão
 	self.raycastParams = RaycastParams.new()
 	self.raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-	self.raycastParams.FilterDescendantsInstances = {Entity.Instance, self.weapon}
+	local filter = { self.weapon }
+	if excludeSelf then
+		table.insert(filter, Entity.Instance)
+	end
+	self.raycastParams.FilterDescendantsInstances = filter
 
 	-- Descobre hitboxes
 	self:_discoverHitboxes()
@@ -83,7 +84,9 @@ function HitboxWrapper:_discoverHitboxes()
 
 	--Loopa por todas as hitboxes no modelo (dentro da pasta hitboxes)
 	for _, hitboxModel in ipairs(hitboxFolder:GetChildren()) do
-		if hitboxModel:IsA("Part")then
+		if hitboxModel:IsA("Part") then
+			hitboxModel.CanQuery = false -- volume de hitbox nunca bloqueia raycast alheio
+			hitboxModel.CanTouch = false
 			local flags = {}
 
 			
@@ -127,11 +130,12 @@ function HitboxWrapper:RemoveOwner(owner)
     if not self.owners then return self end
     self.owners[owner] = nil
 
-    -- se ficou vazio, remove callback
+    -- se ficou vazio, remove callback e para a hitbox
     local empty = true
     for _ in pairs(self.owners) do empty = false; break end
     if empty then
         self.callback = nil
+		self:StopHitbox()
     end
 
     return self
@@ -140,54 +144,53 @@ end
 
 --Inicia a hitbox (caso ainda não ativa)
 function HitboxWrapper:StartHitbox(duration)
-	
-	if self.isActive then return false end
+
+	if self:IsHitboxActive() then return false end
 	if next(self.hitboxConfigs) == nil then
 		warn("[HitboxWrapper] Nenhuma hitbox configurada")
 		return false
 	end
 
-	self.isActive = true
 	table.clear(self.hitTargets)
 
 	--Pra cada dado na tabela de configuração das hitboxes (flags, nome e parte)
 	for name, config in pairs(self.hitboxConfigs) do
-		
+
 		--Cria (ou reutiliza) uma hitbox
 		local hitbox = self:_createOrReuseHitbox(config.part)
 
-		--Se encontrar alguma parte já alocada então prepara o onHit da hitbox dela, informando callbacks e afins
 		if hitbox then
+			-- Registra ANTES do HitStart: o OnStopped precisa encontrar a entrada
+			self.activeHitboxes[name] = hitbox
+
 			hitbox:OnHit(function(result, segment)
 				self:_handleHit(result, segment, config, self.callback)
 			end)
-
-			hitbox:HitStart(duration)
 
 			hitbox:OnStopped(function(clearCallbacks)
 				clearCallbacks()
 				self:_returnHitbox(name, hitbox)
 			end)
 
-			self.activeHitboxes[name] = hitbox
+			hitbox:HitStart(duration)
 		end
 	end
 
-	return true
+	return next(self.activeHitboxes) ~= nil
 end
 
---Criação e/ou reutilização de novas hitboxes já preparadas na pool
+--Criação e/ou reutilização de hitboxes na pool global
 function HitboxWrapper:_createOrReuseHitbox(part: Part)
-	
-	--Chave de acesso da pool (dict)
-	local poolKey = part:GetFullName()
 
-	--Se a pool já tiver uma hitbox para aquela parte, então a reutiliza
-	if hitboxPool[poolKey] and #hitboxPool[poolKey] > 0 then
-		local hitbox = table.remove(hitboxPool[poolKey])
+	-- Chave por ARMA+PARTE (não por GetFullName, que embute o nome do personagem e vazava hitbox por entidade)
+	local poolKey = self.weapon.Name .. "/" .. part.Name
+
+	local pool = hitboxPool[poolKey]
+	if pool and #pool > 0 then
+		local hitbox = table.remove(pool)
 		hitbox.Instance = part
 		hitbox.RaycastParams = self.raycastParams
-		hitbox:Reconcile() --E atualiza a posição da mesma
+		hitbox:Reconcile() --E atualiza os segmentos pra nova parte
 		return hitbox
 	end
 
@@ -196,28 +199,36 @@ function HitboxWrapper:_createOrReuseHitbox(part: Part)
 		return ShapecastModule.new(part, self.raycastParams)
 	end)
 
-	return success and hitbox or nil
+	if not success then
+		warn("[HitboxWrapper] Falha ao criar hitbox:", part.Name, hitbox)
+		return nil
+	end
+
+	hitbox._poolKey = poolKey
+	return hitbox
 end
 
---Insere a hitbox na pool global
+--Devolve a hitbox à pool global. IDEMPOTENTE: OnStopped e StopHitbox podem chamar pro mesmo hitbox.
 function HitboxWrapper:_returnHitbox(name: string, hitbox)
 	if not hitbox then return end
+	if self.activeHitboxes[name] ~= hitbox then return end
+	self.activeHitboxes[name] = nil
 
-	local poolKey = hitbox.Instance:GetFullName()
+	hitbox:HitStop()
 
-	if not hitboxPool[poolKey] then
-		hitboxPool[poolKey] = {}
+	local poolKey = hitbox._poolKey
+	local pool = hitboxPool[poolKey]
+	if not pool then
+		pool = {}
+		hitboxPool[poolKey] = pool
 	end
 
 	-- Limite de pool
-	if #hitboxPool[poolKey] < POOL_MAX_SIZE then
-		hitbox:HitStop()
-		table.insert(hitboxPool[poolKey], hitbox)
+	if #pool < POOL_MAX_SIZE then
+		table.insert(pool, hitbox)
 	else
-		hitbox:DestroyHitbox()
+		hitbox:Destroy()
 	end
-
-	self.activeHitboxes[name] = nil
 end
 
 
@@ -256,46 +267,47 @@ function HitboxWrapper:_handleHit(result: RaycastResult, segment, config: Hitbox
 	end
 end
 
---Busca o Entity do alvo atingido
+--Busca o Entity do alvo atingido subindo a hierarquia até achar um Model com EntityID
+--(a arma é um Model filho do personagem: parar no primeiro Model ignorava o hit)
 function HitboxWrapper:_getTargetEntity(hitInstance: Instance)
 	local current = hitInstance
 
-	--Se atingir uma parte, busca o ID da parte atingida
 	while current and current ~= workspace do
-
-		--Se for um modelo
 		if current:IsA("Model") then
-
-			--Busca o ID da entidade
 			local hitID = current:GetAttribute("EntityID")
-
-			--Se encontrar, devolve a referência da entidade
-			if hitID then 
-			return self.DataManager.Get(hitID) 
-
-			--Retorna que atingiu algo sem ID, permite efeitos de atingir parede e afins.
-			else return false end
-
+			if hitID then
+				return self.DataManager.Get(hitID)
+			end
 		end
 		current = current.Parent
 	end
 
-	return nil 
+	return nil --Atingiu algo sem entidade (parede etc.)
 end
 
 
 --Desativa a hitbox
 function HitboxWrapper:StopHitbox()
-	if not self.isActive then return end
-
-	for name, hitbox in pairs(self.activeHitboxes) do
-		hitbox:HitStop()
-		self:_returnHitbox(name, hitbox)
+	-- Snapshot: HitStop dispara OnStopped, que mexe em activeHitboxes durante a iteração
+	for name, hitbox in table.clone(self.activeHitboxes) do
+		hitbox:HitStop()                 -- dispara OnStopped -> _returnHitbox
+		self:_returnHitbox(name, hitbox) -- no-op se o OnStopped já devolveu
 	end
 
-	table.clear(self.activeHitboxes)
 	table.clear(self.hitTargets)
-	self.isActive = false
+end
+
+--Derivado do estado real: não existe mais flag isActive pra ficar presa quando o timer expira sozinho
+function HitboxWrapper:IsHitboxActive(): boolean
+	return next(self.activeHitboxes) ~= nil
+end
+
+function HitboxWrapper:GetActiveHitboxes()
+	return self.activeHitboxes
+end
+
+function HitboxWrapper:GetHitboxConfigs()
+	return self.hitboxConfigs
 end
 
 
@@ -312,7 +324,7 @@ function HitboxWrapper.ClearPool()
 	local totalDestroyEntity = 0
 	for poolKey, pool in pairs(hitboxPool) do
 		for _, hitbox in ipairs(pool) do
-			hitbox:DestroyHitbox()
+			hitbox:Destroy()
 			totalDestroyEntity += 1
 		end
 	end
@@ -348,15 +360,17 @@ local ExposeAPI = {
 	RemoveOwner = function(component, owner) return component:RemoveOwner(owner) end,
 
 	-- State
-	IsHitboxActive = function(component) return component.isActive == true end,
+	IsHitboxActive = function(component) return component:IsHitboxActive() end,
 
 	-- Debug / Utils
-	GetActiveHitboxes = function(component) return component.activeHitboxes end,
-	GetHitboxConfigs = function(component) return component.hitboxConfigs end,
+	GetActiveHitboxes = function(component) return component:GetActiveHitboxes() end,
+	GetHitboxConfigs = function(component) return component:GetHitboxConfigs() end,
 }
 
 return {
 	new = HitboxWrapper.new,
 	ExposeAPI = ExposeAPI,
 	IHitbox = IHitbox,
+	GetPoolStats = HitboxWrapper.GetPoolStats, -- debug
+	ClearPool = HitboxWrapper.ClearPool,
 }

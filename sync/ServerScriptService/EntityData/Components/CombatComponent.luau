@@ -14,6 +14,7 @@ type ActionStatesType = {
 
 local ServerStorage = game:GetService("ServerStorage")
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
+local StateEnum = StateTable.Enum
 local SkillData = require(ServerStorage.DataBase.SkillDatabase)
 local CharData = require(ServerStorage.DataBase.CharacterDatabase)
 local Intents = require(game:GetService("ReplicatedStorage").Input.Intents)
@@ -206,10 +207,8 @@ function CombatComponent:SetCooldown(skillName : string, customCooldown : number
 
 	-- Se não forneceu cooldown customizado, busca no módulo
 	if not cd then
-		if self.SkillCache and self.SkillCache[skillName].data then
-			local skill = self.SkillCache[skillName]
-			cd = skill.data.cooldown
-		end
+		local skill = self.SkillCache[skillName]
+		cd = skill and skill.data and skill.data.cooldown
 	end
 
 	if cd then
@@ -255,15 +254,25 @@ function CombatComponent:GetActionState()
 	return self.ActionState
 end
 
-function CombatComponent:SetActionState(state,runner)
-
-	if not self.ActionState then self.ActionState = {name = state, runner} end
-
-	self.ActionState.name = state.data.name
-	self.ActionState.runner = runner
+function CombatComponent:SetActionState(state, runner)
+	-- Normaliza proxy da skill -> Runner (identidade única)
+	self.ActionState = {
+		name = state.data.name,
+		runner = StateTable.ResolveRunner(runner),
+	}
 end
 
-function CombatComponent:RemoveActionState()
+--[[
+Remove o ActionState. Se `runner` for informado, só remove se o estado for DELE
+(cleanup atrasado de uma skill antiga não apaga o estado de uma skill nova).
+]]
+function CombatComponent:RemoveActionState(runner)
+	local current = self.ActionState
+	if not current then return end
+
+	runner = StateTable.ResolveRunner(runner)
+	if runner and current.runner ~= runner then return end
+
 	self.ActionState = nil
 end
 
@@ -282,7 +291,7 @@ function CombatComponent:TrySelfCancel() : boolean
 					local runner = self.ActionState.runner 
 					if runner and typeof(runner) == "table" then
 						runner:Stop(true)
-						return true 
+						return runner:IsEnded() -- a skill pode ter recusado o cancel
 					end
 				end
 			end
@@ -306,7 +315,7 @@ function CombatComponent:CanContinue(skill) : boolean
 	--Busca por tag de impedimento
 	if self.Entity:HasComponent(self.Entity.ComponentKey.Status) then
 		local tags = self.Entity.GetActiveTags()
-		if tags["canCast"] == false then
+		if tags[StateEnum.Tags.canCast] == false then
 			return false
 		end
 	end
@@ -614,28 +623,23 @@ Aplica dano a uma entidade alvo, acionando o pipeline OUT do atacante antes e de
 ]]
 function CombatComponent:ApplyDamage(amount: number, source: any, targetEntity: any)
 	if not targetEntity or type(targetEntity.TakeDamage) ~= "function" then return false, 0 end
-	
+
 	-- Monta contexto base da ação ofensiva
 	local context = StateTable.BuildContext(source, amount)
 	context.targetEntity = targetEntity
-	
+
 	-- 1. Emite OUT antes do hit conectar
-	self.Entity:Emit("OUT", StateTable.Breakpoints.onHit, context)
-	
-	-- 2. Aplica o dano no alvo 
-	local success, actualDamage, outContext = targetEntity.TakeDamage(context.damage, source)
-	
+	self.Entity:Emit(StateEnum.Roles.OUT, StateEnum.Breakpoints.onHit, context)
+
+	-- 2. Aplica o dano no alvo passando o CONTEXT (traits/effects/damage alterados pelos listeners OUT precisam chegar no alvo)
+	local success, actualDamage, outContext = targetEntity.TakeDamage(context)
+
 	-- 3. Emite OUT após o hit conectar
 	if success and outContext then
 		outContext.actualDamage = actualDamage
-		self.Entity:Emit("OUT", StateTable.Breakpoints.OnDamage, outContext)
-		
-		-- Se o hit matou, emite OnDeath no canal OUT
-		if targetEntity.IsDead and targetEntity.IsDead() then
-			self.Entity:Emit("OUT", StateTable.Breakpoints.OnDeath, outContext)
-		end
+		self.Entity:Emit(StateEnum.Roles.OUT, StateEnum.Breakpoints.OnDamage, outContext)
 	end
-	
+
 	return success, actualDamage
 end
 

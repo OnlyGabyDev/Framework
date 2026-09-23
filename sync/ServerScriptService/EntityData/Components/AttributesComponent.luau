@@ -77,12 +77,17 @@ Retorna a tabela de Stats do personagem
 @return tabela de Stats TABLE
 ]]
 function AttributeComponents:GetStats() : {}
-	if not self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then return {Speed = 16, JumpForce = 20, GravityScale = 1} end
-	local char = self.Entity.GetChosenChar()
-	local mode = self.Entity.GetCharMode()
-	local charData = DB[char][mode]
+	local entity = self.Entity
 
-	return charData
+	-- Sem Combat não há char/forma: devolve o MESMO shape do registro, só com defaults
+	if not entity:HasComponent(entity.ComponentKey.Combat) then
+		return { Stats = table.clone(StateTable.Enum.StatDefaults) }
+	end
+
+	local charData = DB[entity.GetChosenChar()]
+	local formData = charData and charData[entity.GetCharMode()]
+
+	return formData or { Stats = table.clone(StateTable.Enum.StatDefaults) }
 end
 
 --=============================================================================
@@ -106,32 +111,22 @@ end
 
 
 function AttributeComponents:OnAdded()
+	if next(self.BaseStats) then return end -- override por config: respeita
 
-		local charData = self:GetStats()
-        if not next(self.BaseStats) then
-             local DefaultStats =  
-                {
-                    Speed = 16,
-                    JumpForce = 50,
-                    MaxHP = 100,
-                    Defense = 0,
-                    DamageMult = 1,
-                }
+	local charData = self:GetStats()
+	local stats = charData.Stats or {}
+	local Stat = StateTable.Enum.Stats
+	local Defaults = StateTable.Enum.StatDefaults
 
-            if not charData then
-
-                self.BaseStats = DefaultStats
-            end
-
-            self.BaseStats = {
-                Speed = charData["Stats"][StateTable.Enum.Stats.Speed] or DefaultStats.Speed,
-                JumpForce = charData["Stats"][StateTable.Enum.Stats.JumpForce] or DefaultStats.JumpForce,
-                MaxHP = charData["Stats"][StateTable.Enum.Stats.MaxHP] or DefaultStats.MaxHP,
-                Defense = charData["Stats"][StateTable.Enum.Stats.Defense] or DefaultStats.Defense,
-                DamageMult = charData["Stats"][StateTable.Enum.Stats.DamageMult] or DefaultStats.DamageMult,
-                Weapon = charData[StateTable.Enum.Stats.Weapon],
-            }
-        end
+	self.BaseStats = {
+		Speed = stats[Stat.Speed] or Defaults.Speed,
+		JumpForce = stats[Stat.JumpForce] or Defaults.JumpForce,
+		MaxHP = stats[Stat.MaxHP] or Defaults.MaxHP,
+		Defense = stats[Stat.Defense] or Defaults.Defense,
+		DamageMult = stats[Stat.DamageMult] or Defaults.DamageMult,
+		GravityScale = stats[Stat.GravityScale] or Defaults.GravityScale,
+		Weapon = charData[Stat.Weapon],
+	}
 end
 
 local ExposeAPI = {

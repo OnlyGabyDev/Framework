@@ -7,6 +7,7 @@ TriggerSet.__index = TriggerSet
 function TriggerSet.new()
 	local self = setmetatable({}, TriggerSet)
 	self.Subscriptions = {}
+	self._seq = 0 -- desempate determinístico de prioridade (ordem de inscrição)
 	return self
 end
 
@@ -17,41 +18,51 @@ function TriggerSet:Subscribe(sub: any)
 	if not self.Subscriptions[sub.Role][sub.Breakpoint] then
 		self.Subscriptions[sub.Role][sub.Breakpoint] = {}
 	end
-	
-	-- Initialize tracking (use shared state so "Tree" scope works by reference)
+
+	-- Estado de contagem compartilhado por referência (escopo "Tree" depende disso)
 	if not sub._sharedState then
 		sub._sharedState = { Count = 0 }
 	end
-	
-	table.insert(self.Subscriptions[sub.Role][sub.Breakpoint], sub)
-	
-	-- Sort by Priority (higher runs first)
-	table.sort(self.Subscriptions[sub.Role][sub.Breakpoint], function(a, b)
-		return (a.Priority or 0) > (b.Priority or 0)
+
+	sub._removed = nil
+	self._seq += 1
+	sub._seq = self._seq
+
+	local list = self.Subscriptions[sub.Role][sub.Breakpoint]
+	table.insert(list, sub)
+
+	table.sort(list, function(a, b)
+		local pa, pb = a.Priority or 0, b.Priority or 0
+		if pa ~= pb then
+			return pa > pb -- maior prioridade roda primeiro
+		end
+		return a._seq < b._seq -- empate: ordem de inscrição
 	end)
-	
+
 	return function()
 		self:Unsubscribe(sub)
 	end
 end
 
 function TriggerSet:Unsubscribe(subToRemove: any)
-	if not self.Subscriptions[subToRemove.Role] or not self.Subscriptions[subToRemove.Role][subToRemove.Breakpoint] then return end
-	
-	local list = self.Subscriptions[subToRemove.Role][subToRemove.Breakpoint]
-	for i, sub in ipairs(list) do
-		if sub == subToRemove or sub.ID == subToRemove.ID then
-			table.remove(list, i)
-			break
+	local byRole = self.Subscriptions[subToRemove.Role]
+	local list = byRole and byRole[subToRemove.Breakpoint]
+	if list then
+		local index = table.find(list, subToRemove)
+		if index then
+			table.remove(list, index)
 		end
 	end
+	-- Marca pra que um Emit em andamento (que trabalha num snapshot) pule esta inscrição
+	subToRemove._removed = true
 end
 
 function TriggerSet:UnsubscribeByOwner(owner: any)
-	for role, breakpoints in pairs(self.Subscriptions) do
-		for bp, list in pairs(breakpoints) do
+	for _, breakpoints in pairs(self.Subscriptions) do
+		for _, list in pairs(breakpoints) do
 			for i = #list, 1, -1 do
 				if list[i].Owner == owner then
+					list[i]._removed = true
 					table.remove(list, i)
 				end
 			end
@@ -60,42 +71,40 @@ function TriggerSet:UnsubscribeByOwner(owner: any)
 end
 
 function TriggerSet:Emit(role: string, breakpoint: string, context: any, ...)
-	if not self.Subscriptions[role] or not self.Subscriptions[role][breakpoint] then
+	local byRole = self.Subscriptions[role]
+	local list = byRole and byRole[breakpoint]
+	if not list or #list == 0 then
 		return
 	end
-	
-	local list = self.Subscriptions[role][breakpoint]
-	
-	for i = #list, 1, -1 do
-		local sub = list[i]
-		
-		-- 1. Check Traits
-		if TraitQuery.Match(sub.Query, context.traits) then
-			
-			-- 2. Check Limits
-			local canRun = true
-			if sub.Limit then
-				if sub._sharedState.Count >= sub.Limit.Max then
-					canRun = false
-					if sub.Limit.OnExhaust == "Remove" then
-						table.remove(list, i)
-					end
-				end
+
+	-- Snapshot: Actions podem chamar Listen/Unsubscribe/UnsubscribeByOwner sem corromper esta iteração
+	for _, sub in table.clone(list) do
+		if sub._removed then continue end
+
+		-- 1. Traits
+		if not TraitQuery.Match(sub.Query, context.traits) then continue end
+
+		-- 2. Limites
+		local limit = sub.Limit
+		if limit and sub._sharedState.Count >= limit.Max then
+			if limit.OnExhaust == "Remove" then
+				self:Unsubscribe(sub)
 			end
-			
-			if canRun then
-				sub._sharedState.Count += 1
-				
-				-- Pipeline calls modifying context (or Observer calls via task.spawn)
-				if type(sub.Action) == "function" then
-					-- Para Pipeline síncrono, a action deve mutar o context ou aplicar lógicas
-					sub.Action(context, ...)
-				end
-				
-				if sub.Limit and sub._sharedState.Count >= sub.Limit.Max and sub.Limit.OnExhaust == "Remove" then
-					table.remove(list, i)
-				end
+			continue
+		end
+
+		sub._sharedState.Count += 1
+
+		-- 3. Ação (síncrona: no pipeline ela pode mutar o context). Erro de um listener NÃO derruba o Emit.
+		if type(sub.Action) == "function" then
+			local ok, err = xpcall(sub.Action, debug.traceback, context, ...)
+			if not ok then
+				warn(`[TriggerSet] erro em {role}.{breakpoint}: {err}`)
 			end
+		end
+
+		if limit and limit.OnExhaust == "Remove" and sub._sharedState.Count >= limit.Max then
+			self:Unsubscribe(sub)
 		end
 	end
 end
@@ -117,7 +126,7 @@ function TriggerSet:Fork()
 						Limit = sub.Limit,
 						Inherit = { Generations = sub.Inherit.Generations - 1 }
 					}
-					
+
 					if inheritedSub.Limit and inheritedSub.Limit.Scope == "Branch" then
 						-- Novo ramo tem sua própria contagem clone
 						inheritedSub._sharedState = { Count = sub._sharedState.Count }
@@ -125,10 +134,10 @@ function TriggerSet:Fork()
 						-- Tree compartilha a mesma referência de _sharedState
 						inheritedSub._sharedState = sub._sharedState
 					else
-						-- Default/Holder: não compartilha ou zera (regras de herança podem variar, zerar é o seguro)
+						-- Default/Holder: não compartilha (zerar é o seguro)
 						inheritedSub._sharedState = { Count = 0 }
 					end
-					
+
 					newSet:Subscribe(inheritedSub)
 				end
 			end

@@ -15,24 +15,32 @@ local Intents = require(ReplicatedStorage.Input.Intents)
 
 function SkillHandler.HandleMovementInput(ID, dir)
 
-	local entityCore = DataManager.Get(ID) 	--Salva o EntityCore do player que chamou a função
+	local entityCore = DataManager.Get(ID)
 	if not entityCore then return false end
+	if typeof(dir) ~= "Vector3" then return false end
 
-	local n = (typeof(dir) == "Vector3" and dir.Magnitude > 0) and dir.Unit or Vector3.zero
+	-- Servidor é a autoridade: Humanoid.MoveDirection é sempre planar, então Y vindo do cliente é forjado.
+	-- Achata e normaliza aqui (único ponto), senão dash usa magnitude/Y arbitrários.
+	local flat = Vector3.new(dir.X, 0, dir.Z)
+	local n = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
 
 	entityCore.SetDirection(n)
 	return n.Magnitude > 0
 end
 
 --[[
-Mesmo padrão de HandleMovementInput, Ver
-InputValidator.server.luau (RequestLook) e MovementComponent:SetLookDirection.
+Mesmo padrão de HandleMovementInput. LookDirection é "plana" por contrato
+(ver LookDirectionBroadcaster.client.luau e MovementComponent:SetLookDirection).
 ]]
 function SkillHandler.HandleLookInput(ID, look)
 	local entityCore = DataManager.Get(ID)
 	if not entityCore then return false end
+	if typeof(look) ~= "Vector3" then return false end
 
-	entityCore.SetLookDirection(look)
+	local flat = Vector3.new(look.X, 0, look.Z)
+	if flat.Magnitude < 0.01 then return false end
+
+	entityCore.SetLookDirection(flat.Unit)
 	return true
 end
 
@@ -55,8 +63,9 @@ function SkillHandler.GetGestureSpec(entityCore, intent)
 	return skill and skill.data and skill.data.input or nil
 end
 
-local function startCooldown(entityCore, skillName)
-	entityCore.SetCooldown(skillName)
+local function startCooldown(entityCore, skill)
+	local skillName = skill.data.name
+	entityCore.SetCooldown(skillName, skill.data.cooldown)
 	return entityCore.GetCooldown(skillName)
 end
 
@@ -106,7 +115,7 @@ local function activate(entityCore, event)
 			if runner:Recast(true) then
 				runner:Recast(nil, event)
 				track(entityCore, event, runner)
-				return true, skillName, startCooldown(entityCore, skillName)
+				return true, skillName, startCooldown(entityCore, skill)
 			end
 			-- Sem onRecast: tenta cancelar e recriar a skill
 			if not entityCore.TrySelfCancel() then
@@ -122,7 +131,7 @@ local function activate(entityCore, event)
 	--Se obtiver retorno false (estado encontrado mas não é Self), sai do código
 	if not entityCore.TrySelfCancel() then return false end
 
-	local cooldown = startCooldown(entityCore, skillName)
+	local cooldown = startCooldown(entityCore, skill)
 
 	--inicializa o runner da skill
 	local runner = SkillRunner.new(
@@ -165,22 +174,6 @@ function SkillHandler.HandleIntent(ID, event)
 	return activate(entityCore, event)
 end
 
-function SkillHandler.HandleMovementInput(ID, direction)
-	local entityCore = DataManager.Get(ID)
-	if not entityCore then return end
-	
-	if entityCore.SetDirection then
-		entityCore.SetDirection(direction)
-	end
-end
 
-function SkillHandler.HandleLookInput(ID, look)
-	local entityCore = DataManager.Get(ID)
-	if not entityCore then return end
-	
-	if entityCore.SetLookDirection then
-		entityCore.SetLookDirection(look)
-	end
-end
 
 return SkillHandler

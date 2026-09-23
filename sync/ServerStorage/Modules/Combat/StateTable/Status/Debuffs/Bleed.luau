@@ -20,6 +20,16 @@ local Bleed = {
 	callbacks = {
 		onStart = function(self)
 			self._tickTimer = 0
+			-- O GetStatusCounter retorna 0 aqui porque o runner ainda está sendo inicializado e não foi salvo na tabela.
+			-- O counter real da skill pode ser acessado via self.counter.
+			warn("[Bleed] onStart - Stack atual:", self.counter)
+		end,
+
+		onRecast = function(self)
+			-- Roda toda vez que uma nova stack é aplicada sobre a mesma instância
+			warn("[Bleed] onRecast - Nova stack aplicada! Total:", self.counter)
+			-- Se quiser checar o GetStatusCounter (agora ele funciona porque o runner já está salvo):
+			warn("[Bleed] GetStatusCounter confirma:", self.Entity.GetStatusCounter("Bleed"))
 		end,
 
 		onStep = function(self, dt, context)

@@ -70,7 +70,6 @@ function WeaponComponent:EquipWeapon(weaponName : string) : boolean
 
 
 		local weaponFolder = weaponsFolder:FindFirstChild(weaponName)
-		warn(weaponName)
 		if not weaponFolder then
 			warn("[WeaponComponent] Arma não encontrada:", weaponName)
 			return false
@@ -166,6 +165,8 @@ end
 Desequipar a arma atual
 ]]
 function WeaponComponent:UnequipWeapon()
+	self:DestroyHitbox()
+
 	if self.Weapon then
 		self.Weapon:Destroy()
 		self.Weapon = nil
@@ -241,6 +242,21 @@ end
 
 function WeaponComponent:IsHitboxActive()
 	return self.Hitbox and self.Hitbox:IsHitboxActive()
+end
+
+function WeaponComponent:DestroyHitbox()
+	if self.Hitbox then
+		self.Hitbox:DestroyHitbox()
+		self.Hitbox = nil
+	end
+end
+
+function WeaponComponent:GetActiveHitboxes()
+	return self.Hitbox and self.Hitbox:GetActiveHitboxes() or {}
+end
+
+function WeaponComponent:GetHitboxConfigs()
+	return self.Hitbox and self.Hitbox:GetHitboxConfigs() or {}
 end
 
 

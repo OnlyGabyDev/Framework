@@ -1,6 +1,6 @@
 local Intents = require(game:GetService("ReplicatedStorage").Input.Intents)
 
-enum = {}
+local enum = {}
 
              --=====ENUM PRINCIPAL=====-
 
@@ -16,7 +16,7 @@ enum.Categories = {
     --Estados, status tratados de forma especial pelo sistema
 enum.States = {
         Stun = "Stun",          --Perde todo e qualquer input
-        noControl = "noControl",--Perde controle de input de movimentação
+        NoControl = "NoControl",--Perde controle de input de movimentação
         Root = "Root",          --Imobiliza o personagem
         Silence = "Silence",    --Impede de usar skills
     }
@@ -127,6 +127,15 @@ enum.Stats = {
     Weapon = "Weapon",
     GravityScale = "GravityScale",
 }
+
+enum.StatDefaults = table.freeze({
+    Speed = 16,
+    JumpForce = 50,
+    MaxHP = 100,
+    Defense = 0,
+    DamageMult = 1,
+    GravityScale = 1,
+})
 
 enum.MAX_RECURSION = 50 -- limite de ações recursivas de uma chain em um segundo
 

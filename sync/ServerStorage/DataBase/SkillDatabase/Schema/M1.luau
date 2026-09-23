@@ -34,7 +34,7 @@ local Skill = {
 					self.Entity.RemoveStatusByID(self.stateID)
 					self.stateID = nil
 				end
-				self.Entity.RemoveActionState()
+				self.Entity.RemoveActionState(self.Runner)
 				self.Entity.StopAnimation(self.M1Start, 0.2)
 				self.Entity.StopHitbox()
 			end
@@ -50,12 +50,7 @@ local Skill = {
 			self.Entity.ApplyDamage(self.damage, self, targetEntity)
 		end,
 		
-		onStep = function(self, dt)
-			if self.trigger then
-				self.cleanUp()
-			end
-		end,
-		
+
 		onRecast = function(self)
 			self.counter += 1
 			if self.counter == 2 then
@@ -66,7 +61,8 @@ local Skill = {
 				self.track = self.Entity.PlayAnimation(self.M1S2)
 				self.track.Looped = false
 				
-				self.Entity.StartHitbox(self.data.duration, function(hitResult) self:onHit(hitResult) end)
+				self.Entity.StopHitbox() -- zera hitTargets do 1º golpe: o 2º pode acertar o mesmo alvo
+				self.Entity.StartHitbox(self.data.duration)
 				self.damage = 2
 
 				self.cleanUp = function()
@@ -74,7 +70,7 @@ local Skill = {
 						self.Entity.RemoveStatusByID(self.stateID)
 						self.stateID = nil
 					end
-					self.Entity.RemoveActionState()
+					self.Entity.RemoveActionState(self.Runner)
 					self:Stop(false)
 					self.Entity.StopHitbox()
 				end
@@ -86,11 +82,11 @@ local Skill = {
 		end,
 
 		onEnd = function(self)
-			if self.track then self.track:Stop() end
+			if self.cleanUp then self.cleanUp() end
 		end,
 		
 		onCancel = function(self)
-			if self.track then self.track:Stop() end
+			if self.cleanUp then self.cleanUp() end
 		end,
 	}
 

@@ -45,7 +45,7 @@ function CharacterComponent:SetEntity(Entity) : boolean
 		root = model:FindFirstChild("HumanoidRootPart") or Entity
 	else
 		model = Entity
-		root = model:FindFirstChildWhichIsA("BasePart") or model.PrimaryPart
+		root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
 		humanoid = nil
 	end
 
@@ -62,7 +62,7 @@ Retorna o modelo da entidade
 @return modelo do personagem MODEL
 ]]
 function CharacterComponent:GetModel()
-	return self.entity.Instance
+	return self.Entity.Instance
 end
 
 --[[
@@ -100,7 +100,8 @@ Devolve a posição do root part da entidade
 @return posição VECTOR3
 ]]
 function CharacterComponent:GetPosition() : Vector3
-	return self.Root and self.Root.Position or Vector3.zero
+	local root = self:GetRoot()
+	return root and root.Position or Vector3.zero
 end
 
 --[[
@@ -108,7 +109,8 @@ Devolve o CFrame do root part da entidade
 @return CFrame do root part CFRAME
 ]]
 function CharacterComponent:GetCFrame()
-	return self.Root and self.Root.CFrame or CFrame.identity
+	local root = self:GetRoot()
+	return root and root.CFrame or CFrame.identity
 end
 
 --[[
@@ -116,8 +118,9 @@ Teleporta o personagem para uma posição específica
 @param position - posição para teleportar VECTOR3
 ]]
 function CharacterComponent:Teleport(position : Vector3) 
-	if self.Root then
-		self.Root.CFrame = CFrame.new(position)
+	local root = self:GetRoot()
+	if root then
+		root.CFrame = CFrame.new(position)
 	end
 end
 
@@ -130,7 +133,7 @@ Função de destruição do componente, limpa referências
 ]]
 function CharacterComponent:Destroy()
 	self.Entity = nil
-	self.Character = nil
+	self.CharacterWrap = nil
 	self.Root = nil
 	self.Humanoid = nil
 end

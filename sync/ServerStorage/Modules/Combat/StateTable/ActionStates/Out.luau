@@ -16,7 +16,7 @@ return {
 			data = {
 				category = Enum.Categories.ActionState,
 				exclusive = true,
-				name = "GlobalCast",
+				name = "OutGlobalCast",
 			},
 			callbacks = {}
 				

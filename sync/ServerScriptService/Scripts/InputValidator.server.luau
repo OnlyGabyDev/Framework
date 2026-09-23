@@ -132,7 +132,13 @@ RequestDir.OnServerEvent:Connect(function(player: Player, direction: any)
 	end
 
 	local session = getSession(player)
-	local ID = AntiCheat.CheckInput(player, session.lastMove)
+
+	local ID
+	if direction.Magnitude < 0.01 then
+		ID = AntiCheat.GetEntityID(player) -- "parar" nunca passa por rate limit
+	else
+		ID = AntiCheat.CheckInput(player, session.lastMove)
+	end
 	if not ID then
 		return
 	end

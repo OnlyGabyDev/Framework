@@ -131,9 +131,13 @@ Carrega a biblioteca de animações do personagem
 ]]
 function AnimationComponent:_LoadAnimLib()
 	local combatComp = self.Entity:GetComponent(self.Entity.ComponentKey.Combat)
-	if not combatComp then return end
+	local charName = combatComp and combatComp.ChosenChar
 	
-	local charName = combatComp.ChosenChar
+	if not charName and self.Entity.GetChosenChar then
+		charName = self.Entity.GetChosenChar()
+	end
+	
+	if not charName then return end
 	
 	-- Tenta carregar AnimationLib
 	local success, animLib = pcall(require, ServerStorage.Modules.Animation.AnimationLib)

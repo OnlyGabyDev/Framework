@@ -218,7 +218,7 @@ end
 
 
 --[[
-Release do botão que startou a skill, se existir onRelease, executa, se não, finaliza a skill
+Release do botão que startou a skill: se existir onRelease, executa; se não, NÃO faz nada (retorna false) e a skill segue até a duração/cleanup próprios
 @param input - InputEvent (Kind = Release, HeldTime = segundos segurado)
 @return rodou onRelease BOOLEAN
 ]]
@@ -257,6 +257,10 @@ end
 --[[Cancela a skill
 @param cancel - boolean, se a skill foi cancelada forçadamente de forma externa
 ]]
+function SkillRunner:IsEnded()
+	return self.state == STATES.Ended
+end
+
 function SkillRunner:Stop(cancel : boolean?)
 	self:endSkill(cancel)
 end
@@ -264,28 +268,36 @@ end
 
 --Finaliza a skill
 function SkillRunner:endSkill(cancel)
-	
-	if self.state == STATES.Ended then return end
-	self.state = STATES.Ended
 
-	--Se foi cancelada externamente
+	-- _ending protege contra re-entrada (onCancel chamando Stop)
+	if self.state == STATES.Ended or self._ending then return end
+
 	if cancel then
-		if self:_fire("onCancel", self:BuildContext()) == false then return end --Permita que somente a ação ocorra sem parar a skill.
-	end	
+		-- state só vira Ended DEPOIS: se a skill recusar o cancel (onCancel == false), ela continua viva
+		self._ending = true
+		local ok, result = pcall(self._fire, self, "onCancel", self:BuildContext())
+		self._ending = nil
 
+		if not ok then
+			warn("[SkillRunner] Erro em onCancel:", self.skillName, result)
+		elseif result == false then
+			return
+		end
+	end
+
+	self.state = STATES.Ended
 
 	--Sequência de finalização padrão
 	self:_fire("onEnd", self:BuildContext())
-	
+
 	if self.Entity and self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then
 		self.Entity.RemoveActiveSkill(self.skillName, self)
 		if self.Entity:HasComponent(self.Entity.ComponentKey.Weapon) then
 			self.Entity.RemoveHitboxOwner(self) --Limpa a hitbox
 		end
-		
+
 		self.Entity:Emit(StateTable.Enum.Roles.OUT, StateTable.Enum.Breakpoints.onEnd, self:BuildContext())
 	end
-
 
 	if self.connection then
 		self.connection.Unregister(self,self.type) --Sai do heartbeat global
@@ -294,7 +306,6 @@ function SkillRunner:endSkill(cancel)
 
 	-- Sempre limpar o runner e notificar
 	if self.onFinish then self.onFinish() end
-	
 end
 
 return SkillRunner

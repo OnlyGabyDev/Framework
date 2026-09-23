@@ -13,6 +13,10 @@ local SkillFactory = require(ServerScript.Modules.SkillFactory)
 local StatusComponent = {}
 StatusComponent.__index = StatusComponent
 
+local function asItems(entry)
+	return (entry.runner or entry.data) and { entry } or entry
+end
+
 function StatusComponent.new(entity, config)
 	local self = setmetatable({}, StatusComponent)
 	
@@ -140,20 +144,17 @@ function StatusComponent:ApplyStatus(statusData, duration : number?, sourceSkill
 	local group = isState and self.Effects[StateTable.Enum.Types.State] or self.Effects[StateTable.Enum.Types.Status]
 
 	
-	-- Verifica cooldown (se aplicável)
-	if meta.cooldown and meta.cooldown > 0 and sourceSkill then
-		local sourceEntity = sourceSkill.ED -- EntityData
-		if sourceEntity and sourceEntity.hasStatusCooldown then
-			if self:hasStatusCooldown(meta.name) then
-				return nil -- Em cooldown
-			end
-			self:setStatusCooldown(meta.name, meta.cooldown)
+	-- Verifica cooldown de re-aplicação (se o status declarar data.cooldown)
+	if meta.cooldown and meta.cooldown > 0 then
+		if self:HasStatusCooldown(meta.name) then
+			return nil -- Em cooldown
 		end
+		self:SetStatusCooldown(meta.name, meta.cooldown)
 	end
 	
 	-- ===== STACK NA MESMA INSTÂNCIA =====
 
-	if meta.traits and meta.traits[StateTable.Enum.Traits.Stackable] and meta.stackOnSelf then
+	if StateTable.HasTrait(meta, StateTable.Enum.Traits.Stackable) and meta.stackOnSelf then
 		local existing = group[meta.name]
 		if existing then
 			if existing.runner.skill.counter >= (meta.maxStacks or math.huge) then
@@ -187,7 +188,7 @@ function StatusComponent:ApplyStatus(statusData, duration : number?, sourceSkill
 	end
 	
 	-- ===== STACK EM INSTÂNCIAS DIFERENTES =====
-	if meta.traits and meta.traits[StateTable.Enum.Traits.Stackable] and not meta.stackOnSelf then
+	if StateTable.HasTrait(meta, StateTable.Enum.Traits.Stackable) and not meta.stackOnSelf then
    	 if not group[meta.name] then
       	  group[meta.name] = {}
     	end
@@ -221,6 +222,12 @@ function StatusComponent:ApplyStatus(statusData, duration : number?, sourceSkill
 	end
 	
 	-- ===== STATUS ÚNICO =====
+	-- O novo substitui o antigo: encerra o runner anterior (senão ele vira órfão e tica até o fim)
+	local previous = group[meta.name]
+	if previous and previous.runner then
+		previous.runner:endSkill(true)
+	end
+
 	local runner = self:_CreateRunner(data, meta.name, duration,targetEntity)
 	group[meta.name] = {
 		data = data,
@@ -491,8 +498,8 @@ function StatusComponent:_OnRunnerFinished(name : string, runner)
 			return
 		end
 
-		-- Caso múltiplas instâncias
-		if type(entry) == "table" then
+		-- Caso múltiplas instâncias (LISTA). Entrada única de outro runner NÃO entra aqui.
+		if entry[1] ~= nil then
 			local removed = false
 			for i = #entry, 1, -1 do
 				if entry[i].runner == runner then
@@ -530,7 +537,7 @@ function StatusComponent:GetActiveTags()
     
     for _, group in pairs(self.Effects) do 
         for _, entry in pairs(group) do
-            local items = (entry.runner or entry.data) and {entry} or entry
+            local items = asItems(entry)
             
             for _, item in ipairs(items) do
                 local runner = item.runner
@@ -599,15 +606,15 @@ end
 Retorna os efeitos a ser ignorados.
 ]]
 function StatusComponent:_GetShields()
-
 	local shields = {}
-	local effectRunner
 
-	for _,effect in pairs(self.Effects[StateTable.Enum.Types.Status]) do
-		effectRunner = effect.runner     
-		if effect.data.data.ShieldsFrom ~= nil then 
-			for _,StatusName in pairs(effect.data.data.ShieldsFrom) do
-				shields[StatusName] = effectRunner
+	for _, entry in pairs(self.Effects[StateTable.Enum.Types.Status]) do
+		for _, item in ipairs(asItems(entry)) do
+			local shieldsFrom = item.data.data.ShieldsFrom
+			if shieldsFrom ~= nil then
+				for _, statusName in pairs(shieldsFrom) do
+					shields[statusName] = item.runner
+				end
 			end
 		end
 	end
@@ -673,7 +680,7 @@ Verifica se a entidade possui algum estado de uma categoria específica.
 ]]
 function StatusComponent:HasStateCategory(category : string) : boolean
 	for _, entry in pairs(self.Effects[StateTable.Enum.Types.State]) do
-		local items = (entry.runner or entry.data) and {entry} or entry
+		local items = asItems(entry)
 		
 		for _, item in ipairs(items) do
 			if item.data and item.data.data and item.data.data.category == category then
@@ -730,7 +737,7 @@ local ExposeAPI = {
 	--Tags
 	GetImmunityRules = function(component) return component:GetImmunityRules() end,
 	GetActiveTags = function(component) return component:GetActiveTags() end,               
-	GetStatusCounter = function(component) return component:GetStatusCounter() end,
+	GetStatusCounter = function(component, ...) return component:GetStatusCounter(...) end,
 	GenerateUniqueEffectID = function(component, ...) return component:GenerateUniqueEffectID(...) end,         
 
 	--Status Cooldown

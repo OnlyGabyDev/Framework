@@ -16,14 +16,13 @@ callbacks = {
 
         --=========CLEANUP=========--
         	self.cleanUp = function()
-                 self.Entity.RemoveActionState()
                  if self.stateID then
                      self.Entity.RemoveStatusByID(self.stateID)
                  end
                  if self.dashForceID then
                      self.Entity.RemoveForce(self.dashForceID)
                  end
-                 self.Entity.RemoveActionState()
+                 self.Entity.RemoveActionState(self.Runner)
 			end
 
 
