@@ -36,6 +36,8 @@ local Skill = {
 				self.Entity.RemoveActionState(self.Runner)
 			end
 
+			self.Entity.StartHitbox(self.data.duration)
+
 			self.forceID = self.Entity.AddForce({
 				Type = "UltFlight",
 				Hard = true,
@@ -58,6 +60,35 @@ local Skill = {
 				OnEnd = function()
 					self.cleanUp()
 					self:Stop(false)
+				end,
+			})
+		end,
+
+		onHit = function(self,result)
+			local targetEntity = result.target
+			targetEntity.forceID = targetEntity.AddForce({
+				Type = "UltFlight",
+				Hard = true,
+				IgnoreGravity = true,
+				Priority = 20,
+				Duration = self.data.duration,
+				Speed = self.data.Speed,
+				TurnRate = math.rad(self.data.TurnRateDegrees),
+				FaceDirection = true,
+
+				Direction = function(_elapsed, _duration, ctx)
+					local look = self.Entity.GetLookDirection()
+					if look.Magnitude < 0.1 then
+						return self.Entity.GetDirection()
+					end
+					return look
+				end,
+
+
+				OnEnd = function()
+					if targetEntity.forceID then
+						targetEntity.forceID = nil
+					end
 				end,
 			})
 		end,

@@ -73,6 +73,7 @@ callbacks = {
 			Priority = 0,
 			Owner = comboOwner,
 			Limit = { Max = 1, OnExhaust = "Remove" },
+			TTD = 3.5,
 			Action = function(context)
 				local targetEntity = context.targetEntity
 				if not targetEntity then return end
@@ -86,6 +87,7 @@ callbacks = {
 					Breakpoint = StateTable.Enum.Breakpoints.PostDamage,
 					Priority = 0,
 					Owner = comboOwner,
+					TTD = 3.5,
 					Action = function(tgtContext)
 						if tgtContext.source and tgtContext.source.skill and tgtContext.source.skill.data and tgtContext.source.skill.data.name == "Bleed" then
 							if self.isUltActive then
@@ -104,6 +106,7 @@ callbacks = {
 			Breakpoint = StateTable.Enum.Breakpoints.onStart,
 			Priority = 0,
 			Owner = comboOwner,
+			TTD = 3.5,
 			Action = function(context)
 				local runner = context.sourceRunner
 				if runner and StateTable.HasTrait(runner.skill.data, StateTable.Enum.Traits.Ultimate) then
@@ -118,6 +121,7 @@ callbacks = {
 			Breakpoint = StateTable.Enum.Breakpoints.onEnd,
 			Priority = 0,
 			Owner = comboOwner,
+			TTD = 3.5,
 			Action = function(context)
 				local runner = context.sourceRunner
 				if runner and StateTable.HasTrait(runner.skill.data, StateTable.Enum.Traits.Ultimate) then

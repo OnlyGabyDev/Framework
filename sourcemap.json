@@ -1038,6 +1038,14 @@
               ]
             },
             {
+              "name": "ComponentUtils",
+              "className": "ModuleScript",
+              "guid": "7599648",
+              "filePaths": [
+                "sync/ServerScriptService/EntityData/ComponentUtils.luau"
+              ]
+            },
+            {
               "name": "DataManager",
               "className": "ModuleScript",
               "guid": "14189",
@@ -1059,14 +1067,6 @@
               "guid": "14200",
               "filePaths": [
                 "sync/ServerScriptService/EntityData/EntityWrapper.luau"
-              ]
-            },
-            {
-              "name": "ComponentUtils",
-              "className": "ModuleScript",
-              "guid": "7599648",
-              "filePaths": [
-                "sync/ServerScriptService/EntityData/ComponentUtils.luau"
               ]
             }
           ]
@@ -5090,17 +5090,17 @@
         {
           "name": "Camera",
           "className": "Camera",
-          "guid": "203271",
+          "guid": "14208434",
           "children": [
             {
               "name": "ShapecastHitboxHelper",
               "className": "Folder",
-              "guid": "203272",
+              "guid": "14208435",
               "children": [
                 {
                   "name": "CurrentObject",
                   "className": "ObjectValue",
-                  "guid": "203273"
+                  "guid": "14208436"
                 }
               ]
             }
