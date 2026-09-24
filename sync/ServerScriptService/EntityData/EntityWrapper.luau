@@ -36,7 +36,7 @@ function IMovement:ReleaseForces() end
 function IMovement:FaceDirection(direction: Vector3, responsiveness: number?) end
 function IMovement:ReleaseFaceDirection() end
 function IMovement:Destroy() end
-
+function IMovement:GetAirState(): string end -- "Grounded" | "Jumping" | "Falling"
 
 --====================CHARACTER==========================--
 
@@ -151,6 +151,30 @@ function HumanoidMovement:SetJumpForce(jump)
 	if hum then hum.JumpHeight = jump end
 end
 
+local StateToAir = {
+	[Enum.HumanoidStateType.Jumping] = "Jumping",
+	[Enum.HumanoidStateType.Freefall] = "Falling",
+}
+
+function HumanoidMovement:GetAirState(): string
+	local hum = self._character:GetHumanoid()
+	if not hum then return "Grounded" end
+
+	local mapped = StateToAir[hum:GetState()]
+	if mapped then
+		return mapped
+	end
+
+	-- Humanoid:GetState() só distingue Jumping/Freefall explicitamente; outros
+	-- estados (Running, Physics — usado quando uma Force externa toma conta —
+	-- etc.) não dizem sozinhos se há contato com o chão. FloorMaterial é a
+	-- forma barata e confiável do próprio Humanoid responder isso sem raycast.
+	if hum.FloorMaterial == Enum.Material.Air then
+		return "Falling"
+	end
+	return "Grounded"
+end
+
 function HumanoidMovement:SetFrozen(isFrozen)
 	local hum = self._character:GetHumanoid()
 	local root = self._character:GetRoot()
@@ -238,6 +262,32 @@ resultado das Forces eixo a eixo, é ApplyForceFrame/ReleaseForces abaixo.
 function NPCMovement:Move(direction: Vector3)
 	local flat = Vector3.new(direction.X, 0, direction.Z)
 	self._desiredWalk = flat * self._currentSpeed
+end
+
+function NPCMovement:GetAirState(): string
+	local root = self._character:GetRoot()
+	if not root then return "Grounded" end
+
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { root.Parent }
+
+	local rayLength = (root.Size.Y / 2) + 0.3
+	local result = workspace:Raycast(root.Position, Vector3.new(0, -rayLength, 0), params)
+	if result then
+		return "Grounded"
+	end
+
+	-- Sem Humanoid não existe state machine nativa: aproxima por velocidade
+	-- vertical. ATENÇÃO: isso raycasta a cada chamada — se algum dia virar
+	-- hot-path chamado todo Heartbeat pra centenas de NPCs, cacheie o
+	-- resultado por frame (hoje nada chama isso automaticamente, só quando
+	-- uma skill pergunta).
+	local verticalVelocity = root.AssemblyLinearVelocity.Y
+	if verticalVelocity > 0.5 then
+		return "Jumping"
+	end
+	return "Falling"
 end
 
 function NPCMovement:SetJumpForce(_jump) end -- NPCs sem Humanoid não pulam por padrão; sobrescreva se precisar

@@ -14,17 +14,25 @@ local Intents = require(ReplicatedStorage.Input.Intents)
 --=============================================================================
 
 function SkillHandler.HandleMovementInput(ID, dir)
-
 	local entityCore = DataManager.Get(ID)
 	if not entityCore then return false end
 	if typeof(dir) ~= "Vector3" then return false end
 
-	-- Servidor é a autoridade: Humanoid.MoveDirection é sempre planar, então Y vindo do cliente é forjado.
-	-- Achata e normaliza aqui (único ponto), senão dash usa magnitude/Y arbitrários.
 	local flat = Vector3.new(dir.X, 0, dir.Z)
 	local n = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
 
 	entityCore.SetDirection(n)
+
+	-- Fan-out opcional pra corpos linkados. Custo zero quando ninguém usa
+	-- Link — HasComponent é um lookup de tabela.
+	if entityCore:HasComponent(entityCore.ComponentKey.Control) then
+		for _, linkedEntity in ipairs(entityCore.GetLinkedEntities("MirrorMovement")) do
+			if linkedEntity:HasComponent(linkedEntity.ComponentKey.Movement) then
+				linkedEntity.SetDirection(n)
+			end
+		end
+	end
+
 	return n.Magnitude > 0
 end
 
@@ -36,11 +44,18 @@ function SkillHandler.HandleLookInput(ID, look)
 	local entityCore = DataManager.Get(ID)
 	if not entityCore then return false end
 	if typeof(look) ~= "Vector3" then return false end
+	if look.Magnitude < 0.01 then return false end
 
-	local flat = Vector3.new(look.X, 0, look.Z)
-	if flat.Magnitude < 0.01 then return false end
+	entityCore.SetAimDirection(look.Unit)
 
-	entityCore.SetLookDirection(flat.Unit)
+	if entityCore:HasComponent(entityCore.ComponentKey.Control) then
+		for _, linkedEntity in ipairs(entityCore.GetLinkedEntities("MirrorLook")) do
+			if linkedEntity:HasComponent(linkedEntity.ComponentKey.Movement) then
+				linkedEntity.SetAimDirection(look.Unit)
+			end
+		end
+	end
+
 	return true
 end
 

@@ -16,7 +16,7 @@ Caso Player, passar o Player Character (modelo do player), caso NPC, passar o mo
 @param components - tabela de componentes a serem adicionados {}
 @return void
 ]]
-function DataManager.Create(Entity, components : {}, configs : {[string]: any}?)
+function DataManager.Create(Entity, components : {}, configs : {[string]: any}?, parentEntity : any?)
 
 
 	warn("===========VITALS============")
@@ -52,6 +52,12 @@ function DataManager.Create(Entity, components : {}, configs : {[string]: any}?)
 	end
 	local core = EntityCore.new(Model,entityType,id,Player)
 
+	-- NOVO: herança de reações (Regra 4). TriggerSet.Fork() já suporta
+	-- Inherit.Generations/Limit.Scope — só faltava alguém chamar isso na
+	-- criação.
+	if parentEntity and parentEntity._triggerSet then
+		core._triggerSet = parentEntity._triggerSet:Fork()
+	end
 
 	--DEBUG
 	local compList = {}

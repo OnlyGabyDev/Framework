@@ -45,6 +45,8 @@ local ServerScript = game:GetService("ServerScriptService")
 local ServerStorage = game:GetService("ServerStorage")
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
 local MovementController = require(ServerScript.Modules.Physics.MovementController)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Utils = require(ReplicatedStorage.Utils)
 
 function MovementComponent.new(entity, config)
 	local self = setmetatable({}, MovementComponent)
@@ -54,6 +56,7 @@ function MovementComponent.new(entity, config)
 	self.Direction = Vector3.zero      -- input AO VIVO (zero = soltou tudo)
 	self.LastDirection = Vector3.zero  -- último não-zero (fallback de dash/facing)
 	self.LookDirection = Vector3.zero  -- direção "plana" da câmera do dono (ver SetLookDirection)
+	self.AimDirection = Vector3.new(0, 0, -1) -- 3D cru, inclui pitch da câmera
 	self.IsFrozen = false              -- USE SÓ pra hard-stop (cutscene/loading).
 	-- CC de combate = StateTable (Root/Stun/canMove), que já
 	-- compõe corretamente com o sistema de Forces abaixo.
@@ -100,6 +103,49 @@ end
 
 function MovementComponent:GetDirection()
 	return self.Direction
+end
+
+function MovementComponent:GetIntentDirection(): string
+	local facing = self.LookDirection
+	if facing.Magnitude < 0.1 then
+		facing = self.LastDirection
+	end
+	if facing.Magnitude < 0.1 then
+		facing = Vector3.new(0, 0, -1)
+	end
+	return Utils.classifyDirection(self.Direction, facing)
+end
+
+--[[
+Sobrepõe o palpite do wrapper (Grounded/Jumping/Falling, só física bruta) com
+"Floating" quando algo está DELIBERADAMENTE suspendendo o eixo Y — uma Force
+Hard com IgnoreGravity/Axes.Y, ou GravityScale <= 0 via Attributes. Sem isso,
+uma entidade flutuando parada (velocidade vertical ~0) seria confundida com
+"acabou de começar a cair", que é exatamente o furo reportado.
+Grounded sempre vence — flutuar não anula estar de pé em cima de algo.
+]]
+function MovementComponent:GetAirState(): string
+	local wrapperState = self.MovementWrapper and self.MovementWrapper:GetAirState() or "Grounded"
+	if wrapperState == "Grounded" then
+		return "Grounded"
+	end
+
+	for _, forceEntry in pairs(self.ActiveForces) do
+		local data = forceEntry.Data
+		local axes = data.Axes
+		local claimsY = data.IgnoreGravity or (axes and axes.Y)
+		if data.Hard and claimsY then
+			return "Floating"
+		end
+	end
+
+	if self.Entity:HasComponent(self.Entity.ComponentKey.Attributes) then
+		if self.Entity.GetStat(StateTable.Enum.Stats.GravityScale, 1) <= 0 then
+			return "Floating"
+		end
+	end
+
+	return wrapperState
 end
 
 function MovementComponent:SetMovement()
@@ -181,13 +227,24 @@ function MovementComponent:ClearForces()
 end
 
 local ExposeAPI = {
+	GetAirState = function(Component) return Component:GetAirState() end,
 	SetDirection = function(Component, dir) 
 		Component.Direction = dir 
 		if dir.Magnitude > 0 then Component.LastDirection = dir end
 	end,
 	GetLastDirection = function(Component) return Component.LastDirection end,
 	GetDirection = function(Component) return Component.Direction end,
-	SetLookDirection = function(Component, dir) Component.LookDirection = dir end,
+	SetAimDirection = function(Component, dir)
+		Component.AimDirection = dir
+		local flat = Vector3.new(dir.X, 0, dir.Z)
+		if flat.Magnitude > 1e-3 then
+			Component.LookDirection = flat.Unit
+		end
+		-- Se flat.Magnitude for ~0 (olhando reto pra cima/baixo), mantém o último
+		-- LookDirection válido: classificação de combo não pode ficar com vetor zero.
+	end,
+	GetAimDirection = function(Component) return Component.AimDirection end,
+	GetIntentDirection = function(Component) return Component:GetIntentDirection() end,
 	GetLookDirection = function(Component) return Component.LookDirection end,
 	AddForce = function(Component, ...) return Component:AddForce(...) end,
 	RemoveForce = function(Component, ...) return Component:RemoveForce(...) end,

@@ -10,6 +10,13 @@ function TriggerSet.new()
 	return self
 end
 
+-- Dono único da checagem de expiração de TTD (Regra 1) — usado tanto em Emit
+-- quanto em Fork. Antes só Emit sabia disso, e Fork podia "ressuscitar" um
+-- sub cujo TTD já tinha estourado, herdando um countdown novo do zero.
+local function isExpired(sub: any): boolean
+	return sub._expirationTime ~= nil and os.clock() >= sub._expirationTime
+end
+
 function TriggerSet:Subscribe(sub: any)
 	if not self.Subscriptions[sub.Role] then
 		self.Subscriptions[sub.Role] = {}
@@ -18,12 +25,13 @@ function TriggerSet:Subscribe(sub: any)
 		self.Subscriptions[sub.Role][sub.Breakpoint] = {}
 	end
 
-	-- Estado de contagem compartilhado por referência (escopo "Tree" depende disso)
 	if not sub._sharedState then
 		sub._sharedState = { Count = 0 }
 	end
 	
-	-- TTD (Time To Die): expiração por tempo (avaliação preguiçosa)
+	-- TTD (Time To Die): expiração por tempo. Avaliação preguiçosa em Emit,
+	-- avaliação ATIVA em Fork (ver TriggerSet:Fork) — sem a segunda, uma
+	-- reação já morta podia ser copiada pro filho com clock novo.
 	if sub.TTD then
 		sub._expirationTime = os.clock() + sub.TTD
 	end
@@ -38,9 +46,9 @@ function TriggerSet:Subscribe(sub: any)
 	table.sort(list, function(a, b)
 		local pa, pb = a.Priority or 0, b.Priority or 0
 		if pa ~= pb then
-			return pa > pb -- maior prioridade roda primeiro
+			return pa > pb
 		end
-		return a._seq < b._seq -- empate: ordem de inscrição
+		return a._seq < b._seq
 	end)
 
 	return function()
@@ -57,7 +65,6 @@ function TriggerSet:Unsubscribe(subToRemove: any)
 			table.remove(list, index)
 		end
 	end
-	-- Marca pra que um Emit em andamento (que trabalha num snapshot) pule esta inscrição
 	subToRemove._removed = true
 end
 
@@ -81,21 +88,18 @@ function TriggerSet:Emit(role: string, breakpoint: string, context: any, ...)
 		return
 	end
 
-	-- Snapshot: Actions podem chamar Listen/Unsubscribe/UnsubscribeByOwner sem corromper esta iteração
 	for _, sub in table.clone(list) do
 		if sub._removed then continue end
 
 		-- 0. TTD (Time To Die) - Avaliação Preguiçosa
-		if sub._expirationTime and os.clock() >= sub._expirationTime then
+		if isExpired(sub) then
 			self:Unsubscribe(sub)
 			continue
 		end
 
-		-- 1. Traits
 		local matched = TraitQuery.Match(sub.Query, context.traits)
 		if not matched then continue end
 
-		-- 2. Limites
 		local limit = sub.Limit
 		if limit and sub._sharedState.Count >= limit.Max then
 			if limit.OnExhaust == "Remove" then
@@ -106,7 +110,6 @@ function TriggerSet:Emit(role: string, breakpoint: string, context: any, ...)
 
 		sub._sharedState.Count += 1
 
-		-- 3. Ação (síncrona: no pipeline ela pode mutar o context). Erro de um listener NÃO derruba o Emit.
 		if type(sub.Action) == "function" then
 			local ok, err = xpcall(sub.Action, debug.traceback, context, ...)
 			if not ok then
@@ -125,8 +128,34 @@ function TriggerSet:Fork()
 	local newSet = TriggerSet.new()
 	for role, breakpoints in pairs(self.Subscriptions) do
 		for bp, list in pairs(breakpoints) do
-			for _, sub in ipairs(list) do
+			-- Clona ANTES de iterar: Unsubscribe (chamado abaixo pra podar
+			-- subs expirados encontrados aqui) muda `list` por remoção de
+			-- índice — iterar com ipairs sobre a tabela viva ao mesmo tempo
+			-- pularia elementos. Mesmo idioma que Emit já usa.
+			for _, sub in ipairs(table.clone(list)) do
+				if sub._removed then continue end
+
+				-- FIX: sem isso, um sub cujo TTD já estourou (mas que ainda
+				-- não foi podado por falta de Emit nesse breakpoint
+				-- específico) era copiado pro filho com um countdown NOVO,
+				-- do zero — "ressuscitando" uma reação que já devia estar
+				-- morta. Aproveita a passagem pra podar do PAI também, de graça.
+				if isExpired(sub) then
+					self:Unsubscribe(sub)
+					continue
+				end
+
 				if sub.Inherit and sub.Inherit.Generations > 0 then
+					local inheritedTTD = sub.TTD
+					if sub.TTD and sub.TTDInheritRemaining and sub._expirationTime then
+						-- Opt-in: filho herda o TEMPO RESTANTE, não a duração
+						-- cheia de novo. Default é duração cheia (cada
+						-- geração da árvore tem sua própria janela plena) —
+						-- marque TTDInheritRemaining=true no sub original se
+						-- quiser um TTD que só encolhe ao longo da linhagem.
+						inheritedTTD = math.max(0, sub._expirationTime - os.clock())
+					end
+
 					local inheritedSub = {
 						Role = sub.Role,
 						Breakpoint = sub.Breakpoint,
@@ -136,17 +165,15 @@ function TriggerSet:Fork()
 						Owner = sub.Owner,
 						Limit = sub.Limit,
 						Inherit = { Generations = sub.Inherit.Generations - 1 },
-						TTD = sub.TTD,
+						TTD = inheritedTTD,
+						TTDInheritRemaining = sub.TTDInheritRemaining,
 					}
 
 					if inheritedSub.Limit and inheritedSub.Limit.Scope == "Branch" then
-						-- Novo ramo tem sua própria contagem clone
 						inheritedSub._sharedState = { Count = sub._sharedState.Count }
 					elseif inheritedSub.Limit and inheritedSub.Limit.Scope == "Tree" then
-						-- Tree compartilha a mesma referência de _sharedState
 						inheritedSub._sharedState = sub._sharedState
 					else
-						-- Default/Holder: não compartilha (zerar é o seguro)
 						inheritedSub._sharedState = { Count = 0 }
 					end
 

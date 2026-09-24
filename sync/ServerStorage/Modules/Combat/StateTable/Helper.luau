@@ -3,6 +3,8 @@ local Helper = {}
 
 local Enum = require(script.Parent.Enum)
 local LineageModule = require(script.Parent.Parent.Lineage)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Utils = require(ReplicatedStorage.Utils)
 
 
 
@@ -223,6 +225,7 @@ function Helper.BuildContext(source, amount, parentContext)
 
 	local context = {
 		damage = amount or 0,
+		direction = nil,
 		source = source,
 		sourceEntity = nil,
 		traits = {},
@@ -243,6 +246,20 @@ function Helper.BuildContext(source, amount, parentContext)
 			context.type = source.type
 			context.secondaryType = source.secondaryType or nil
 		end
+	end
+
+	-- Direção de intenção de quem originou a ação. Regra 16 (dependência
+	-- opcional explícita): sem MovementComponent, direction fica nil — quem
+	-- ler isso precisa checar por nil.
+	if context.sourceEntity and context.sourceEntity:HasComponent(context.sourceEntity.ComponentKey.Movement) then
+		local worldDir = context.sourceEntity.GetDirection()
+		local facing = context.sourceEntity.GetLookDirection()
+		context.direction = {
+			Id = Utils.classifyDirection(worldDir, facing),
+			World = worldDir,
+			Local = Utils.worldToLocalPlanar(worldDir, facing),
+			Magnitude = worldDir.Magnitude,
+		}
 	end
 
 	-- Lineage: dono único é Combat/Lineage.luau (antes essa função não trackeava nada disso)

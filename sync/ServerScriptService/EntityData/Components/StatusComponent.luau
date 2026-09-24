@@ -14,6 +14,11 @@ local SkillFactory = require(ServerScript.Modules.SkillFactory)
 local StatusComponent = {}
 StatusComponent.__index = StatusComponent
 
+local function nextSeq(self)
+	self._effectSeq += 1
+	return self._effectSeq
+end
+
 local function asItems(entry)
 	return (entry.runner or entry.data) and { entry } or entry
 end
@@ -32,6 +37,7 @@ function StatusComponent.new(entity, config)
 	-- Cache de tags combinadas
 	self._cachedTags = nil
 	self._tagsDirty = true
+	self._effectSeq = 0 -- NOVO: contador monotônico, usado pra desempate determinístico em GetActiveTags
 
 	--Cooldown de status
 	self.StatusCooldowns = {} -- [statusName] = timestamp
@@ -178,7 +184,7 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 		end
 
 		local runner = self:_CreateRunner(data, meta.name, duration, target, source)
-		group[meta.name] = { data = data, counter = 1, runner = runner, sourceSkill = source, ID = suppliedID }
+		group[meta.name] = { data = data, counter = 1, runner = runner, sourceSkill = source, ID = suppliedID, seq = nextSeq(self) }
 
 		self:_MarkTagsDirty()
 		return suppliedID
@@ -196,7 +202,7 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 		end
 
 		local runner = self:_CreateRunner(data, meta.name, duration, target, source)
-		table.insert(list, { data = data, runner = runner, sourceSkill = source, ID = suppliedID })
+		table.insert(list, { data = data, runner = runner, sourceSkill = source, ID = suppliedID, seq = nextSeq(self) })
 
 		group[meta.name] = list
 		self:_MarkTagsDirty()
@@ -220,7 +226,7 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 	end
 
 	local runner = self:_CreateRunner(data, meta.name, duration, target, source)
-	group[meta.name] = { data = data, runner = runner, sourceSkill = source, ID = suppliedID }
+	group[meta.name] = { data = data, runner = runner, sourceSkill = source, ID = suppliedID, seq = nextSeq(self) }
 
 	self:_MarkTagsDirty()
 	return suppliedID
@@ -526,6 +532,7 @@ function StatusComponent:GetActiveTags()
     
     local mergedTags = {}
     local tagOwners = {} 
+    local tagOwnerSeq = {} -- [tagName] = seq do dono atual, resolve empate multi-fonte deterministicamente
     
     for _, group in pairs(self.Effects) do 
         for _, entry in pairs(group) do
@@ -543,8 +550,14 @@ function StatusComponent:GetActiveTags()
                         mergedTags[tagName] = val
                     end
                     
-                    if runner and val then 
-                        tagOwners[tagName] = runner 
+                    if runner and val then
+                        local itemSeq = item.seq or 0
+                        -- Dono da tag = aplicação mais recente (maior seq). Sem isso, pairs()
+                        -- decidia o "vencedor" de forma não-determinística a cada rehash da hash table.
+                        if tagOwnerSeq[tagName] == nil or itemSeq >= tagOwnerSeq[tagName] then
+                            tagOwners[tagName] = runner
+                            tagOwnerSeq[tagName] = itemSeq
+                        end
                     end
                 end
             end

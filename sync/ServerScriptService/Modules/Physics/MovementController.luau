@@ -13,6 +13,9 @@ local ServerStorage = game:GetService("ServerStorage")
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
 local Settings = require(script.Parent.Settings)
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Utils = require(ReplicatedStorage.Utils)
+
 local MovementController = {}
 local trackedEntities = {}
 
@@ -30,35 +33,6 @@ end
 
 local function tableToVector3(t: { [string]: number }): Vector3
 	return Vector3.new(t.X, t.Y, t.Z)
-end
-
-
-local function RotateTowards(current: Vector3, target: Vector3, maxRadians: number): Vector3
-	if current.Magnitude < 1e-6 then
-		return target.Unit
-	end
-
-	local currentUnit = current.Unit
-	local targetUnit = target.Unit
-
-	local dot = math.clamp(currentUnit:Dot(targetUnit), -1, 1)
-	local angle = math.acos(dot)
-
-	if angle <= maxRadians or angle < 1e-4 then
-		return targetUnit
-	end
-
-	local axis = currentUnit:Cross(targetUnit)
-	if axis.Magnitude < 1e-6 then
-		axis = currentUnit:Cross(Vector3.yAxis)
-		if axis.Magnitude < 1e-6 then
-			axis = Vector3.xAxis
-		end
-	end
-
-
-	local rotation = CFrame.fromAxisAngle(axis.Unit, maxRadians)
-	return (rotation * currentUnit).Unit
 end
 
 function MovementController.Register(comp)
@@ -155,34 +129,75 @@ function MovementController.ProcessEntity(comp, dt)
 			hasAnyForce = true
 
 			local elapsed = forceEntry.ElapsedTime
-			local speed = data.Speed
-			if type(speed) == "function" then
-				speed = speed(elapsed, duration)
-			end
-			speed = speed or 0
+			local velocity: Vector3
+			local direction: Vector3
 
-			local rawDirection = data.Direction
-			if type(rawDirection) == "function" then
-				rawDirection = rawDirection(elapsed, duration, {
-					Entity = entity,
-					MovementComponent = comp,
-				})
-			end
-			rawDirection = (rawDirection :: Vector3?) or Vector3.zero
-			if rawDirection.Magnitude > 1e-4 then
-				rawDirection = rawDirection.Unit -- servidor nunca confia na magnitude vinda de skill/rede
-			end
+			if data.FollowTarget then
+				-- Modo TETHER: em vez de "ande nessa direção nessa
+				-- velocidade", persegue uma posição-alvo (outra entidade +
+				-- offset) com um controlador proporcional. Direction como
+				-- função sozinha NÃO consegue isso: sempre normaliza e usa
+				-- Speed constante, então vira "atrair", não "grudar" — sem
+				-- isso, arrastar um alvo diverge com o tempo porque as duas
+				-- entidades resolvem força de forma independente.
+				local followPart = data.FollowTarget
+				if type(followPart) == "function" then
+					followPart = followPart()
+				end
 
-			local direction = rawDirection
-			if data.TurnRate and rawDirection.Magnitude > 1e-4 then
-				forceEntry.CurrentDirection = forceEntry.CurrentDirection or rawDirection.Unit
-				direction = RotateTowards(forceEntry.CurrentDirection, rawDirection, data.TurnRate * dt)
-				forceEntry.CurrentDirection = direction
-			elseif rawDirection.Magnitude > 1e-4 then
-				forceEntry.CurrentDirection = rawDirection.Unit
-			end
+				if followPart then
+					local anchor = (followPart :: BasePart)
+					local desiredPosition = data.FollowOffsetIsLocal
+						and anchor.CFrame:PointToWorldSpace(data.FollowOffset or Vector3.zero)
+						or (anchor.Position + (data.FollowOffset or Vector3.zero))
 
-			local velocity = direction * speed
+					local ownRoot = entity.GetRoot and entity.GetRoot()
+					local currentPosition = ownRoot and ownRoot.Position or desiredPosition
+					local toDesired = desiredPosition - currentPosition
+
+					velocity = toDesired * (data.FollowResponsiveness or 10)
+
+					if data.FollowMaxSpeed and velocity.Magnitude > data.FollowMaxSpeed then
+						velocity = velocity.Unit * data.FollowMaxSpeed
+					end
+
+					direction = toDesired.Magnitude > 1e-4 and toDesired.Unit or (forceEntry.CurrentDirection or Vector3.new(0, 0, -1))
+					forceEntry.CurrentDirection = direction
+				else
+					-- Alvo sumiu (morreu/destruído): zera velocidade até a Force expirar pelo Duration
+					velocity = Vector3.zero
+					direction = forceEntry.CurrentDirection or Vector3.new(0, 0, -1)
+				end
+			else
+				local speed = data.Speed
+				if type(speed) == "function" then
+					speed = speed(elapsed, duration)
+				end
+				speed = speed or 0
+
+				local rawDirection = data.Direction
+				if type(rawDirection) == "function" then
+					rawDirection = rawDirection(elapsed, duration, {
+						Entity = entity,
+						MovementComponent = comp,
+					})
+				end
+				rawDirection = (rawDirection :: Vector3?) or Vector3.zero
+				if rawDirection.Magnitude > 1e-4 then
+					rawDirection = rawDirection.Unit
+				end
+
+				direction = rawDirection
+				if data.TurnRate and rawDirection.Magnitude > 1e-4 then
+					forceEntry.CurrentDirection = forceEntry.CurrentDirection or rawDirection.Unit
+					direction = Utils.rotateTowards(forceEntry.CurrentDirection, rawDirection, data.TurnRate * dt)
+					forceEntry.CurrentDirection = direction
+				elseif rawDirection.Magnitude > 1e-4 then
+					forceEntry.CurrentDirection = rawDirection.Unit
+				end
+
+				velocity = direction * speed
+			end
 
 			local axes = data.Axes
 			if not axes then

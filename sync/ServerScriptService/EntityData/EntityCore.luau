@@ -83,7 +83,7 @@ Adiciona um componente à entidade
 @param config - Configurações iniciais do componente TABLE
 @return instância do componente adicionado ANY
 ]]
-function EntityCore:AddComponent(componentName : string, config : {[string]: any}?)
+function EntityCore:AddComponent(componentName : string, config : {[string]: any}?, callOnAddedNow: boolean?)
 	if self.Components[componentName] then
 		warn("[EntityCore] Componente já existe:", componentName)
 		return self.Components[componentName]
@@ -94,11 +94,9 @@ function EntityCore:AddComponent(componentName : string, config : {[string]: any
 		return nil
 	end
 
-	-- Cria instância do componente e armazena no ComponentRegistry
 	local component = ComponentRegistry[componentName].new(self, config or {})
 	self.Components[componentName] = component
 
-	-- Expõe API do componente diretamente na entidade
 	if ComponentRegistry[componentName].ExposeAPI then
 		for methodName, method in pairs(ComponentRegistry[componentName].ExposeAPI) do
 			self[methodName] = function(...)
@@ -116,7 +114,15 @@ function EntityCore:AddComponent(componentName : string, config : {[string]: any
 			end
 		end
 	end
-	
+
+	-- Add dinâmico PÓS-criação (entidade já passou por ComponentsLoaded): sem
+	-- isso, um componente adicionado depois nunca teria seu OnAdded chamado,
+	-- diferente do lote inicial. Callers existentes (DataManager.Create)
+	-- continuam passando só 2 args — zero mudança de comportamento pra eles;
+	-- ComponentsLoaded continua sendo quem dispara OnAdded do lote inicial.
+	if callOnAddedNow and component.OnAdded then
+		component:OnAdded()
+	end
 
 	return component
 end

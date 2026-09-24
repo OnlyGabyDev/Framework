@@ -24,15 +24,14 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 	accumulated = 0
 
-	local look = camera.CFrame.LookVector
-	local flat = Vector3.new(look.X, 0, look.Z)
-	if flat.Magnitude < 1e-3 then
-		return
-	end
-	flat = flat.Unit
+	-- Antes achatava aqui (Y=0) antes de enviar. Agora manda o vetor 3D
+	-- cheio — LookDirection (combate, plano) continua existindo, mas é
+	-- DERIVADO no servidor a partir deste vetor. Isso é o que permite Ults
+	-- de voo considerarem o pitch da câmera sem duplicar remote/rate-limit.
+	local aim = camera.CFrame.LookVector
 
-	if (flat - lastSent).Magnitude > MIN_DELTA then
-		lastSent = flat
-		RequestLook:FireServer(flat)
+	if (aim - lastSent).Magnitude > MIN_DELTA then
+		lastSent = aim
+		RequestLook:FireServer(aim)
 	end
 end)

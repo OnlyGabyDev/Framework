@@ -74,7 +74,6 @@ function ForceRig:Release()
 	self.Velocity.MaxAxesForce = Vector3.zero
 end
 
-
 function ForceRig:SetAmbientGravityScale(scale: number)
 	local mass = self.Root.AssemblyMass
 	local gravity = workspace.Gravity

@@ -15,7 +15,7 @@ for i = 0,0,1 do
     model.Parent = workspace
 
     local part1 = Instance.new("Part")
-    part1.Name = "BasePart"
+    part1.Name = "HumanoidRootPart"
     local num3 = math.random(1,15)
     local num1 = math.random(1,15)
     local num2 = math.random(1,15)
@@ -24,6 +24,7 @@ for i = 0,0,1 do
     part1.Anchored = false
     part1.BrickColor = BrickColor.new("Bright yellow")
     part1.Parent = model
+    model.PrimaryPart = part1
 
     DataManager.Create(model, components)
 end

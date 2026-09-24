@@ -49,6 +49,7 @@ local Skill = {
 				FaceDirection = true,
 
 				Direction = function(_elapsed, _duration, ctx)
+					-- Captura LookDirection (2D, horizontal puro) travado para voo reto.
 					local look = ctx.Entity.GetLookDirection()
 					if look.Magnitude < 0.1 then
 						return ctx.Entity.GetDirection()

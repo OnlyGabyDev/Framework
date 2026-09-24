@@ -6,6 +6,7 @@ local StateTable = require(ServerStorage.Modules.Combat.StateTable)
 local DataManager = require(ServerScriptService.EntityData.DataManager)
 local component = require(ServerScriptService.EntityData.ComponentsExport)
 local AntiCheat = require(ServerScriptService.Modules.GlobalAntiCheat)
+local ControlComponent = require(ServerScriptService.EntityData.Components.ControlComponent)
 
 local PlayerComponents = {
 	Character = component.Character,
@@ -26,6 +27,11 @@ local function onPlayerAdded(player)
 	handled[player] = true
 
 	local function onCharacterAdded(character)
+		local possessed = ControlComponent.GetPossessionOf(player)
+		if possessed then
+			possessed:Release()
+		end
+
 		DataManager.Create({
 			Model = character,
 			Player = player,
@@ -51,6 +57,10 @@ end
 
 Players.PlayerRemoving:Connect(function(player)
 	handled[player] = nil
+	local possessed = ControlComponent.GetPossessionOf(player)
+	if possessed then
+		possessed:Release()
+	end
 	DataManager.Remove(player)
 	AntiCheat.Unregister(player)
 end)
