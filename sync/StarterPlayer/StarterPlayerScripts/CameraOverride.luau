@@ -37,7 +37,7 @@ local yaw = 0
 local pitch = 0
 
 local function getCharacterParts()
-	local character = player.Character
+	local character = CameraOverride.PossessedSubject or player.Character
 	if not character then return nil, nil end
 	local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -188,10 +188,42 @@ function CameraOverride.Init()
 		end
 	end)
 
+	UserInputService.JumpRequest:Connect(function()
+		if CameraOverride.PossessedSubject then
+			local jumpEvent = ReplicatedStorage.RemoteEvents:FindFirstChild("RequestJump")
+			if jumpEvent then jumpEvent:FireServer() end
+		end
+	end)
+
 	local ControlStateChanged = ReplicatedStorage.RemoteEvents:WaitForChild("ControlStateChanged")
 	local activeBeforeLock = false
 
-	ControlStateChanged.OnClientEvent:Connect(function(isLocked: boolean)
+	ControlStateChanged.OnClientEvent:Connect(function(isLocked: boolean, entityID: string?)
+		if entityID then
+			for _, obj in ipairs(workspace:GetChildren()) do
+				if obj:GetAttribute("EntityID") == entityID then
+					CameraOverride.PossessedSubject = obj
+					workspace.CurrentCamera.CameraSubject = obj:FindFirstChild("Humanoid") or obj.PrimaryPart
+					break
+				end
+			end
+			
+			-- Se for o próprio player (exemplo: depois do Unlock, Volta pra id do player original)
+			-- então clear o subject
+			local selfId = player.Character and player.Character:GetAttribute("EntityID")
+			if selfId == entityID then
+				CameraOverride.PossessedSubject = nil
+				if player.Character then
+					workspace.CurrentCamera.CameraSubject = player.Character:FindFirstChild("Humanoid") or player.Character.PrimaryPart
+				end
+			end
+		else
+			CameraOverride.PossessedSubject = nil
+			if player.Character then
+				workspace.CurrentCamera.CameraSubject = player.Character:FindFirstChild("Humanoid") or player.Character.PrimaryPart
+			end
+		end
+
 		if isLocked then
 			activeBeforeLock = active
 			CameraOverride.Disable()

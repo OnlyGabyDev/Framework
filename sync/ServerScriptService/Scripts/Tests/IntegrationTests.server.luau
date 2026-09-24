@@ -127,7 +127,7 @@ TestHarness.Run("Sprint 10 — Fork de TriggerSet propaga OUT.onHit do minion pr
 end)
 
 TestHarness.Run("Sprint 11 — ComboWindow marca e consome dentro da janela", function(t)
-	local dummy = makeDummy(CFrame.new(0, 5, 0))
+	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Character", "Health", "Movement", "Status" })
 
 	BaseSkills.ComboWindow.Mark(dummy, "TestMarker", 0.3, { Foo = "bar" })
 	local immediate = BaseSkills.ComboWindow.Consume(dummy, "TestMarker")

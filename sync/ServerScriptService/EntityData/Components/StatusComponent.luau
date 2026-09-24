@@ -311,7 +311,8 @@ end
 
 function StatusComponent:_TriggerShield(immunityTag, activeShields,incomingData,sourceSkill)
 
-	local runner = activeShields[immunityTag]
+	local item = activeShields[immunityTag]
+	local runner = item and item.runner
 
 	if runner then
 		local context = StateTable.BuildContext(incomingData)
@@ -555,7 +556,7 @@ function StatusComponent:GetActiveTags()
                         -- Dono da tag = aplicação mais recente (maior seq). Sem isso, pairs()
                         -- decidia o "vencedor" de forma não-determinística a cada rehash da hash table.
                         if tagOwnerSeq[tagName] == nil or itemSeq >= tagOwnerSeq[tagName] then
-                            tagOwners[tagName] = runner
+                            tagOwners[tagName] = item
                             tagOwnerSeq[tagName] = itemSeq
                         end
                     end
@@ -662,13 +663,13 @@ function StatusComponent:ApplyMitigation(context)
 
 		local unbreakable = blockRunner.data.traits and table.find(blockRunner.data.traits, StateEnum.Traits.Unbreakable)
 		if blockBreak and not unbreakable then
-			blockRunner:Stop(true)
+			if blockRunner.runner then blockRunner.runner:Stop(true) end
 			broke = true
 		end
 	end
 
-	if not broke then
-		local resultDamage = blockRunner:TriggerAction(context)
+	if not broke and blockRunner.runner then
+		local resultDamage = blockRunner.runner:TriggerAction(context)
 		if resultDamage then
 			context.damage = resultDamage
 		end

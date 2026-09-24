@@ -10,8 +10,8 @@ local MIN_INPUT_INTERVAL = 0.015
 local RemoteEvents = ReplicatedStorage.RemoteEvents
 local ControlStateChanged = RemoteEvents:WaitForChild("ControlStateChanged")
 
-local function notifyControlState(player: Player, isLocked: boolean)
-	ControlStateChanged:FireClient(player, isLocked)
+local function notifyControlState(player: Player, isLocked: boolean, entityID: string?)
+	ControlStateChanged:FireClient(player, isLocked, entityID)
 end
 
 local AntiCheat = {}
@@ -80,6 +80,7 @@ function AntiCheat.SetControlledEntity(Player, entityID)
 	end
 
 	tracked.ID = entityID
+	notifyControlState(Player, false, entityID)
 	return true
 end
 
@@ -95,7 +96,7 @@ function AntiCheat.LockPlayerInput(Player)
 	tracked.Locked = true
 	tracked.PreLockID = tracked.ID
 	tracked.ID = nil
-	notifyControlState(Player, true)
+	notifyControlState(Player, true, nil)
 	return true
 end
 
@@ -105,7 +106,7 @@ function AntiCheat.UnlockPlayerInput(Player)
 	tracked.Locked = false
 	tracked.ID = tracked.PreLockID
 	tracked.PreLockID = nil
-	notifyControlState(Player, false)
+	notifyControlState(Player, false, tracked.ID)
 	return true
 end
 

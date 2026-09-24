@@ -1,15 +1,8 @@
 --[[
-Prova de integração ampla, não demo de produção: um Hunter guiado por
-AIComponent caça a entidade viva mais próxima usando o MESMO pipeline de
-input que um player usa (SkillHandler), invoca 2 minions (Fork de
-TriggerSet via MinionFactory), executa Dash->Finisher (ComboWindow) e prende
-o alvo (Tether) no finisher quando combado. Demonstra possessão real
-(ControlComponent) se houver um player conectado.
-
-Ignora CombatComponent/loadout de propósito — chamar SkillRunner direto é
-válido: SkillHandler.activate só RESOLVE qual skill rodar a partir de um
-loadout, não é o único caminho legítimo de iniciar uma. Fabricar uma pasta
-CharData inteira só pra este smoke test seria esforço fora de escopo.
+Prova de integração ampla: Hunter guiado por AIComponent caça a entidade viva 
+mais próxima. Possui o jogador aos 5 segundos, criando uma "Possessão Dupla": 
+o jogador controla o Hunter, e a IA do Hunter assume o corpo do jogador! 
+Adicionalmente, 2 minions idênticos ao jogador em miniatura são spawnados.
 ]]
 
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -21,15 +14,19 @@ local SkillHandler = require(ServerScriptService.Modules.SkillHandler)
 local SkillRunner = require(ServerScriptService.Modules.SkillRunner)
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
 local BaseSkills = require(ServerStorage.DataBase.SkillDatabase.BaseSkills)
-local MinionFactory = require(ServerStorage.Modules.MinionFactory)
+local VFXManager = require(ServerScriptService.Modules.VFX.VFXManager)
 
-local function findNearestHealthEntity(fromEntity: any, maxRange: number): any?
+local function isAlive(core)
+	return core:HasComponent(core.ComponentKey.Health) and core.GetHP() > 0
+end
+
+local function findNearestHealthEntity(fromEntity: any, maxRange: number, ignoreSet: {[any]: boolean}): any?
 	local myPos = fromEntity.GetCFrame().Position
 	local best, bestDist = nil, maxRange
 	for _, obj in ipairs(workspace:GetChildren()) do
 		if obj:IsA("Model") and obj:GetAttribute("EntityID") then
 			local core = DataManager.Get(obj)
-			if core and core ~= fromEntity and core:HasComponent(core.ComponentKey.Health) then
+			if core and core ~= fromEntity and isAlive(core) and not ignoreSet[core] then
 				local root = core.GetRoot and core.GetRoot()
 				if root then
 					local dist = (root.Position - myPos).Magnitude
@@ -44,7 +41,6 @@ local function findNearestHealthEntity(fromEntity: any, maxRange: number): any?
 end
 
 -- ===== Skills inline =====
-
 local HunterDash = {
 	data = { cooldown = 2, duration = 0.4, castTime = 0 },
 	callbacks = {
@@ -68,7 +64,9 @@ local HunterFinisher = {
 	callbacks = {
 		onStart = function(self)
 			self.comboed = BaseSkills.ComboWindow.Consume(self.Entity, "HunterCombo") ~= nil
-			self.target = findNearestHealthEntity(self.Entity, 8)
+			
+			local ignore = self.Entity.HunterIgnoreSet or {}
+			self.target = findNearestHealthEntity(self.Entity, 8, ignore)
 			if not self.target then self:Stop(false); return end
 
 			if self.comboed then
@@ -81,9 +79,27 @@ local HunterFinisher = {
 				})
 			end
 
-			local damage = self.comboed and 15 or 5
+			local damage = self.comboed and 5 or 1 -- Dano baixo para demorar a matar
 			local success = self.target.TakeDamage(damage, self.Runner)
-			warn(string.format("[HunterFinisher] Combo=%s DanoAplicado=%s", tostring(self.comboed), tostring(success)))
+			
+			-- Simula um trigger "onHit" pros buffs escutarem
+			self.Entity:Emit(
+				StateTable.Enum.Roles.OUT,
+				StateTable.Enum.Breakpoints.onHit,
+				{ targetEntity = self.target, sourceSkill = self, traits = { [StateTable.Enum.Traits.Melee] = true } }
+			)
+
+			if success then
+				VFXManager.PlayAll("GenericImpact", {Position = self.target.GetRoot().Position})
+				
+				if not isAlive(self.target) then
+					for _, part in ipairs(self.target.Entity:GetDescendants()) do
+						if part:IsA("BasePart") then
+							part.Color = Color3.fromRGB(40, 40, 200) -- Azul (Morto)
+						end
+					end
+				end
+			end
 		end,
 		onEnd = function(self)
 			if self.grabForceID and self.target then
@@ -92,8 +108,23 @@ local HunterFinisher = {
 		end,
 	},
 }
-
 -- ===== Setup =====
+
+local jumpEvent = Instance.new("RemoteEvent")
+jumpEvent.Name = "RequestJump"
+jumpEvent.Parent = game:GetService("ReplicatedStorage").RemoteEvents
+
+jumpEvent.OnServerEvent:Connect(function(plr)
+	local ID = AntiCheat.GetEntityID(plr)
+	if not ID then return end
+	local entityCore = DataManager.Get(ID)
+	if not entityCore then return end
+	local root = entityCore.GetRoot and entityCore.GetRoot()
+	if root and root.Parent then
+		local hum = root.Parent:FindFirstChildOfClass("Humanoid")
+		if hum then hum.Jump = true end
+	end
+end)
 
 local function buildDummyModel(cframe: CFrame, color: Color3): Model
 	local model = Instance.new("Model")
@@ -103,6 +134,8 @@ local function buildDummyModel(cframe: CFrame, color: Color3): Model
 	root.Color = color
 	root.CFrame = cframe
 	root.Parent = model
+	local hum = Instance.new("Humanoid")
+	hum.Parent = model
 	model.PrimaryPart = root
 	return model
 end
@@ -113,6 +146,7 @@ local hunter = DataManager.Create(hunterModel, {
 	"Character", "Health", "Movement", "Status", "Control", "AI"
 })
 hunter.SetMovement()
+hunter.HunterIgnoreSet = {}
 
 local targetModel = buildDummyModel(CFrame.new(0, 5, -20), Color3.fromRGB(40, 200, 40))
 targetModel.Parent = workspace
@@ -120,67 +154,95 @@ local target = DataManager.Create(targetModel, { "Character", "Health", "Movemen
 target.SetMovement()
 target.ApplyStatus(StateTable.Status.GenericBlock, { Duration = 30 })
 
-for i = 1, 2 do
-	local minion = MinionFactory.Spawn("TestMinion", CFrame.new(i * 3, 5, 5), hunter)
-	if minion then
-		minion.SetMovement()
-		minion:AddComponent(minion.ComponentKey.AI, {}, true)
-		minion.SetBrain(function(entity, dt)
-			local nearestTarget = findNearestHealthEntity(entity, 30)
-			if nearestTarget then
-				local dir = nearestTarget.GetRoot().Position - entity.GetRoot().Position
-				SkillHandler.HandleMovementInput(entity.ID, dir)
+local function createHunterBrain()
+	local sinceLastAction = 0
+	return function(entity, dt)
+		sinceLastAction += dt
+		local ignore = entity.HunterIgnoreSet or {}
+		
+		local nearestTarget = findNearestHealthEntity(entity, 40, ignore)
+		if not nearestTarget then return end
+
+		local toTarget = nearestTarget.GetRoot().Position - entity.GetRoot().Position
+		local flatToTarget = Vector3.new(toTarget.X, 0, toTarget.Z)
+
+		SkillHandler.HandleMovementInput(entity.ID, flatToTarget)
+		SkillHandler.HandleLookInput(entity.ID, flatToTarget)
+
+		if flatToTarget.Magnitude > 6 then return end
+		if sinceLastAction < 2 then return end
+		sinceLastAction = 0
+
+		if entity:HasComponent(entity.ComponentKey.Combat) then
+			local Intents = require(game:GetService("ReplicatedStorage").Input.Intents)
+			
+			-- Usa Dash para encurtar distância ou às vezes aleatoriamente, senão espanca de M1
+			if flatToTarget.Magnitude > 15 or math.random() < 0.3 then
+				SkillHandler.HandleIntent(entity.ID, Intents.NewEvent(Intents.Id.Dash, Intents.Kind.Activate, Intents.Gesture.Press))
+			else
+				SkillHandler.HandleIntent(entity.ID, Intents.NewEvent(Intents.Id.Primary, Intents.Kind.Activate, Intents.Gesture.Press))
 			end
-		end)
+		else
+			SkillRunner.new(HunterDash, entity, "HunterDash", StateTable.Enum.Types.Skill):start()
+			task.delay(0.5, function()
+				SkillRunner.new(HunterFinisher, entity, "HunterFinisher", StateTable.Enum.Types.Skill):start()
+			end)
+		end
 	end
 end
 
-hunter:Listen({
-	Role = StateTable.Enum.Roles.OUT,
-	Breakpoint = StateTable.Enum.Breakpoints.onHit,
-	Inherit = { Generations = 1 },
-	Priority = 0,
-	Action = function()
-		warn("[GrandDemo] Hunter OUVIU um hit herdado de um minion — Fork de TriggerSet confirmado")
-	end,
-})
-
-local sinceLastAction = 0
-hunter.SetBrain(function(entity, dt)
-	sinceLastAction += dt
-
-	local nearestTarget = findNearestHealthEntity(entity, 40)
-	if not nearestTarget then return end
-
-	local toTarget = nearestTarget.GetRoot().Position - entity.GetRoot().Position
-	local flatToTarget = Vector3.new(toTarget.X, 0, toTarget.Z)
-
-	SkillHandler.HandleMovementInput(entity.ID, flatToTarget)
-	SkillHandler.HandleLookInput(entity.ID, flatToTarget)
-
-	if flatToTarget.Magnitude > 6 then return end
-	if sinceLastAction < 2 then return end
-	sinceLastAction = 0
-
-	SkillRunner.new(HunterDash, entity, "HunterDash", StateTable.Enum.Types.Skill):start()
-
-	task.delay(0.5, function()
-		SkillRunner.new(HunterFinisher, entity, "HunterFinisher", StateTable.Enum.Types.Skill):start()
-	end)
-end)
+hunter.SetBrain(createHunterBrain())
 
 task.delay(5, function()
 	local player = Players:GetPlayers()[1]
-	if not player then
-		warn("[GrandDemo] Nenhum player conectado — pulando demo de possessão real")
-		return
+	if not player then return end
+
+	local playerCore = DataManager.Get("Player_" .. player.UserId)
+	local playerChar = player.Character
+
+	warn("[GrandDemo] Possessão Dupla! Você é o bloco vermelho. Seu corpo virou IA.")
+	hunter.SetEnabled(false) -- Desliga a IA do Hunter pra ele parar de lutar com você
+	hunter.Possess({ Player = player })
+	-- O corpo original do player ganha a mente da IA e ignora o Hunter
+	if playerCore then
+		-- Puxa a ownership pro servidor pro client não conseguir mover o próprio corpo
+		local root = playerCore.GetRoot and playerCore.GetRoot()
+		if root then root:SetNetworkOwner(nil) end
+
+		playerCore:AddComponent(playerCore.ComponentKey.AI, {}, true)
+		playerCore.HunterIgnoreSet = { [hunter] = true }
+		hunter.HunterIgnoreSet[playerCore] = true
+		playerCore.SetBrain(createHunterBrain())
 	end
 
-	warn("[GrandDemo] Possuindo Hunter com", player.Name, "por 4 segundos (IA pausa)")
-	hunter.Possess({ Player = player })
-	task.wait(4)
-	warn("[GrandDemo] Devolvendo Hunter pra IA")
-	hunter.Release()
-end)
+	-- Clona o jogador como minions menores
+	for i = 1, 2 do
+		if playerChar then
+			playerChar.Archivable = true
+			local clone = playerChar:Clone()
+			clone.Parent = workspace
+			clone:PivotTo(hunter.GetCFrame() * CFrame.new(i * 3, 0, 5))
+			clone:ScaleTo(0.5)
+			
+			local minion = DataManager.Create(clone, {"Character", "Health", "Movement", "Status", "AI"}, nil, hunter)
+			if minion then
+				minion.SetMovement()
+				minion.HunterIgnoreSet = { [hunter] = true, [playerCore] = true }
+				hunter.HunterIgnoreSet[minion] = true
+				playerCore.HunterIgnoreSet[minion] = true
+				minion.SetBrain(createHunterBrain())
+			end
+		end
+	end
 
-warn("[GrandDemo] Cenário no ar: Hunter (vermelho) caça alvo (verde), minions auxiliares, dash+finisher com combo/tether.")
+	task.wait(30)
+	
+	warn("[GrandDemo] Devolvendo tudo ao normal.")
+	hunter.Release()
+	hunter.SetEnabled(true) -- Liga a IA do Hunter de volta
+	if playerCore then
+		playerCore:RemoveComponent(playerCore.ComponentKey.AI)
+		local root = playerCore.GetRoot and playerCore.GetRoot()
+		if root then root:SetNetworkOwner(player) end
+	end
+end)

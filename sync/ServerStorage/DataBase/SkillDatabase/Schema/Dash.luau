@@ -69,6 +69,7 @@ callbacks = {
 		self.Entity:Listen({
 			Role = StateTable.Enum.Roles.OUT,
 			Breakpoint = StateTable.Enum.Breakpoints.onHit,
+			Inherit = { Generations = 1 },
 			Query = { Any = { StateTable.Enum.Traits.Melee } },
 			Priority = 0,
 			Owner = comboOwner,

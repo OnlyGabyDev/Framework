@@ -202,6 +202,16 @@ function MovementComponent:AddForce(forceData)
 
 	self.ForceCounter += 1
 	local forceId = "F_" .. tostring(self.ForceCounter)
+	
+	if forceData.Hard then
+		local root = self.Entity.GetRoot and self.Entity.GetRoot()
+		if root and self.Entity.Player == nil then
+			pcall(function()
+				root:SetNetworkOwner(nil)
+			end)
+		end
+	end
+
 	self.ActiveForces[forceId] = {
 		ID = forceId,
 		Type = forceData.Type or "UnnamedForce",
