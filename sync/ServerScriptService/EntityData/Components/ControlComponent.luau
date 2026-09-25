@@ -24,6 +24,14 @@ local function getAntiCheat()
 	return require(game.ServerScriptService.Modules.GlobalAntiCheat)
 end
 
+local function getDataManager()
+	return require(game.ServerScriptService.EntityData.DataManager)
+end
+
+local function getInputSessions()
+	return require(game.ServerScriptService.Modules.InputSessions)
+end
+
 -- Índice reverso GLOBAL: qual componente este Player está possuindo agora,
 -- fora do próprio corpo nativo. Existe só pra cleanup em respawn/disconnect
 -- sem iterar toda entidade viva.
@@ -34,7 +42,6 @@ function ControlComponent.new(entity, config)
 	self.Entity = entity
 	self._native = entity.Player and { Player = entity.Player } or { AI = true }
 	self.Controller = self._native
-	self._priorControllerEntityId = nil
 	self._locked = false
 	self._links = {}
 	return self
@@ -51,15 +58,33 @@ function ControlComponent:Possess(controller: Controller)
 		getAntiCheat().LockPlayerInput(self._native.Player)
 	end
 
+	if self.Entity:HasComponent(self.Entity.ComponentKey.Movement) then
+		self.Entity.SetDrivesInput(true)
+	end
+
 	if controller.Player then
-		-- Lembra o que esse player controlava ANTES, pra Release() devolver
-		-- certo mesmo em possessão encadeada (A possui B, depois A possui C
-		-- — Release de C devolve A pra B, não direto pro nativo de A).
-		self._priorControllerEntityId = getAntiCheat().GetControlledEntityId(controller.Player)
+		local priorControllerId = getAntiCheat().GetControlledEntityId(controller.Player)
+		getAntiCheat().SetPriorControlledEntityId(controller.Player, priorControllerId)
+
+		getAntiCheat().SetNativeControlSuspended(controller.Player, true)
+
+		local priorCore = getDataManager().Get(priorControllerId)
+		if priorCore and priorCore:HasComponent(priorCore.ComponentKey.Movement) then
+			priorCore.SetDrivesInput(true)
+		end
+		local priorRoot = priorCore and priorCore.GetRoot and priorCore.GetRoot()
+		if priorRoot then priorRoot:SetNetworkOwner(nil) end
 
 		if self.Controller.Player and self.Controller.Player ~= controller.Player then
-			ActivePossessions[self.Controller.Player] = nil
+			local previousPlayer = self.Controller.Player
+			ActivePossessions[previousPlayer] = nil
+			local previousPriorId = getAntiCheat().GetPriorControlledEntityId(previousPlayer)
+			if previousPriorId then
+				getAntiCheat().SetControlledEntity(previousPlayer, previousPriorId)
+			end
 		end
+
+		getInputSessions().CancelActiveGestures(controller.Player)
 
 		getAntiCheat().SetControlledEntity(controller.Player, self.Entity.ID)
 		ActivePossessions[controller.Player] = self
@@ -71,10 +96,27 @@ end
 function ControlComponent:Release()
 	if self.Controller.Player then
 		ActivePossessions[self.Controller.Player] = nil
-		if self._priorControllerEntityId then
-			getAntiCheat().SetControlledEntity(self.Controller.Player, self._priorControllerEntityId)
-			self._priorControllerEntityId = nil
+		local priorId = getAntiCheat().GetPriorControlledEntityId(self.Controller.Player)
+		
+		if priorId then
+			getAntiCheat().SetControlledEntity(self.Controller.Player, priorId)
+			
+			local priorCore = getDataManager().Get(priorId)
+			if priorCore and priorCore:HasComponent(priorCore.ComponentKey.Movement) then
+				priorCore.SetDrivesInput(false)
+			end
+			local priorRoot = priorCore and priorCore.GetRoot and priorCore.GetRoot()
+			if priorRoot then priorRoot:SetNetworkOwner(self.Controller.Player) end
+			
+			getAntiCheat().SetNativeControlSuspended(self.Controller.Player, false)
+			getAntiCheat().SetPriorControlledEntityId(self.Controller.Player, nil)
 		end
+
+		getInputSessions().CancelActiveGestures(self.Controller.Player)
+	end
+
+	if self.Entity:HasComponent(self.Entity.ComponentKey.Movement) and self._native.Player then
+		self.Entity.SetDrivesInput(false)
 	end
 
 	if self._native.Player then

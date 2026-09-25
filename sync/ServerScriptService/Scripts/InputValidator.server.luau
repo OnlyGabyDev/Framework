@@ -18,6 +18,7 @@ local GestureResolver = require(ReplicatedStorage.Input.GestureResolver)
 local DataManager = require(Server.EntityData.DataManager)
 local AntiCheat = require(Server.Modules.GlobalAntiCheat)
 local SkillHandler = require(Server.Modules.SkillHandler)
+local InputSessions = require(Server.Modules.InputSessions)
 
 local Remotes = ReplicatedStorage.RemoteEvents
 local RequestIntent = Remotes.RequestIntent
@@ -27,30 +28,12 @@ local SkillFired = Remotes.SkillFired
 
 local MAX_AXIS_MAGNITUDE = 1.5 -- direções chegam ~normalizadas; folga para float
 
--- [Player] = { resolvers = { [intent] = GestureResolver }, lastPress = { [intent] = t }, lastMove = t }
-local sessions = {}
-
---=============================================================================
---  HELPERS
---=============================================================================
-
---[[ NaN-safe: comparações com NaN são sempre false, então "está DENTRO da faixa" rejeita NaN.
-     (o formato `< min or > max` deixava NaN passar) ]]
 local function isVectorInRange(value: any, min: number, max: number): boolean
 	if typeof(value) ~= "Vector3" then
 		return false
 	end
 	local magnitude = value.Magnitude
 	return magnitude >= min and magnitude <= max
-end
-
-local function getSession(player: Player)
-	local session = sessions[player]
-	if not session then
-		session = { resolvers = {}, lastPress = {}, lastMove = 0 }
-		sessions[player] = session
-	end
-	return session
 end
 
 --[[ Único ponto onde um InputEvent vira ação no framework (chamado pelo resolver, inclusive em timers). ]]
@@ -96,7 +79,7 @@ RequestIntent.OnServerEvent:Connect(function(player: Player, intent: any, isDown
 		return
 	end
 
-	local session = getSession(player)
+	local session = InputSessions.GetSession(player)
 	local resolver = getResolver(player, session, intent)
 
 	-- Release NUNCA passa por rate limit: perder um Release deixaria a skill presa em "segurado".
@@ -131,7 +114,7 @@ RequestDir.OnServerEvent:Connect(function(player: Player, direction: any)
 		return
 	end
 
-	local session = getSession(player)
+	local session = InputSessions.GetSession(player)
 
 	local ID
 	if direction.Magnitude < 0.01 then
@@ -171,14 +154,7 @@ end)
 local function trackPlayer(player: Player)
 	-- Respawn: a entidade antiga ainda existe neste instante, então o Release chega e as skills seguradas encerram limpo.
 	player.CharacterRemoving:Connect(function()
-		local session = sessions[player]
-		if not session then
-			return
-		end
-		local now = os.clock()
-		for _, resolver in session.resolvers do
-			resolver:Cancel(now)
-		end
+		InputSessions.CancelActiveGestures(player, false)
 	end)
 end
 
@@ -188,13 +164,5 @@ for _, player in Players:GetPlayers() do
 end
 
 Players.PlayerRemoving:Connect(function(player: Player)
-	local session = sessions[player]
-	if not session then
-		return
-	end
-	-- silent: a entidade está sendo destruída (DataManager.Remove) — emitir Release geraria warn de ID inválido
-	for _, resolver in session.resolvers do
-		resolver:Cancel(os.clock(), true)
-	end
-	sessions[player] = nil
+	InputSessions.CancelActiveGestures(player, true)
 end)

@@ -195,10 +195,38 @@ function CameraOverride.Init()
 		end
 	end)
 
+	local PlayerModule = require(player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule"))
+	local Controls = PlayerModule:GetControls()
+	local NATIVE_MOVE = Controls.moveFunction
+	local savedHumanoid = nil -- guarda a referência do humanoid quando suspendemos
+
+	-- Stub que substitui o humanoid real no ControlModule durante a posse.
+	-- calculateRawMoveVector chama humanoid:GetState() e lê .RootPart,
+	-- então o stub precisa responder a isso. Escritas em .Jump são engolidas.
+	local function makeHumanoidStub(realHumanoid)
+		return setmetatable({ Jump = false }, {
+			__index = function(_, key)
+				if key == "RootPart" then
+					return realHumanoid and realHumanoid.RootPart
+				end
+				if key == "GetState" then
+					return function()
+						return Enum.HumanoidStateType.Running
+					end
+				end
+				return nil
+			end,
+			__newindex = function(self, key, value)
+				-- Engole .Jump e qualquer outra escrita silenciosamente
+				rawset(self, key, value)
+			end,
+		})
+	end
+
 	local ControlStateChanged = ReplicatedStorage.RemoteEvents:WaitForChild("ControlStateChanged")
 	local activeBeforeLock = false
 
-	ControlStateChanged.OnClientEvent:Connect(function(isLocked: boolean, entityID: string?)
+	ControlStateChanged.OnClientEvent:Connect(function(isLocked: boolean, entityID: string?, suspendNative: boolean?)
 		if entityID then
 			for _, obj in ipairs(workspace:GetChildren()) do
 				if obj:GetAttribute("EntityID") == entityID then
@@ -221,6 +249,33 @@ function CameraOverride.Init()
 			CameraOverride.PossessedSubject = nil
 			if player.Character then
 				workspace.CurrentCamera.CameraSubject = player.Character:FindFirstChild("Humanoid") or player.Character.PrimaryPart
+			end
+		end
+
+		if isLocked or suspendNative then
+			Controls.moveFunction = function() end
+			-- Substitui o humanoid real por um stub que engole .Jump mas
+			-- mantém GetState/RootPart funcionando — sem isso,
+			-- calculateRawMoveVector e inputMoveVector param de atualizar.
+			if not savedHumanoid then
+				savedHumanoid = Controls.humanoid
+			end
+			Controls.humanoid = makeHumanoidStub(savedHumanoid)
+
+			-- O pulo nativo acontece via UserInputService.JumpRequest que aciona
+			-- o Humanoid original. Precisamos desativar o estado no corpo físico.
+			if player.Character and player.Character:FindFirstChild("Humanoid") then
+				player.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+			end
+		else
+			Controls.moveFunction = NATIVE_MOVE
+			if savedHumanoid then
+				Controls.humanoid = savedHumanoid
+				savedHumanoid = nil
+			end
+
+			if player.Character and player.Character:FindFirstChild("Humanoid") then
+				player.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
 			end
 		end
 

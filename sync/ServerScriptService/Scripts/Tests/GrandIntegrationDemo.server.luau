@@ -10,6 +10,7 @@ local ServerStorage = game:GetService("ServerStorage")
 local Players = game:GetService("Players")
 
 local DataManager = require(ServerScriptService.EntityData.DataManager)
+local AntiCheat = require(ServerScriptService.Modules.GlobalAntiCheat)
 local SkillHandler = require(ServerScriptService.Modules.SkillHandler)
 local SkillRunner = require(ServerScriptService.Modules.SkillRunner)
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
@@ -205,10 +206,6 @@ task.delay(5, function()
 	hunter.Possess({ Player = player })
 	-- O corpo original do player ganha a mente da IA e ignora o Hunter
 	if playerCore then
-		-- Puxa a ownership pro servidor pro client não conseguir mover o próprio corpo
-		local root = playerCore.GetRoot and playerCore.GetRoot()
-		if root then root:SetNetworkOwner(nil) end
-
 		playerCore:AddComponent(playerCore.ComponentKey.AI, {}, true)
 		playerCore.HunterIgnoreSet = { [hunter] = true }
 		hunter.HunterIgnoreSet[playerCore] = true
@@ -242,7 +239,5 @@ task.delay(5, function()
 	hunter.SetEnabled(true) -- Liga a IA do Hunter de volta
 	if playerCore then
 		playerCore:RemoveComponent(playerCore.ComponentKey.AI)
-		local root = playerCore.GetRoot and playerCore.GetRoot()
-		if root then root:SetNetworkOwner(player) end
 	end
 end)

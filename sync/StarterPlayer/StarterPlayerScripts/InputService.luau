@@ -195,10 +195,19 @@ local function startMoveAxis()
 		lastSent = Vector3.zero
 	end)
 
+	local PlayerModule = require(player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule"))
+	local Controls = PlayerModule:GetControls()
+	
+	local ControlStateChanged = ReplicatedStorage.RemoteEvents:WaitForChild("ControlStateChanged")
+	ControlStateChanged.OnClientEvent:Connect(function(isLocked: boolean, entityID: string?, suspendNative: boolean?)
+		-- Força a atualização do input no próximo frame. Se o player não estiver segurando nada,
+		-- lastSent = 999.. vai fazer 'stopped = true' e enviar Vector3.zero, sobrescrevendo
+		-- qualquer input residual (ex: a AI que estava andando reto).
+		lastSent = Vector3.new(999, 999, 999)
+	end)
+
 	RunService.Heartbeat:Connect(function()
-		local character = player.Character
-		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-		local direction = if humanoid then humanoid.MoveDirection else Vector3.zero
+		local direction = Controls.inputMoveVector or Vector3.zero
 
 		local now = os.clock()
 		local stopped = direction == Vector3.zero and lastSent ~= Vector3.zero

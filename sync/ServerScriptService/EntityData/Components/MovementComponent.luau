@@ -178,6 +178,12 @@ function MovementComponent:Destroy()
 	table.clear(self.Filters)
 end
 
+function MovementComponent:SetDrivesInput(value: boolean)
+	if self.MovementWrapper then
+		self.MovementWrapper.DrivesInput = value
+	end
+end
+
 -- ==========================================
 -- FILTROS ORGÂNICOS
 -- ==========================================
@@ -266,6 +272,7 @@ local ExposeAPI = {
 	SetJumpForce = function(Component,...) return Component:SetJumpForce(...) end,
 	AddFilter = function(Component, ...) return Component:AddFilter(...) end,
 	RemoveFilter = function(Component, ...) return Component:RemoveFilter(...) end,
+	SetDrivesInput = function(Component, v) return Component:SetDrivesInput(v) end,
 }
 
 return { new = MovementComponent.new, ExposeAPI = ExposeAPI }

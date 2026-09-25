@@ -27,9 +27,10 @@ local function makeDummy(cframe: CFrame, components: {string}?, configs: {[strin
 end
 
 local function cleanup(entity: any)
-	if entity and entity.Instance then
-		entity.Instance:Destroy()
-	end
+	if not entity then return end
+	local instance = entity.Instance
+	DataManager.Remove(instance)
+	if instance then instance:Destroy() end
 end
 
 task.wait(2) -- deixa o resto do jogo terminar de bootar
