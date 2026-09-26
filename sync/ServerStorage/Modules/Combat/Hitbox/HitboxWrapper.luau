@@ -238,7 +238,7 @@ function HitboxWrapper:_handleHit(result: RaycastResult, segment, config: Hitbox
 
 
 	--Busca o Entity do alvo atingido
-	local targetEntity = self:_getTargetEntity(result.Instance)
+	local targetEntity = self.DataManager.GetEntityFromInstance(result.Instance)
 	if not targetEntity then return end
 
 	-- Anti multi-hit
@@ -265,24 +265,6 @@ function HitboxWrapper:_handleHit(result: RaycastResult, segment, config: Hitbox
 			warn("[HitboxWrapper] Erro no callback:", err)
 		end
 	end
-end
-
---Busca o Entity do alvo atingido subindo a hierarquia até achar um Model com EntityID
---(a arma é um Model filho do personagem: parar no primeiro Model ignorava o hit)
-function HitboxWrapper:_getTargetEntity(hitInstance: Instance)
-	local current = hitInstance
-
-	while current and current ~= workspace do
-		if current:IsA("Model") then
-			local hitID = current:GetAttribute("EntityID")
-			if hitID then
-				return self.DataManager.Get(hitID)
-			end
-		end
-		current = current.Parent
-	end
-
-	return nil --Atingiu algo sem entidade (parede etc.)
 end
 
 

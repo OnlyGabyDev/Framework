@@ -511,7 +511,9 @@ function ControlModule:OnRenderStepped(dt)
 		--end
 
 		-- And make them jump if needed
-		self.humanoid.Jump = self.activeController:GetIsJumping() or (self.touchJumpController and self.touchJumpController:GetIsJumping())
+		if not self._nativeJumpSuspended then
+			self.humanoid.Jump = self.activeController:GetIsJumping() or (self.touchJumpController and self.touchJumpController:GetIsJumping())
+		end
 	end
 end
 

@@ -16,10 +16,10 @@ Registry.GenericImpact = function(data: {[string]: any})
 	anchor.Parent = workspace
 
 	local emitter = Instance.new("ParticleEmitter")
-	emitter.Lifetime = NumberRange.new(60, 60) -- Vivem por 1 minuto
+	emitter.Lifetime = NumberRange.new(0.3, 1.3) -- Vivem por 1 minuto
 	emitter.Rate = 0
-	emitter.Speed = NumberRange.new(2, 5) -- Bem mais devagar pra não sumirem da tela
-	emitter.Size = NumberSequence.new(20) -- GIGANTES
+	emitter.Speed = NumberRange.new(1, 2) -- Bem mais devagar pra não sumirem da tela
+	emitter.Size = NumberSequence.new(2) -- GIGANTES
 	emitter.LightEmission = 1 -- Brilhantes
 	emitter.Brightness = 5
 	emitter.Color = ColorSequence.new(Color3.fromRGB(255, 200, 50)) -- Amarelas

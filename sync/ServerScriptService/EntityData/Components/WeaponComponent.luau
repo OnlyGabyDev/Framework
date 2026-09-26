@@ -35,7 +35,10 @@ function WeaponComponent.new(entity, config)
 	self.HitOrigin = nil
 	self.Hitbox = nil
 
-
+	-- Modes and Motors
+	self.Motors = {}
+	self.CurrentMode = nil
+	self.CurrentModeData = nil
 
 	return self
 end
@@ -100,31 +103,35 @@ function WeaponComponent:EquipWeapon(weaponName : string) : boolean
 		return false
 	end
 
-	-- Determina ponto de attach
-	local attachTo = self:_GetAttachPoint(weaponModel)
-	local charAttach = char:FindFirstChild(attachTo)
-
-	if not charAttach then
-		warn("[WeaponComponent] Ponto de attach não encontrado:", attachTo)
-		weaponClone:Destroy()
-		return false
-	end
-
-	-- CFrame da arma
-	local cframeValue = weaponClone:FindFirstChild("Value")
-	local weaponCFrame = cframeValue and cframeValue.Value or CFrame.identity
-
-	-- Cria Motor6D
-	local motor = Instance.new("Motor6D")
-	motor.Part0 = charAttach
-	motor.Part1 = handle
-	motor.C1 = weaponCFrame
-	motor.Parent = handle
-
-	-- Salva referências
+	-- Salva referências primárias (antes do attach/modo)
 	self.Weapon = weaponClone
 	self.WeaponName = weaponName
 	self.HitOrigin = weaponClone:FindFirstChild("hitOrigin")
+	
+	self.Motors = {}
+
+	local weaponData = self:_GetWeaponData()
+	if weaponData and weaponData.Modes then
+		self:SetMode(weaponData.DefaultMode or "Default")
+	else
+		-- Determina ponto de attach (fallback)
+		local attachTo = self:_GetAttachPoint(weaponModel)
+		local charAttach = char:FindFirstChild(attachTo)
+
+		if not charAttach then
+			warn("[WeaponComponent] Ponto de attach não encontrado:", attachTo)
+			weaponClone:Destroy()
+			return false
+		end
+
+		-- Cria Motor6D
+		local motor = Instance.new("Motor6D")
+		motor.Part0 = charAttach
+		motor.Part1 = handle
+		motor.C1 = self:_GetCFrameFor(weaponClone, "primary")
+		motor.Parent = handle
+		self.Motors["primary"] = motor
+	end
 
 	-- Cria wrapper de hitbox caso não seja modelo cosmético
 	if not self.IsCosmetic then
@@ -161,11 +168,101 @@ function WeaponComponent:_GetAttachPoint(weaponModel : Instance) : string
 	return "Right Arm"
 end
 
+function WeaponComponent:_GetCFrameFor(weaponClone: Instance, key: string): CFrame
+	local cframeValue = weaponClone:FindFirstChild("Value_" .. key)
+		or weaponClone:FindFirstChild("Value")
+	return cframeValue and cframeValue.Value or CFrame.identity
+end
+
+function WeaponComponent:_AttachAllPoints(weaponClone, attachPoints)
+	for key, attachName in pairs(attachPoints) do
+		local charAttach = self.Entity.Instance:FindFirstChild(attachName)
+		local handle = weaponClone:FindFirstChild(key == "primary" and "Handle" or ("Handle_" .. key))
+						or weaponClone:FindFirstChild("Handle")
+
+		if not charAttach or not handle then
+			warn("[WeaponComponent] Attach point ou handle não encontrado:", key, attachName)
+			continue
+		end
+
+		local motor = Instance.new("Motor6D")
+		motor.Part0 = charAttach
+		motor.Part1 = handle
+		motor.C1 = self:_GetCFrameFor(weaponClone, key)
+		motor.Parent = handle
+		self.Motors[key] = motor
+	end
+end
+
+function WeaponComponent:_ClearMotors()
+	for key, motor in pairs(self.Motors) do
+		motor:Destroy()
+	end
+	table.clear(self.Motors)
+end
+
+function WeaponComponent:_GetWeaponData(): {}?
+	if self.WeaponData then return self.WeaponData end
+	
+	if not self.WeaponName then return nil end
+	
+	local chosenChar = self.Entity.GetChosenChar and self.Entity.GetChosenChar()
+	if not chosenChar then return nil end
+	
+	local weaponsFolder = RS.Assets.Weapons:FindFirstChild(chosenChar)
+	if not weaponsFolder then return nil end
+	
+	local weaponFolder = weaponsFolder:FindFirstChild(self.WeaponName)
+	if not weaponFolder then return nil end
+	
+	local dataModule = weaponFolder:FindFirstChild("WeaponData")
+	if not dataModule then return nil end
+	
+	local success, data = pcall(require, dataModule)
+	if success then
+		self.WeaponData = data
+		return data
+	end
+	
+	return nil
+end
+
+function WeaponComponent:SetMode(modeName: string): boolean
+	local weaponData = self:_GetWeaponData()
+	if not weaponData or not weaponData.Modes or not weaponData.Modes[modeName] then
+		warn("[WeaponComponent] Modo inválido ou arma sem Modes:", modeName)
+		return false
+	end
+
+	local modeData = weaponData.Modes[modeName]
+
+	self:_ClearMotors()
+	self:_AttachAllPoints(self.Weapon, modeData.AttachPoints)
+
+	self.CurrentMode = modeName
+	self.CurrentModeData = modeData
+
+	return true
+end
+
+function WeaponComponent:GetCurrentMode(): string?
+	return self.CurrentMode
+end
+
+function WeaponComponent:GetModeData(): {}?
+	return self.CurrentModeData
+end
+
+function WeaponComponent:GetWeaponData(): {}?
+	return self:_GetWeaponData()
+end
+
 --[[
 Desequipar a arma atual
 ]]
 function WeaponComponent:UnequipWeapon()
 	self:DestroyHitbox()
+	self:_ClearMotors()
 
 	if self.Weapon then
 		self.Weapon:Destroy()
@@ -175,6 +272,9 @@ function WeaponComponent:UnequipWeapon()
 	self.WeaponName = nil
 	self.HitOrigin = nil
 	self.Hitbox = nil
+	self.CurrentMode = nil
+	self.CurrentModeData = nil
+	self.WeaponData = nil
 end
 
 --=============================================================================
@@ -316,6 +416,10 @@ local ExposeAPI = {
 	GetHitOrigin  = function(component) return component:GetHitOrigin() end,
 	GetHitbox     = function(component) return component:GetHitbox() end,
 	HasWeapon     = function(component) return component:HasWeapon() end,
+	SetMode       = function(component, ...) return component:SetMode(...) end,
+	GetCurrentMode= function(component) return component:GetCurrentMode() end,
+	GetModeData   = function(component) return component:GetModeData() end,
+	GetWeaponData = function(component) return component:GetWeaponData() end,
 
 	-- Utility 
 	GetWeaponPosition = function(component) return component:GetWeaponPosition() end,

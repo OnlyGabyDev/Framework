@@ -68,24 +68,16 @@ local Skill = {
 		onHit = function(self,result)
 			local targetEntity = result.target
 			targetEntity.forceID = targetEntity.AddForce({
-				Type = "UltFlight",
+				Type = "UltGrab",
+				Duration = self.data.duration,
 				Hard = true,
 				IgnoreGravity = true,
-				Priority = 20,
-				Duration = self.data.duration,
-				Speed = self.data.Speed,
-				TurnRate = math.rad(self.data.TurnRateDegrees),
-				FaceDirection = true,
-
-				Direction = function(_elapsed, _duration, ctx)
-					local look = self.Entity.GetLookDirection()
-					if look.Magnitude < 0.1 then
-						return self.Entity.GetDirection()
-					end
-					return look
-				end,
-
-
+				RequiresControl = false,
+				FollowTarget = function() return self.Entity.GetRoot() end,
+				FollowOffset = self.data.GrabOffset or Vector3.new(0, 0, -4),
+				FollowOffsetIsLocal = true,
+				FollowResponsiveness = self.data.GrabResponsiveness or 16,
+				FollowMaxSpeed = self.data.Speed,
 				OnEnd = function()
 					if targetEntity.forceID then
 						targetEntity.forceID = nil

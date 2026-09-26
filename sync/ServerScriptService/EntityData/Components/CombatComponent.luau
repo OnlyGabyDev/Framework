@@ -730,6 +730,7 @@ local ExposeAPI = {
 	SetCharMode = function(component,...) return component:SetCharMode(...) end,
 
 	--Loadout
+	ApplyLoadout = function(component, ...) return component:_ApplyLoadout(...) end,
 	EquipSkill = function(component, ...) return component:EquipSkill(...) end,
 	AddSkill = function(component, ...) return component:AddSkill(...) end,
 	UnequipSlot = function(component, ...) return component:UnequipSlot(...) end,

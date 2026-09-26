@@ -139,6 +139,25 @@ function DataManager.Get(Entity)
 end
 
 --[[
+Busca o Entity do alvo atingido subindo a hierarquia até achar um Model com EntityID
+]]
+function DataManager.GetEntityFromInstance(hitInstance: Instance)
+	local current = hitInstance
+
+	while current and current ~= workspace do
+		if current:IsA("Model") then
+			local hitID = current:GetAttribute("EntityID")
+			if hitID then
+				return DataManager.Get(hitID)
+			end
+		end
+		current = current.Parent
+	end
+
+	return nil
+end
+
+--[[
 Remove o EntityCore da entidade
 @param Entity - Player ou entidade
 ]]
