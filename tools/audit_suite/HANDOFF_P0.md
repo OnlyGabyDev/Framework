@@ -8,8 +8,8 @@ usuário em português, de forma direta: ele quer críticas, não elogios.
 
 - Repo Roblox/Luau. `sync/` espelha o place **UNTOLD BATTLEGROUNDS** (placeId 114873614457629)
   por uma ferramenta de sync. **O place no Studio é a fonte da verdade.**
-- Auditoria completa (74 falhas F01–F74): https://claude.ai/code/artifact/46b99f1b-a621-440c-a492-107e7e5c1e9f
-  — leia com o conector Claude Docs se você tiver; senão peça ao usuário um export em Markdown.
+- Auditoria completa (74 falhas F01–F74): `tools/audit_suite/AUDITORIA.md` (cópia em Markdown).
+  A versão viva, com comentários, fica em https://claude.ai/code/artifact/46b99f1b-a621-440c-a492-107e7e5c1e9f.
 - Regras do framework: **leia `.agents/rules/00` a `03` antes de tudo.** São 20 regras; trate como
   não negociáveis. As que mais pesam aqui: 1 (DRY), 7 (um módulo por vez), 12 (nada de campos
   soltos), 16/20 (dependência entre componentes explícita ou eliminada), 17 (formato com dono único),

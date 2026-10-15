@@ -1,7 +1,9 @@
 # audit_suite — testes da auditoria de 15/10/2026
 
-Suíte usada na auditoria "Framework de Combate — Auditoria de Falhas e Brechas"
-(doc no claude.ai: https://claude.ai/code/artifact/46b99f1b-a621-440c-a492-107e7e5c1e9f).
+Suíte usada na auditoria "Framework de Combate — Auditoria de Falhas e Brechas".
+A auditoria completa está em [`AUDITORIA.md`](AUDITORIA.md) (cópia em Markdown); a versão viva,
+com comentários, fica no claude.ai: https://claude.ai/code/artifact/46b99f1b-a621-440c-a492-107e7e5c1e9f.
+O lote P0 pronto para outra sessão aplicar está em [`HANDOFF_P0.md`](HANDOFF_P0.md).
 Cada teste mede um comportamento e compara com o contrato esperado. Os IDs `F01..F74`
 são as falhas do doc; rode de novo depois de cada correção e compare com a coluna "auditoria".
 
