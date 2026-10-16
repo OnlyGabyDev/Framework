@@ -21,7 +21,11 @@ function SkillHandler.HandleMovementInput(ID, dir)
 	local flat = Vector3.new(dir.X, 0, dir.Z)
 	local n = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
 
-	entityCore.SetDirection(n)
+	-- Corpo sem Movement (ex.: torre possuída) ignora o próprio eixo em vez de cair no stub e
+	-- gerar um warn por RequestDir (F58); os corpos linkados continuam recebendo
+	if entityCore:HasComponent(entityCore.ComponentKey.Movement) then
+		entityCore.SetDirection(n)
+	end
 
 	-- Fan-out opcional pra corpos linkados. Custo zero quando ninguém usa
 	-- Link — HasComponent é um lookup de tabela.
@@ -46,7 +50,9 @@ function SkillHandler.HandleLookInput(ID, look)
 	if typeof(look) ~= "Vector3" then return false end
 	if look.Magnitude < 0.01 then return false end
 
-	entityCore.SetAimDirection(look.Unit)
+	if entityCore:HasComponent(entityCore.ComponentKey.Movement) then
+		entityCore.SetAimDirection(look.Unit)
+	end
 
 	if entityCore:HasComponent(entityCore.ComponentKey.Control) then
 		for _, linkedEntity in ipairs(entityCore.GetLinkedEntities("MirrorLook")) do
@@ -93,6 +99,23 @@ local function track(entityCore, event, runner)
 	end
 end
 
+--[[
+Runners vivos da skill. Um runner Ended que ainda esteja listado (limpeza que falhou no
+passado) sai do registro aqui em vez de receber recast: era o "runner fantasma" do F13, que
+fazia o próximo toque cair no onRecast de uma skill morta.
+]]
+local function liveRunners(entityCore, skillName)
+	local live = {}
+	for _, runner in ipairs(table.clone(entityCore.GetActiveSkills(skillName))) do
+		if runner:IsEnded() then
+			entityCore.RemoveActiveSkill(skillName, runner)
+		else
+			table.insert(live, runner)
+		end
+	end
+	return live
+end
+
 local function activate(entityCore, event)
 	local skillData = entityCore.GetSkillFromSlot(event.Intent)
 	if not skillData then return false end
@@ -100,7 +123,7 @@ local function activate(entityCore, event)
 	local skill = SkillFactory.GetSkill(skillData)
 	local skillName = skill.data.name
 	local maxInstances = skill.data.maxInstances --Guarda a quantidade máximas de instâncias permitida daquela skill
-	local activeRunners = entityCore.GetActiveSkills(skillName) --Busca instâncias ativas da skill na entidade
+	local activeRunners = liveRunners(entityCore, skillName) --Busca instâncias ativas (vivas) da skill na entidade
 
 	if entityCore.HasCooldown(skillName) then return false end --Se estiver em cooldown, retorne false.
 
@@ -159,7 +182,8 @@ local function activate(entityCore, event)
 
 	if not runner then return false end --caso o runner seja apagado na criação devido a stack overflow.
 
-	runner:start()
+	-- onStart com erro: o runner já se cancelou e limpou sozinho (F14), a ativação falha
+	if not runner:start() then return false end
 	track(entityCore, event, runner)
 	return true, skillName, cooldown
 end

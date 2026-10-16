@@ -33,6 +33,14 @@ function AIComponent:SetEnabled(enabled: boolean)
 	self.Enabled = enabled
 end
 
+function AIComponent:GetBrain()
+	return self.Brain
+end
+
+function AIComponent:IsAIEnabled(): boolean
+	return self.Enabled
+end
+
 function AIComponent:OnAdded()
 	AIScheduler.Register(self)
 end
@@ -46,6 +54,9 @@ end
 local ExposeAPI = {
 	SetBrain = function(component, ...) return component:SetBrain(...) end,
 	SetEnabled = function(component, ...) return component:SetEnabled(...) end,
+	-- Getters usados pelo ControlComponent pra guardar e restaurar a mente original na possessão
+	GetBrain = function(component) return component:GetBrain() end,
+	IsAIEnabled = function(component) return component:IsAIEnabled() end,
 }
 
 return {

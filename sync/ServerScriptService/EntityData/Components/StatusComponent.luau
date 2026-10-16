@@ -23,6 +23,22 @@ local function asItems(entry)
 	return (entry.runner or entry.data) and { entry } or entry
 end
 
+-- Regra 16: dependência OPCIONAL de Health, declarada aqui num único ponto.
+-- Sem Health a entidade não morre, então nunca recusa status por isso.
+local function isDead(entity)
+	return entity:HasComponent(entity.ComponentKey.Health) and not entity.IsAlive()
+end
+
+-- Encerra runners que JÁ saíram do registro: o onFinish deles não acha mais a entrada
+-- e não mexe em lista nenhuma no meio de uma iteração.
+local function endDetached(items)
+	for _, item in items do
+		if item.runner then
+			item.runner:endSkill(true)
+		end
+	end
+end
+
 function StatusComponent.new(entity, config)
 	local self = setmetatable({}, StatusComponent)
 	
@@ -41,7 +57,10 @@ function StatusComponent.new(entity, config)
 
 	--Cooldown de status
 	self.StatusCooldowns = {} -- [statusName] = timestamp
-	
+
+	-- Regra de morte do motor (F39): padrão em Enum.DeathDefaults, override no config
+	self._refuseStatusOnDeath = StateTable.ResolveDeathPolicy(config, "RefuseStatusOnDeath")
+
 	return self
 end
 
@@ -103,15 +122,10 @@ Aplica um status à entidade.
 @return ID do status STRING ou nil se não aplicado
 ]]
 function StatusComponent:ApplyStatus(statusData, durationOrOpts, sourceSkill, ID, targetEntity)
-	if not StateTable.TryEnterChain() then
-		warn("[StatusComponent] MAX_RECURSION excedido, aplicação recusada. Entidade:", tostring(self.Entity.ID))
-		return nil
-	end
-
-	local resultID = self:_ApplyStatusInner(statusData, durationOrOpts, sourceSkill, ID, targetEntity)
-	StateTable.ExitChain()
-
-	return resultID
+	local ran, resultID = StateTable.RunInChain(
+		"[StatusComponent] ApplyStatus", self.Entity and self.Entity.ID,
+		self._ApplyStatusInner, self, statusData, durationOrOpts, sourceSkill, ID, targetEntity)
+	return ran and resultID or nil
 end
 
 function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSkill, ID, targetEntity)
@@ -127,6 +141,13 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 	local source = StateTable.ResolveRunner(opts.Source)
 	local target = opts.Target
 	local suppliedID = opts.ID
+
+	-- F39: entidade morta (ou sendo destruída) não recebe status. Configurável por entidade
+	-- (RefuseStatusOnDeath = false no config: nem checa a morte) e por status (um status que
+	-- precise agir sobre cadáver declara data.allowOnDead = true).
+	if self._destroying or (self._refuseStatusOnDeath and isDead(self.Entity) and not (statusData.data and statusData.data.allowOnDead)) then
+		return nil
+	end
 
 	local canApply = self:_ValidateApplication(statusData, source)
 	if not canApply then
@@ -185,9 +206,7 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 
 		local runner = self:_CreateRunner(data, meta.name, duration, target, source)
 		group[meta.name] = { data = data, counter = 1, runner = runner, sourceSkill = source, ID = suppliedID, seq = nextSeq(self) }
-
-		self:_MarkTagsDirty()
-		return suppliedID
+		return self:_StartRunner(runner, suppliedID)
 	end
 
 	-- ===== STACK EM INSTÂNCIAS DIFERENTES =====
@@ -205,17 +224,22 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 		table.insert(list, { data = data, runner = runner, sourceSkill = source, ID = suppliedID, seq = nextSeq(self) })
 
 		group[meta.name] = list
-		self:_MarkTagsDirty()
-		return suppliedID
+		return self:_StartRunner(runner, suppliedID)
 	end
 
 	-- ===== EXCLUSIVO (substitui outros da mesma categoria) =====
 	if meta.exclusive then
+		-- Snapshot dos nomes: RemoveStatus encerra runners, e os callbacks de fim podem
+		-- aplicar status neste mesmo grupo enquanto o pairs ainda percorre ele.
+		local sameCategory = {}
 		for name, entry in pairs(group) do
 			local entryMeta = entry.data and entry.data.data
 			if entryMeta and entryMeta.category == meta.category then
-				self:RemoveStatus(name)
+				table.insert(sameCategory, name)
 			end
+		end
+		for _, name in sameCategory do
+			self:RemoveStatus(name)
 		end
 	end
 
@@ -227,8 +251,20 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 
 	local runner = self:_CreateRunner(data, meta.name, duration, target, source)
 	group[meta.name] = { data = data, runner = runner, sourceSkill = source, ID = suppliedID, seq = nextSeq(self) }
+	return self:_StartRunner(runner, suppliedID)
+end
 
+--[[
+Inicia um runner cuja entrada JÁ está registrada em self.Effects. A ordem importa: um
+status que falha (F14) ou se encerra dentro do próprio onStart passa pelo onFinish e sai
+do registro, em vez de ficar listado com o runner morto (e com as tags dele valendo).
+@return o ID, ou nil se o onStart falhou
+]]
+function StatusComponent:_StartRunner(runner, suppliedID)
 	self:_MarkTagsDirty()
+	if not runner:start() then
+		return nil
+	end
 	return suppliedID
 end
 
@@ -240,7 +276,8 @@ Cria um SkillRunner para o status
 @return SkillRunner criado SkillRunner
 ]]
 --[[
-Cria um SkillRunner para o status.
+Cria um SkillRunner para o status. NÃO inicia: quem chama registra a entrada em
+self.Effects e só então chama _StartRunner.
 @param source - Runner original que aplicou o status (opcional). Vira runner.Source
 	(acessível como self.Source dentro dos callbacks) e alimenta a Lineage do novo
 	runner, corrigindo Lineage.Origin (antes sempre virava o portador, nunca o caster).
@@ -251,7 +288,9 @@ function StatusComponent:_CreateRunner(data, name, duration, target, source)
 		data.runtimeDuration = duration
 	end
 
-	local targetEntity = target and target.Entity or self.Entity
+	-- opts.Target é um EntityCore (contrato do ApplyStatus). Antes lia target.Entity, que não
+	-- existe num EntityCore, e o alvo era sempre ignorado.
+	local targetEntity = target or self.Entity
 	local runner = SkillRunner.new(data, targetEntity, name, StateEnum.Types.Status, source and source.Lineage)
 
 	if runner then
@@ -262,7 +301,6 @@ function StatusComponent:_CreateRunner(data, name, duration, target, source)
 			self:_OnRunnerFinished(name, runner)
 			self:_MarkTagsDirty()
 		end
-		runner:start()
 	end
 	return runner
 end
@@ -345,29 +383,29 @@ end
 --=============================================================================
 
 --[[
-RemoveStatus um status completamente pelo nome
+RemoveStatus um status completamente pelo nome (todas as instâncias, nos dois grupos)
 @param name - Nome do status STRING
+@return removeu alguma instância BOOLEAN
 ]]
-function StatusComponent:RemoveStatus(name : string)
+function StatusComponent:RemoveStatus(name : string) : boolean
+	-- Desregistra ANTES de encerrar: endSkill dispara onFinish -> _OnRunnerFinished, que
+	-- tirava runners da lista enquanto ela era percorrida (metade de uma stack de
+	-- instâncias ficava órfã, rodando fora do registro).
+	local detached = {}
 	for _, group in pairs(self.Effects) do
 		local entry = group[name]
-		if not entry then continue end
-		
-		-- Single runner
-		if entry.runner then
-			entry.runner:endSkill(true)
-		-- Multiple runners
-		elseif type(entry) == "table" then
-			for _, item in ipairs(entry) do
-				if item.runner then
-					item.runner:endSkill(true)
-				end
+		if entry then
+			group[name] = nil
+			for _, item in ipairs(asItems(entry)) do
+				table.insert(detached, item)
 			end
 		end
-		
-		group[name] = nil
-		self:_MarkTagsDirty()
 	end
+	if #detached == 0 then return false end
+
+	self:_MarkTagsDirty()
+	endDetached(detached)
+	return true
 end
 
 
@@ -433,48 +471,37 @@ RemoveStatusByID
 RemoveStatus um status/estado completamente pelo ID único
 ]]
 function StatusComponent:RemoveStatusByID(id : string) : boolean
-	local removed = false
-	
-	for groupName, group in pairs(self.Effects) do
-		if groupName == StateTable.Enum.Types.State then
-			for name, entry in pairs(group) do
-				if entry.ID == id then
-					self:RemoveStatus(name)
-					removed = true
-				end
-			end
-		elseif groupName == StateTable.Enum.Types.Status then
-			for name, list in pairs(group) do
-				-- single entry
-				if list.ID == id then
-					self:RemoveStatus(name)
-					removed = true
-
-				-- multiple entries (array-only)
-				elseif type(list) == "table" and list[1] ~= nil then
-					for i = #list, 1, -1 do
-						local entry = list[i]
-						if entry.ID == id then
-							if entry.runner then
-								entry.runner:Stop(true)
-							end
-							table.remove(list, i)
-							removed = true
-						end
-					end
-
-					if list[1] == nil then
-						group[name] = nil
-					end
+	-- 1ª passada só coleta: encerrar runners roda callbacks que podem mexer em self.Effects
+	local found = {}
+	for _, group in pairs(self.Effects) do
+		for name, entry in pairs(group) do
+			for _, item in ipairs(asItems(entry)) do
+				if item.ID == id then
+					table.insert(found, { group = group, name = name, item = item })
 				end
 			end
 		end
 	end
+	if #found == 0 then return false end
 
-	if removed then
-		self:_MarkTagsDirty()
+	-- Desregistra ANTES de encerrar (mesmo motivo do RemoveStatus): antes o onFinish tirava
+	-- o runner da lista e o table.remove(list, i) logo em seguida tirava a instância vizinha.
+	local detached = {}
+	for _, hit in found do
+		local entry = hit.group[hit.name]
+		if entry == hit.item then
+			hit.group[hit.name] = nil
+		elseif entry then
+			local index = table.find(entry, hit.item)
+			if index then table.remove(entry, index) end
+			if entry[1] == nil then hit.group[hit.name] = nil end
+		end
+		table.insert(detached, hit.item)
 	end
-	return removed
+
+	self:_MarkTagsDirty()
+	endDetached(detached)
+	return true
 end
 
 	
@@ -774,20 +801,29 @@ Limpa todos os STATUS ativos e devolve quantos foram removidos
 @return quantidade de instancias removidas NUMBER
 ]]
 function StatusComponent:ClearAll() : number
-	local removed = 0
+	-- Desregistra tudo antes de encerrar: os callbacks de fim não podem ver (nem mexer em)
+	-- uma tabela que o pairs ainda está percorrendo.
+	local detached = {}
 	for _, group in pairs(self.Effects) do
-		for name in pairs(group) do
-			self:RemoveStatus(name)
-			removed += 1
+		for _, entry in pairs(group) do
+			for _, item in ipairs(asItems(entry)) do
+				table.insert(detached, item)
+			end
 		end
+		table.clear(group)
 	end
-	return removed
+	if #detached == 0 then return 0 end
+
+	self:_MarkTagsDirty()
+	endDetached(detached)
+	return #detached
 end
 
 --[[
 Destroi o componente, limpando referências e parando processos
 ]]
 function StatusComponent:Destroy()
+	self._destroying = true -- callbacks de fim não aplicam status novos numa entidade que está saindo
 	table.clear(self.StatusCooldowns)
 	self:ClearAll()
 	self.Entity = nil

@@ -52,7 +52,8 @@ export type Context = {
 	}?,
 	input: {
 		Modifiers: {[string]: boolean}?
-	}?
+	}?,
+	reason: string?, -- só no onCancel/onEnd/OUT.onEnd: StateTable.Enum.EndReasons
 }
 
 return {}

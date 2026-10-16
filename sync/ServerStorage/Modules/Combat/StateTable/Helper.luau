@@ -57,6 +57,54 @@ function Helper.ExitChain()
 	activeChainDepth = math.max(0, activeChainDepth - 1)
 end
 
+local function finishChain(label: string, subject: any, ok: boolean, ...: any)
+	Helper.ExitChain()
+	if not ok then
+		warn(label, "erro dentro da cadeia, ação abortada. Entidade:", tostring(subject), "\n" .. tostring((...)))
+		return false, "Error"
+	end
+	return true, ...
+end
+
+--[[
+Dono único do par TryEnterChain/ExitChain: roda `fn(...)` dentro do disjuntor e
+SEMPRE sai da cadeia, mesmo se `fn` lançar erro. Antes TakeDamage e ApplyStatus
+faziam o par à mão e um erro no miolo pulava o ExitChain: depois de MAX_RECURSION
+erros o servidor inteiro passava a recusar dano e status.
+
+A profundidade continua global de propósito: ela mede o aninhamento SÍNCRONO real
+da pilha (o risco é estourar a pilha do servidor). Um contador no context não
+enxergaria reentradas que não repassam o context — ex.: um block que reflete dano
+chamando attacker.TakeDamage(dano, self.Runner) monta um context novo a cada nível.
+
+@param label - prefixo dos warns, ex. "[HealthComponent] TakeDamage" STRING
+@param subject - identificação da entidade, só usada nos warns ANY
+@return true, ...retornos de fn | false, "MaxRecursion" | false, "Error"
+]]
+function Helper.RunInChain(label: string, subject: any, fn: (...any) -> ...any, ...: any)
+	if not Helper.TryEnterChain() then
+		warn(label, "MAX_RECURSION excedido, ação recusada. Entidade:", tostring(subject))
+		return false, "MaxRecursion"
+	end
+	return finishChain(label, subject, xpcall(fn, debug.traceback, ...))
+end
+
+--[[
+Resolve uma regra de morte do motor pra uma entidade: o valor do config do componente ou, na
+falta, Enum.DeathDefaults (dono único dos padrões). Chamado UMA vez, no new() do componente.
+@param config - config do componente na criação da entidade TABLE?
+@param key - chave de Enum.DeathDefaults STRING
+]]
+function Helper.ResolveDeathPolicy(config: {[string]: any}?, key: string): boolean
+	local default = Enum.DeathDefaults[key]
+	assert(default ~= nil, "[StateTable] regra de morte desconhecida: " .. tostring(key))
+	local value = config and config[key]
+	if value == nil then
+		return default
+	end
+	return value and true or false
+end
+
 local function registerModule(module, targetTable)
 	local success, data = pcall(require, module)
 	if not success then

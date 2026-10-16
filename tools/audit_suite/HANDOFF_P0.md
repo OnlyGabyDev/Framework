@@ -4,6 +4,33 @@ Você vai aplicar o lote P0 (as correções que derrubam o servidor ou o player)
 15/10/2026. Trabalhe um item por vez, prove cada correção com o teste indicado e reporte ao
 usuário em português, de forma direta: ele quer críticas, não elogios.
 
+## Estado em 16/10/2026
+
+Itens 1 a 4 aplicados no Studio e no disco, **sem commit**. O item 5 (F05) tem plano aprovado e vai ser
+feito em outro chat pelo guia [`HANDOFF_F05.md`](HANDOFF_F05.md).
+
+| Item | Prova | Antes → depois |
+| --- | --- | --- |
+| 1. F01 | BatchA T14, T02 | vazou 10/10 e dano saudável deu `false/MaxRecursion` → 0 vazamentos, dano ok |
+| 2. F06–F09, F39 | BatchA T08, T09, T10, T46, T50 | 5/10 órfãos; sobravam ID1, ID4, ID5; ID virava tabela; status no cadáver → 0 órfãos; sobram ID1, ID3, ID4, ID5; `"WantedID"`; recusado |
+| 3. F13, F14, F20, F54 | BatchB T20, T21; U2 U3; Caps K1 | runner fantasma; erro do `onStart` escapava; caster morto voando com 3 alvos; recarga interrompida recarregou 6 → tudo limpo; 0 ativas e 0 presos; 0 balas |
+| 4. F02–F04, F21–F24 | BatchP; sonda `ManualPossessionSeq`; log do cliente | 7 de 8 falhavam → 7 de 8 passam (o P4 falha só pela velocidade do rig, F31); sequência torre → enxame inteira; uma mensagem por troca |
+
+Decisões do usuário: 4a = modelo B agora e Server Authority depois; 4b = pilha, configurável por chamada,
+por entidade e no padrão do módulo; 4c = o Possess pausa a IA do alvo e o Release restaura. O sync é
+bidirecional (Script Sync nativo do Studio). HP 0 não mata o Humanoid, de propósito (decisão do dev final).
+
+F20 e F39 são configuráveis (pedido do usuário): padrão ligado em `Enum.DeathDefaults`, override por
+entidade no config do Combat (`CancelSkillsOnDeath`) e do Status (`RefuseStatusOnDeath`); desligado não
+assina listener nem checa a morte. Testado nos três cenários (padrão, os dois desligados, só um).
+
+Extras feitos porque um item dependia deles: F58 e F85 a F91. Achados novos abertos: F75 a F84, em
+[`AUDITORIA.md`](AUDITORIA.md). A suíte mudou em dois pontos: a recarga da Pistoleira usa `ctx.reason`, e
+os `resetPlayer` da BatchP e da sonda manual chamam `ControlComponent.ReleasePlayer` (a `PriorControlledID`
+do AntiCheat saiu).
+
+O resto deste arquivo é o handoff original, mantido como histórico.
+
 ## Contexto em 1 minuto
 
 - Repo Roblox/Luau. `sync/` espelha o place **UNTOLD BATTLEGROUNDS** (placeId 114873614457629)

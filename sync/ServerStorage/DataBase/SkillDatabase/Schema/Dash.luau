@@ -137,12 +137,9 @@ callbacks = {
 
 	end,    
 
+	-- onEnd roda em qualquer fim, inclusive depois do onCancel (F54): uma limpeza só
 	onEnd = function(self)
-        self.cleanUp()
-	end,
-	
-	onCancel = function(self)
-        self.cleanUp()
+        if self.cleanUp then self.cleanUp() end
 	end,
 }
 

@@ -70,15 +70,18 @@ function SkillFactory.GetStatus(originalData)
 	local originalCallbacks = originalData.callbacks or {}
 	local newCallbacks = {}
 
-	newCallbacks.onEnd = function(selfRunner)
-		if originalCallbacks.onEnd then originalCallbacks.onEnd(selfRunner) end
+	-- Repassa o ctx (com ctx.reason, F54) ao callback original. O retorno do onCancel é
+	-- descartado de propósito: status não recusa cancelamento, porque RemoveStatus já tirou a
+	-- entrada do registro antes de encerrar e um veto deixaria o runner órfão.
+	newCallbacks.onEnd = function(selfRunner, ...)
+		if originalCallbacks.onEnd then originalCallbacks.onEnd(selfRunner, ...) end
 		if status.StatusController then
 			status.StatusController:RemoveById(status.ID)
 		end
 	end
 	
-	newCallbacks.onCancel = function(selfRunner)
-		if originalCallbacks.onCancel then originalCallbacks.onCancel(selfRunner) end
+	newCallbacks.onCancel = function(selfRunner, ...)
+		if originalCallbacks.onCancel then originalCallbacks.onCancel(selfRunner, ...) end
 		if status.StatusController then
 			status.StatusController:RemoveById(status.ID)
 		end

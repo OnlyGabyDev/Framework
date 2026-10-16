@@ -63,7 +63,7 @@ end
 local function resetPlayer()
 	pcall(function()
 		AC.UnlockPlayerInput(plr)
-		AC.SetPriorControlledEntityId(plr, nil)
+		ControlComponent.ReleasePlayer(plr) -- a pilha de controle mora no ControlComponent (a PriorControlledID do AC saiu)
 		AC.SetControlledEntity(plr, playerId)
 		AC.SetNativeControlSuspended(plr, false)
 		local b = body()

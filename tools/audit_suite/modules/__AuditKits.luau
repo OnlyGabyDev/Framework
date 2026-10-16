@@ -94,7 +94,8 @@ do
 				self:Stop(true)
 			end
 		end,
-		onEnd = function(self)
+		onEnd = function(self, ctx)
+			if ctx.reason == E.EndReasons.Cancel then return end -- interrompida não recarrega (F54)
 			local c = chamber(self.Entity); if not c then return end
 			for i = 1, 6 do if c.chamber[i] == "_" then c.chamber[i] = "Normal" end end
 			hud(self.Entity)

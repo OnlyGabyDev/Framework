@@ -75,13 +75,12 @@ Aplica dano à entidade
 function HealthComponent:TakeDamage(amountOrContext : number | {}, source : any?)
 	if self.IsDead then return false end
 
-	if not StateTable.TryEnterChain() then
-		warn("[HealthComponent] MAX_RECURSION excedido, dano recusado. Entidade:", tostring(self.Entity.ID))
-		return false, "MaxRecursion"
+	local ran, success, actualDamage, context = StateTable.RunInChain(
+		"[HealthComponent] TakeDamage", self.Entity and self.Entity.ID,
+		self._TakeDamageInner, self, amountOrContext, source)
+	if not ran then
+		return false, success -- `success` traz o motivo: "MaxRecursion" | "Error"
 	end
-
-	local success, actualDamage, context = self:_TakeDamageInner(amountOrContext, source)
-	StateTable.ExitChain()
 
 	return success, actualDamage, context
 end

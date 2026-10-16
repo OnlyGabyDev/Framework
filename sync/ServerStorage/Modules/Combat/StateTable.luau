@@ -84,4 +84,12 @@ function StateTable.ExitChain()
 	Helper.ExitChain()
 end
 
+function StateTable.RunInChain(label, subject, fn, ...)
+	return Helper.RunInChain(label, subject, fn, ...)
+end
+
+function StateTable.ResolveDeathPolicy(config, key)
+	return Helper.ResolveDeathPolicy(config, key)
+end
+
 return StateTable

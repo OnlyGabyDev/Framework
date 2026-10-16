@@ -71,6 +71,17 @@ enum.Roles = {
     OUT = "OUT"
 }
 
+--Prioridade dos listeners internos do motor (ex.: a morte cancelando skills): rodam antes de
+--qualquer listener de conteúdo inscrito no mesmo breakpoint
+enum.EnginePriority = math.huge
+
+--Motivo do fim de um runner, entregue em ctx.reason no onCancel/onEnd (e no OUT.onEnd)
+enum.EndReasons = {
+    Cancel = "cancel",      --Cancelado (Stop(true), remoção do status, morte) ou erro no onStart/onStep
+    Duration = "duration",  --A duração acabou
+    Stop = "stop",          --A própria skill se encerrou sem cancelar (Stop(false))
+}
+
 
 
 
@@ -141,8 +152,17 @@ enum.StatDefaults = table.freeze({
     GravityScale = 1,
 })
 
+-- O que o MOTOR faz quando o HP zera. O resto (Humanoid, animação, respawn) é do jogo: o
+-- framework não mata o Humanoid, de propósito. Override por entidade no config do componente
+-- dono, com a mesma chave; cada componente resolve UMA vez no new() (StateTable.ResolveDeathPolicy),
+-- então uma regra desligada custa zero.
+enum.DeathDefaults = table.freeze({
+    CancelSkillsOnDeath = true, -- CombatComponent: a morte cancela as skills ativas (F20)
+    RefuseStatusOnDeath = true, -- StatusComponent: morto não recebe status novo (F39); data.allowOnDead fura por status
+})
+
 -- Limite de profundidade SÍNCRONA de uma cadeia dano<->status (TakeDamage/ApplyStatus se
--- recusam a continuar acima disso). Ver StateTable.TryEnterChain/ExitChain.
+-- recusam a continuar acima disso). Ver StateTable.RunInChain.
 enum.MAX_RECURSION = 50
 
 

@@ -81,11 +81,8 @@ local Skill = {
 			end
 		end,
 
+		-- onEnd roda em qualquer fim, inclusive depois do onCancel (F54): uma limpeza só
 		onEnd = function(self)
-			if self.cleanUp then self.cleanUp() end
-		end,
-		
-		onCancel = function(self)
 			if self.cleanUp then self.cleanUp() end
 		end,
 	}

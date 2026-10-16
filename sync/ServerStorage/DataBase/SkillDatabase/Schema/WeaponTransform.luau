@@ -28,18 +28,18 @@ local Skill = {
             end
 
             self.pendingMode = nextMode
-
-            self.cleanUp = function()
-                if self.stateID then
-                    self.Entity.RemoveStatusByID(self.stateID)
-                    self.stateID = nil
-                end
-                self.Entity.RemoveActionState(self.Runner)
-            end
         end,
 
-        onEnd = function(self)
-            if not self.pendingMode then return end
+        -- onEnd roda em qualquer fim (F54): limpa sempre, mas só troca de modo se a
+        -- transformação não foi cancelada (antes um Stun no meio trocava o modo mesmo assim).
+        onEnd = function(self, ctx)
+            if self.stateID then
+                self.Entity.RemoveStatusByID(self.stateID)
+                self.stateID = nil
+            end
+            self.Entity.RemoveActionState(self.Runner)
+
+            if not self.pendingMode or ctx.reason == self.statusTable.Enum.EndReasons.Cancel then return end
             local weaponComp = self.Entity:GetComponent(self.Entity.ComponentKey.Weapon)
             weaponComp:SetMode(self.pendingMode)
 
@@ -47,12 +47,6 @@ local Skill = {
             if nextModeData and nextModeData.Loadout then
                 self.Entity.ApplyLoadout(nextModeData.Loadout)
             end
-
-            if self.cleanUp then self.cleanUp() end
-        end,
-
-        onCancel = function(self)
-            if self.cleanUp then self.cleanUp() end
         end,
     }
 }

@@ -28,14 +28,6 @@ local Skill = {
 
 			self.Entity.SetActionState(statsTable.ActionStates.Self.selfCast, self)
 
-			self.cleanUp = function()
-				if self.stateID then
-					self.Entity.RemoveStatusByID(self.stateID)
-					self.stateID = nil
-				end
-				self.Entity.RemoveActionState(self.Runner)
-			end
-
 			self.Entity.StartHitbox(self.data.duration)
 
 			self.forceID = self.Entity.AddForce({
@@ -58,8 +50,8 @@ local Skill = {
 				end,
 
 
+				-- O voo acabou: encerra a skill (a limpeza fica toda no onEnd)
 				OnEnd = function()
-					self.cleanUp()
 					self:Stop(false)
 				end,
 			})
@@ -67,7 +59,7 @@ local Skill = {
 
 		onHit = function(self,result)
 			local targetEntity = result.target
-			targetEntity.forceID = targetEntity.AddForce({
+			local grabID = targetEntity.AddForce({
 				Type = "UltGrab",
 				Duration = self.data.duration,
 				Hard = true,
@@ -78,19 +70,25 @@ local Skill = {
 				FollowOffsetIsLocal = true,
 				FollowResponsiveness = self.data.GrabResponsiveness or 16,
 				FollowMaxSpeed = self.data.Speed,
-				OnEnd = function()
-					if targetEntity.forceID then
-						targetEntity.forceID = nil
-					end
-				end,
 			})
+			-- O grab pertence ao runner: cancel, morte do caster e fim do voo soltam o alvo
+			-- (antes ele ficava preso pelos 20 s da Force, contados do hit)
+			if grabID then
+				self:Own(function() targetEntity.RemoveForce(grabID) end)
+			end
 		end,
 
-		onCancel = function(self)
+		-- Uma limpeza só, para qualquer fim (cancel, morte, duração ou fim do voo): F54
+		onEnd = function(self)
 			if self.forceID then
 				self.Entity.RemoveForce(self.forceID)
+				self.forceID = nil
 			end
-			self.cleanUp()
+			if self.stateID then
+				self.Entity.RemoveStatusByID(self.stateID)
+				self.stateID = nil
+			end
+			self.Entity.RemoveActionState(self.Runner)
 		end,
 	}
 }

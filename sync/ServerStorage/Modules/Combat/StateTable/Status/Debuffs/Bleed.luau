@@ -20,8 +20,7 @@ local Bleed = {
 	callbacks = {
 		onStart = function(self)
 			self._tickTimer = 0
-			-- O GetStatusCounter retorna 0 aqui porque o runner ainda está sendo inicializado e não foi salvo na tabela.
-			-- O counter real da skill pode ser acessado via self.counter.
+			-- O runner já está registrado quando o onStart roda: GetStatusCounter e self.counter batem.
 			warn("[Bleed] onStart - Stack atual:", self.counter)
 		end,
 

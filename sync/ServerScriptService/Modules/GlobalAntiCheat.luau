@@ -10,8 +10,10 @@ local MIN_INPUT_INTERVAL = 0.015
 local RemoteEvents = ReplicatedStorage.RemoteEvents
 local ControlStateChanged = RemoteEvents:WaitForChild("ControlStateChanged")
 
-local function notifyControlState(player: Player, isLocked: boolean, entityID: string?, suspendNative: boolean?)
-	ControlStateChanged:FireClient(player, isLocked, entityID, suspendNative or false)
+-- Sempre o estado COMPLETO numa mensagem só (F22): antes cada setter mandava a sua, e o
+-- suspendNative=true do Possess era sobrescrito pela mensagem seguinte com false.
+local function notifyControlState(player: Player, tracked)
+	ControlStateChanged:FireClient(player, tracked.Locked, not tracked.Locked and tracked.ID or nil, tracked.SuspendNative)
 end
 
 local AntiCheat = {}
@@ -41,7 +43,7 @@ function AntiCheat.Register(Player)
 		NativeID = ID,
 		Locked = false,
 		PreLockID = nil,
-		PriorControlledID = nil,
+		SuspendNative = false, -- o cliente desliga o WASD nativo (está dirigindo outro corpo)
 	}
 end
 
@@ -65,22 +67,17 @@ function AntiCheat.GetControlledEntityId(Player)
 	return tracked.ID
 end
 
-function AntiCheat.GetPriorControlledEntityId(Player)
+--[[ ID do corpo do próprio player (base da pilha de controle do ControlComponent) ]]
+function AntiCheat.GetNativeEntityId(Player)
 	local tracked = TrackedPlayers[Player]
-	return tracked and tracked.PriorControlledID
-end
-
-function AntiCheat.SetPriorControlledEntityId(Player, entityID)
-	local tracked = TrackedPlayers[Player]
-	if tracked then
-		tracked.PriorControlledID = entityID
-	end
+	return tracked and tracked.NativeID
 end
 
 function AntiCheat.SetNativeControlSuspended(Player, suspended)
 	local tracked = TrackedPlayers[Player]
 	if not tracked then return false end
-	notifyControlState(Player, false, tracked.ID, suspended)
+	tracked.SuspendNative = suspended == true
+	notifyControlState(Player, tracked)
 	return true
 end
 
@@ -89,10 +86,16 @@ Redireciona pra qual entidade o input desse player vai. Se o player estiver
 Locked, NÃO deixa vazar input agora — só atualiza o que será restaurado no
 Unlock. Sem essa checagem, um Possess acidental durante um Lock (cutscene)
 furaria o corte.
+@param suspendNative - opcional: atualiza junto, na MESMA mensagem, se o cliente
+	desliga o WASD nativo (nil mantém o estado atual)
 ]]
-function AntiCheat.SetControlledEntity(Player, entityID)
+function AntiCheat.SetControlledEntity(Player, entityID, suspendNative)
 	local tracked = TrackedPlayers[Player]
 	if not tracked then return false end
+
+	if suspendNative ~= nil then
+		tracked.SuspendNative = suspendNative
+	end
 
 	if tracked.Locked then
 		tracked.PreLockID = entityID
@@ -100,7 +103,7 @@ function AntiCheat.SetControlledEntity(Player, entityID)
 	end
 
 	tracked.ID = entityID
-	notifyControlState(Player, false, entityID)
+	notifyControlState(Player, tracked)
 	return true
 end
 
@@ -116,7 +119,7 @@ function AntiCheat.LockPlayerInput(Player)
 	tracked.Locked = true
 	tracked.PreLockID = tracked.ID
 	tracked.ID = nil
-	notifyControlState(Player, true, nil)
+	notifyControlState(Player, tracked)
 	return true
 end
 
@@ -126,7 +129,7 @@ function AntiCheat.UnlockPlayerInput(Player)
 	tracked.Locked = false
 	tracked.ID = tracked.PreLockID
 	tracked.PreLockID = nil
-	notifyControlState(Player, false, tracked.ID)
+	notifyControlState(Player, tracked)
 	return true
 end
 

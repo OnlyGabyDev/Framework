@@ -25,7 +25,7 @@ CombatComponent.__index = CombatComponent
 --[[
 Inicializa o componente de combate na entidade
 @param entity - Entidade dona do componente Entity, enviar EntityData
-@param config - Configurações iniciais do componente TABLE { ChosenChar: string, Mode: string }
+@param config - Configurações iniciais do componente TABLE { ChosenChar: string, Mode: string, CancelSkillsOnDeath: boolean? }
 @return nova instância do CombatComponent CombatComponent
 ]]
 function CombatComponent.new(entity, config)
@@ -52,6 +52,9 @@ function CombatComponent.new(entity, config)
 	self.ChosenChar = config.ChosenChar or "Schema"
 	self.Mode = config.Mode or "Base"
 	self.baseStats = {}
+
+	-- Regra de morte do motor (F20): padrão em Enum.DeathDefaults, override no config
+	self._cancelSkillsOnDeath = StateTable.ResolveDeathPolicy(config, "CancelSkillsOnDeath")
 
 	--Estado de cast
 	self.ActionState = {
@@ -398,20 +401,31 @@ end
 
 
 --[[
-Para cada skill ativa, para todos os runners, chama o método Stop ou endSkill
+Para cada skill ativa, para todos os runners (Stop)
 @param cancel - se true, indica que a skill foi cancelada (opcional, padrão false) BOOLEAN
+@param runnerType - só runners desse tipo (StateTable.Enum.Types), opcional STRING
 ]]
-function CombatComponent:StopAllActiveSkills(cancel : boolean?)
-	for skillName, runners in pairs(self.ActiveSkills) do
-		for _, runner in ipairs(runners) do
-			if runner.Stop then
-				runner:Stop(cancel or false)
-			elseif runner.endSkill then
-				runner:endSkill(cancel or false)
+function CombatComponent:StopAllActiveSkills(cancel : boolean?, runnerType : string?)
+	-- Snapshot: Stop -> endSkill -> RemoveActiveSkill tira o runner da lista durante a
+	-- iteração. Sem a cópia, de 2 runners da mesma skill um era pulado e o table.clear do
+	-- fim o tirava do registro ainda rodando (mesmo defeito do F06 no StatusComponent).
+	local runners = {}
+	for _, list in pairs(self.ActiveSkills) do
+		for _, runner in ipairs(list) do
+			if runnerType == nil or runner.type == runnerType then
+				table.insert(runners, runner)
 			end
 		end
 	end
-	table.clear(self.ActiveSkills)
+
+	for _, runner in runners do
+		runner:Stop(cancel or false)
+		-- Quem recusou o cancel (onCancel == false) segue vivo e registrado; um runner que já
+		-- estava encerrado sai do registro de qualquer jeito.
+		if runner:IsEnded() then
+			self:RemoveActiveSkill(runner.skillName, runner)
+		end
+	end
 end
 
 
@@ -680,6 +694,25 @@ Função de inicialização do componente, tenta carregar skills automaticamente
 function CombatComponent:OnAdded()
 	-- Carrega personagem padrão
 		self:SetCharMode(self.ChosenChar, self.Mode)
+
+	-- F20: a morte encerra as skills ativas. O Combat reage ao IN.OnDeath da própria entidade
+	-- (o Health não conhece o Combat, Regra 20) e cancela só runners de skill: os status seguem
+	-- a política do StatusComponent. Um listener por entidade, não por runner (o Subscribe
+	-- reordena a lista a cada inscrição: 3000 inscrições custaram 3,2 s no T23). Roda com a
+	-- prioridade do motor, antes dos listeners de conteúdo, para não cancelar uma skill que o
+	-- próprio jogo dispare no OnDeath (ex.: explosão ao morrer). Com CancelSkillsOnDeath = false
+	-- no config, nem assina.
+	if self._cancelSkillsOnDeath then
+		self._unsubscribeDeath = self.Entity:Listen({
+			Role = StateEnum.Roles.IN,
+			Breakpoint = StateEnum.Breakpoints.OnDeath,
+			Priority = StateEnum.EnginePriority,
+			Owner = self,
+			Action = function()
+				self:StopAllActiveSkills(true, StateEnum.Types.Skill)
+			end,
+		})
+	end
 end
 
 
@@ -688,6 +721,7 @@ end
 Função de destruição do componente, para todas as skills ativas e limpa tabelas
 ]]
 function CombatComponent:Destroy()
+	if self._unsubscribeDeath then self._unsubscribeDeath() end
 	self:StopAllActiveSkills(true)
 	table.clear(self.Cooldowns)
 	table.clear(self.ActiveSkills)

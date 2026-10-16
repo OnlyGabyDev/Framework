@@ -27,16 +27,17 @@ local function onPlayerAdded(player)
 	handled[player] = true
 
 	local function onCharacterAdded(character)
-		local possessed = ControlComponent.GetPossessionOf(player)
-		if possessed then
-			possessed:Release()
-		end
-
 		DataManager.Create({
 			Model = character,
 			Player = player,
 		}, PlayerComponents)
 		AntiCheat.Register(player)
+
+		-- F02: respawn durante possessão solta tudo DEPOIS que o corpo novo existe. O input
+		-- volta pro corpo nativo (mesmo ID), então ele precisa estar registrado; antes o
+		-- Release vinha primeiro, dava erro no SetNetworkOwner do corpo antigo (já fora do
+		-- workspace) e o Create nunca rodava: o player ficava sem entidade.
+		ControlComponent.ReleasePlayer(player)
 	end
 
 	-- primeiro spawn
@@ -57,10 +58,7 @@ end
 
 Players.PlayerRemoving:Connect(function(player)
 	handled[player] = nil
-	local possessed = ControlComponent.GetPossessionOf(player)
-	if possessed then
-		possessed:Release()
-	end
+	ControlComponent.ReleasePlayer(player, true) -- devolve os corpos possuídos; nada a rotear pra quem sai
 	DataManager.Remove(player)
 	AntiCheat.Unregister(player)
 end)

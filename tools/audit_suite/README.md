@@ -3,7 +3,8 @@
 Suíte usada na auditoria "Framework de Combate — Auditoria de Falhas e Brechas".
 A auditoria completa está em [`AUDITORIA.md`](AUDITORIA.md) (cópia em Markdown); a versão viva,
 com comentários, fica no claude.ai: https://claude.ai/code/artifact/46b99f1b-a621-440c-a492-107e7e5c1e9f.
-O lote P0 pronto para outra sessão aplicar está em [`HANDOFF_P0.md`](HANDOFF_P0.md).
+O lote P0 pronto para outra sessão aplicar está em [`HANDOFF_P0.md`](HANDOFF_P0.md) (itens 1 a 4 aplicados em 16/10/2026).
+O F05 (anticheat de movimento) tem guia próprio: [`HANDOFF_F05.md`](HANDOFF_F05.md).
 Cada teste mede um comportamento e compara com o contrato esperado. Os IDs `F01..F74`
 são as falhas do doc; rode de novo depois de cada correção e compare com a coluna "auditoria".
 
@@ -58,6 +59,10 @@ Esta pasta fica **fora de `sync/`** de propósito: nada aqui vai para o place pe
 | `probes/PlayerUlt` + `client/__AuditUltDriver` | ult do player | F19 | 2/3 agarrados, erro 16,9 studs, 2 presos após cancel | 3/3, erro < 2, 0 presos |
 | `probes/ManualPossessionSeq` + `client/__AuditDriver` | torre → enxame | F04, F21, F58 | erro em `ControlComponent:76`, rota presa | sequência completa, rota no corpo |
 | `client/__AuditClientHooks` | log do cliente | F22, F56, F57 | `suspendNative` true seguido de false | uma mensagem por troca |
+
+Artefatos conhecidos (16/10): o check "bala Perfurante" do K1 espera 10 de dano com o Foco do passo anterior
+ainda ativo (mede 13 = 10 × 1,3); e os tempos de frame do T16/T17 dependem da carga do Studio (com o Studio a
+14–18 núcleos parado, não são comparáveis com a auditoria).
 
 Artefatos conhecidos: ENV11 (deriva por granularidade do `task.wait`), K2 crédito de kill
 (instável no Caps, confirmado na arena com 45 créditos), E1 enrage (contaminado pelos adds;

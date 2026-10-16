@@ -17,6 +17,28 @@ local STATES = {  				--Breakpoints do ciclo de vida da skill
 	Ended = "Ended",
 }
 
+-- Motivo do fim, entregue em ctx.reason no onCancel/onEnd (dono: StateTable.Enum.EndReasons)
+local REASONS = StateTable.Enum.EndReasons
+
+--[[
+Dono único do isolamento de erro dos callbacks do ciclo de vida (onStart, onCancel, onEnd
+e Own): um erro no código da skill vira warn com traceback e nunca interrompe a sequência
+do motor (registro, limpeza, desregistro, onFinish).
+]]
+local function protect(runner, label, fn, ...)
+	local ok, result = xpcall(fn, debug.traceback, ...)
+	if not ok then
+		warn("[SkillRunner] Erro em " .. label .. ":", runner.skillName, result)
+	end
+	return ok, result
+end
+
+local function endContext(runner, reason)
+	local context = runner:BuildContext()
+	context.reason = reason
+	return context
+end
+
 
 function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input) --Instancia o SkillRunner como um objeto responsável de criar a habilidade junto do EntityData para as skills utilizarem
 
@@ -138,7 +160,11 @@ function SkillRunner:_fire(breakpoint, context, ...)
 	return nil
 end
 
-function SkillRunner:start()
+--[[
+Registra e inicia o runner.
+@return false se o onStart falhou (o runner já foi cancelado e limpo) BOOLEAN
+]]
+function SkillRunner:start(): boolean
 	--Conecta com a skill ao heartbeat global.
 		self.connection.Register(self,self.type)
 
@@ -157,12 +183,23 @@ function SkillRunner:start()
 	end
 
 	
-	--Confere se existe onStart na skill, se sim, roda
-	self:_fire("onStart", self:BuildContext())
-	
+	--Confere se existe onStart na skill, se sim, roda. Erro no onStart cancela o runner na
+	--hora (F14): antes o erro escapava do SkillHandler e o runner ficava registrado, com o
+	--que o onStart tivesse feito até ali.
+	if not protect(self, "onStart", self._fire, self, "onStart", self:BuildContext()) then
+		self:endSkill(true)
+		-- Erro não aceita veto: se o onCancel recusou o cancel, encerra mesmo assim
+		if not self:IsEnded() then self:endSkill(false, REASONS.Cancel) end
+		return false
+	end
+
+	-- A skill pode ter se encerrado dentro do próprio onStart: não anuncia início depois do fim
+	if self.state == STATES.Ended then return true end
+
 	if self.Entity then
 		self.Entity:Emit(StateTable.Enum.Roles.OUT, StateTable.Enum.Breakpoints.onStart, self:BuildContext())
 	end
+	return true
 end
 
 
@@ -198,7 +235,7 @@ function SkillRunner:_internalUpdate(dt)
 
 	--Se a skill tiver zerado sua duração, então: 
 	if duration and self.elapsedTime >= duration then
-		self:endSkill(false)
+		self:endSkill(false, REASONS.Duration)
 	end
 	
 end
@@ -273,6 +310,12 @@ end
 Registra uma função de limpeza que roda automaticamente em endSkill (onEnd OU onCancel).
 ]]
 function SkillRunner:Own(cleanupFn: () -> ())
+	-- Já encerrado (ex.: um onHit que chegou depois do fim): não existe fim futuro para rodar
+	-- a limpeza, então ela roda agora em vez de vazar (um grab que nunca seria solto)
+	if self.state == STATES.Ended then
+		protect(self, "Own() cleanup", cleanupFn)
+		return
+	end
 	table.insert(self._ownedCleanups, cleanupFn)
 end
 
@@ -310,7 +353,9 @@ function SkillRunner:ApplyStatus(statusData, opts)
 	opts = opts or {}
 	opts.Source = opts.Source or self
 	local target = opts.Target or self.Entity
-	return target.ApplyStatus(statusData, opts.Duration, opts.Source, opts)
+	-- Assinatura de opts. A posicional legada recebia `opts` no lugar do ID: o ID virava a
+	-- própria tabela e opts.ID era ignorado.
+	return target.ApplyStatus(statusData, opts)
 end
 
 function SkillRunner:Stop(cancel : boolean?)
@@ -318,21 +363,26 @@ function SkillRunner:Stop(cancel : boolean?)
 end
 
 
---Finaliza a skill
-function SkillRunner:endSkill(cancel)
+--[[
+Finaliza a skill.
+@param cancel - true = cancelamento: roda o onCancel antes (que pode recusar devolvendo false)
+@param reason - motivo entregue em ctx.reason no onCancel/onEnd e no OUT.onEnd
+	(StateTable.Enum.EndReasons; padrão: Cancel se cancel, senão Stop)
+]]
+function SkillRunner:endSkill(cancel, reason)
 
 	-- _ending protege contra re-entrada (onCancel chamando Stop)
 	if self.state == STATES.Ended or self._ending then return end
 
+	reason = reason or (cancel and REASONS.Cancel or REASONS.Stop)
+
 	if cancel then
 		-- state só vira Ended DEPOIS: se a skill recusar o cancel (onCancel == false), ela continua viva
 		self._ending = true
-		local ok, result = pcall(self._fire, self, "onCancel", self:BuildContext())
+		local ok, result = protect(self, "onCancel", self._fire, self, "onCancel", endContext(self, reason))
 		self._ending = nil
 
-		if not ok then
-			warn("[SkillRunner] Erro em onCancel:", self.skillName, result)
-		elseif result == false then
+		if ok and result == false then
 			return
 		end
 	end
@@ -344,15 +394,14 @@ function SkillRunner:endSkill(cancel)
 		self.Entity:UnsubscribeByOwner(self)
 	end
 	for _, cleanupFn in self._ownedCleanups do
-		local ok, err = pcall(cleanupFn)
-		if not ok then
-			warn("[SkillRunner] Erro num Own() cleanup:", self.skillName, err)
-		end
+		protect(self, "Own() cleanup", cleanupFn)
 	end
 	table.clear(self._ownedCleanups)
 
-	--Sequência de finalização padrão
-	self:_fire("onEnd", self:BuildContext())
+	--Sequência de finalização padrão. onEnd SEMPRE roda (também depois do onCancel) e recebe
+	--ctx.reason (F54). Um erro nele não pode pular a limpeza abaixo: era o "runner fantasma"
+	--do F13, que ficava em ActiveSkills e recebia o recast do próximo toque.
+	protect(self, "onEnd", self._fire, self, "onEnd", endContext(self, reason))
 
 	if self.Entity and self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then
 		self.Entity.RemoveActiveSkill(self.skillName, self)
@@ -360,7 +409,7 @@ function SkillRunner:endSkill(cancel)
 			self.Entity.RemoveHitboxOwner(self) --Limpa a hitbox
 		end
 
-		self.Entity:Emit(StateTable.Enum.Roles.OUT, StateTable.Enum.Breakpoints.onEnd, self:BuildContext())
+		self.Entity:Emit(StateTable.Enum.Roles.OUT, StateTable.Enum.Breakpoints.onEnd, endContext(self, reason))
 	end
 
 	if self.connection then
