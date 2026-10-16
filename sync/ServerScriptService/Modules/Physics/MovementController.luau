@@ -92,6 +92,7 @@ function MovementController.ProcessEntity(comp, dt)
 	local hardPriority = { X = -math.huge, Y = -math.huge, Z = -math.huge }
 	local hardClaimed = { X = false, Y = false, Z = false }
 	local softAccum = { X = 0, Y = 0, Z = 0 }
+	local softBudget = { X = 0, Y = 0, Z = 0 } -- maior MaxForce entre as Soft que reivindicam o eixo
 	local hasAnyForce = false
 	local faceRequest: Vector3? = nil
 	local faceResponsiveness: number? = nil
@@ -221,6 +222,7 @@ function MovementController.ProcessEntity(comp, dt)
 						end
 					elseif not hardClaimed[axis] then
 						softAccum[axis] += axisOf(velocity, axis)
+						softBudget[axis] = math.max(softBudget[axis], budget)
 					end
 				end
 			end
@@ -242,10 +244,12 @@ function MovementController.ProcessEntity(comp, dt)
 		end
 	end
 
+	-- O orçamento Soft do eixo é o maior MaxForce entre as Soft que o reivindicam (F76): antes
+	-- era sempre Soft_Force_Strength, e o MaxForce pedido pela Force nunca valia.
 	for _, axis in AXES do
 		if not hardClaimed[axis] and softAccum[axis] ~= 0 then
 			targetVelocity[axis] = softAccum[axis]
-			maxForce[axis] = Settings.Soft_Force_Strength
+			maxForce[axis] = softBudget[axis]
 			hasAnyForce = true
 		end
 	end
