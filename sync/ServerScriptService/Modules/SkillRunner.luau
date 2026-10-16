@@ -437,7 +437,10 @@ function SkillRunner:endSkill(cancel, reason)
 		-- apontando para um runner morto, e o TrySelfCancel recusava toda skill nova da entidade.
 		-- Antes do OUT.onEnd: um listener de fim pode castar outra skill
 		self.Entity.RemoveActionState(self)
+	end
 
+	-- Par do OUT.onStart, que vale para qualquer entidade: emitido também sem Combat
+	if self.Entity then
 		self.Entity:Emit(StateTable.Enum.Roles.OUT, StateTable.Enum.Breakpoints.onEnd, endContext(self, reason))
 	end
 

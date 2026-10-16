@@ -340,6 +340,23 @@ run("F1.5 — status homônimo não vira skill ativa nem bloqueia a skill", func
 	cleanup(dummy)
 end)
 
+run("F80 — OUT.onEnd é emitido também em entidade sem Combat", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Health" })
+	local starts, ends, reason = 0, 0, nil
+	dummy:Listen({ Role = StateTable.Enum.Roles.OUT, Breakpoint = StateTable.Enum.Breakpoints.onStart, Action = function() starts += 1 end })
+	dummy:Listen({ Role = StateTable.Enum.Roles.OUT, Breakpoint = StateTable.Enum.Breakpoints.onEnd,
+		Action = function(ctx) ends += 1; reason = ctx.reason end })
+
+	local runner = makeRunner(dummy, "__TestEndNoCombat", { duration = 10 }, {})
+	runner:start()
+	runner:endSkill(false)
+	t.assert(starts == 1, "OUT.onStart não disparou (" .. starts .. "x)")
+	t.assert(ends == 1 and reason == StateTable.Enum.EndReasons.Stop,
+		string.format("OUT.onEnd disparou %dx (reason %s)", ends, tostring(reason)))
+
+	cleanup(dummy)
+end)
+
 task.wait(1)
 TestHarness.Summary()
 platform:Destroy()
