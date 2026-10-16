@@ -46,8 +46,8 @@ local function SpawnVentilador(position: Vector3)
         10
     )
     
-    pushZone:OnStay(function(entity)
-        AreaBehaviors.DirectionalForce(entity, function() return fanCFrame().LookVector end, PUSH_SPEED, "FanPush", { MaxForce = 35000 })
+    pushZone:OnStay(function(entity, area)
+        AreaBehaviors.DirectionalForce(entity, function() return fanCFrame().LookVector end, PUSH_SPEED, "FanPush", { MaxForce = 35000, Area = area })
     end)
     pushZone:Start()
 
@@ -59,8 +59,8 @@ local function SpawnVentilador(position: Vector3)
         10
     )
     
-    pullZone:OnStay(function(entity)
-        AreaBehaviors.DirectionalForce(entity, function() return -fanCFrame().LookVector end, PULL_SPEED, "FanPull", { MaxForce = 35000 })
+    pullZone:OnStay(function(entity, area)
+        AreaBehaviors.DirectionalForce(entity, function() return -fanCFrame().LookVector end, PULL_SPEED, "FanPull", { MaxForce = 35000, Area = area })
     end)
     pullZone:Start()
 

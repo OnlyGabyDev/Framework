@@ -14,6 +14,10 @@
 	--------------------------------------------------------------------------
 	{
 		Type: string,                 -- rótulo LIVRE/identificador
+		Key: string?,                 -- opcional. Com uma Force ativa de mesma Key, o AddForce
+		                              -- RENOVA essa Force (troca o dado, zera o tempo, devolve o
+		                              -- mesmo ID) em vez de empilhar outra. Para força reaplicada
+		                              -- em loop: vento, esteira, aura.
 		Priority: number?,            -- default 0. Empate de eixo = maior prioridade vence.
 		Hard: boolean?,               -- default false. true = fixo nos eixos reivindicados.
 		Axes: {X:boolean?, Y:boolean?, Z:boolean?}?,
@@ -63,6 +67,7 @@ function MovementComponent.new(entity, config)
 
 	-- Forças externas e Filtros
 	self.ActiveForces = {}
+	self.ForcesByKey = {} -- [Key] = forceId da Force ativa com essa Key (ver AddForce)
 	self.Filters = {} -- Filtros de interação/força
 	self.ForceCounter = 0
 
@@ -175,6 +180,7 @@ function MovementComponent:Destroy()
 	self.MovementWrapper = nil
 	self.Entity = nil
 	table.clear(self.ActiveForces)
+	table.clear(self.ForcesByKey)
 	table.clear(self.Filters)
 end
 
@@ -206,6 +212,18 @@ function MovementComponent:AddForce(forceData)
 		end
 	end
 
+	-- Force com Key já ativa: renova a mesma (F29). Sem isso, quem reaplica a força a cada
+	-- poll (AreaEffect a 10 Hz com Duration 0.5) empilhava até 5 cópias, e as Soft se somam.
+	local key = forceData.Key
+	local existingId = key and self.ForcesByKey[key]
+	local existing = existingId and self.ActiveForces[existingId]
+	if existing then
+		existing.Data = forceData
+		existing.Type = forceData.Type or "UnnamedForce"
+		existing.ElapsedTime = 0
+		return existingId
+	end
+
 	self.ForceCounter += 1
 	local forceId = "F_" .. tostring(self.ForceCounter)
 	
@@ -225,12 +243,19 @@ function MovementComponent:AddForce(forceData)
 		ElapsedTime = 0,
 		CurrentDirection = nil,
 	}
+	if key then
+		self.ForcesByKey[key] = forceId
+	end
 	return forceId
 end
 
 function MovementComponent:RemoveForce(forceId)
 	local entry = self.ActiveForces[forceId]
 	if entry then
+		local key = entry.Data.Key
+		if key and self.ForcesByKey[key] == forceId then
+			self.ForcesByKey[key] = nil
+		end
 		if entry.Data.OnEnd then task.spawn(entry.Data.OnEnd) end
 		self.ActiveForces[forceId] = nil
 	end

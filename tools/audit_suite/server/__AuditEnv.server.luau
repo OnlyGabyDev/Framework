@@ -53,8 +53,14 @@ end
 local function flat(v) return Vector3.new(v.X, 0, v.Z) end
 local function fanZone(center, size, dir, speed, opts)
 	local z = AreaEffect.new(function() return CFrame.new(center) end, "Box", size, 10)
-	z:OnStay(function(ent) AreaBehaviors.DirectionalForce(ent, dir, speed, "Fan", opts) end)
-	z:OnEnter(function(ent) AreaBehaviors.DirectionalForce(ent, dir, speed, "Fan", opts) end)
+	-- A zona vai no opts (Key por zona, F29): duas zonas "Fan" sobrepostas (ENV2) não viram uma força só
+	local function push(ent, area)
+		local o = table.clone(opts or {})
+		o.Area = area
+		AreaBehaviors.DirectionalForce(ent, dir, speed, "Fan", o)
+	end
+	z:OnStay(push)
+	z:OnEnter(push)
 	z:Start()
 	return z
 end

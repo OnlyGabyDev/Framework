@@ -5,6 +5,8 @@ local DataManager = require(ServerScriptService.EntityData.DataManager)
 local AreaEffect = {}
 AreaEffect.__index = AreaEffect
 
+local areaCounter = 0
+
 --[[
 @param cframeProvider () -> CFrame  -- lido a cada poll, permite zona que
     acompanha algo que se move/gira (o ventilador, por exemplo)
@@ -16,6 +18,8 @@ AreaEffect.__index = AreaEffect
 ]]
 function AreaEffect.new(cframeProvider, shape, size, pollRate)
     local self = setmetatable({}, AreaEffect)
+    areaCounter += 1
+    self.ID = "Area_" .. areaCounter -- identifica a zona (ex.: Key de força por zona em AreaBehaviors)
     self.CFrameProvider = cframeProvider
     self.Shape = shape
     self.Size = size
@@ -33,6 +37,8 @@ function AreaEffect.new(cframeProvider, shape, size, pollRate)
     return self
 end
 
+-- Callbacks recebem (entity: EntityCore, area: AreaEffect): a zona vai junto para o
+-- comportamento se identificar por zona (ex.: opts.Area do AreaBehaviors.DirectionalForce).
 function AreaEffect:OnEnter(cb) table.insert(self.CallbacksEnter, cb); return self end
 function AreaEffect:OnStay(cb)  table.insert(self.CallbacksStay, cb);  return self end
 function AreaEffect:OnExit(cb)  table.insert(self.CallbacksExit, cb);  return self end
@@ -66,16 +72,16 @@ function AreaEffect:Start()
         local current = self:_Query()
         for entity in pairs(current) do
             if self.Inside[entity] then
-                for _, cb in ipairs(self.CallbacksStay) do task.spawn(cb, entity) end
+                for _, cb in ipairs(self.CallbacksStay) do task.spawn(cb, entity, self) end
             else
                 self.Inside[entity] = true
-                for _, cb in ipairs(self.CallbacksEnter) do task.spawn(cb, entity) end
+                for _, cb in ipairs(self.CallbacksEnter) do task.spawn(cb, entity, self) end
             end
         end
         for entity in pairs(self.Inside) do
             if not current[entity] then
                 self.Inside[entity] = nil
-                for _, cb in ipairs(self.CallbacksExit) do task.spawn(cb, entity) end
+                for _, cb in ipairs(self.CallbacksExit) do task.spawn(cb, entity, self) end
             end
         end
     end)
