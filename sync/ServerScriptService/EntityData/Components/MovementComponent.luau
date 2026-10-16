@@ -19,7 +19,9 @@
 		                              -- mesmo ID) em vez de empilhar outra. Para força reaplicada
 		                              -- em loop: vento, esteira, aura.
 		Priority: number?,            -- default 0. Empate de eixo = maior prioridade vence.
-		Hard: boolean?,               -- default false. true = fixo nos eixos reivindicados.
+		Hard: boolean?,               -- default false. true = fixo nos eixos reivindicados (ignora a caminhada).
+		                              -- false (Soft) = SOMA com a caminhada no eixo: alvo = caminhada
+		                              -- pretendida + soma das Soft (dá pra andar contra o vento).
 		Axes: {X:boolean?, Y:boolean?, Z:boolean?}?,
 		          -- eixos do MUNDO reivindicados. Default: Hard -> todos | Soft -> X,Z (Y livre pra gravidade/pulo)
 		IgnoreGravity: boolean?,      -- atalho: força Axes.Y = true (zera a gravidade nesse eixo enquanto a Force durar)

@@ -73,7 +73,8 @@ function MovementController.ProcessEntity(comp, dt)
 	end
 
 	local canMove = tags.canMove
-	wrapper:SetSpeed(canMove and comp:GetSpeed() or 0)
+	local walkSpeed = canMove and comp:GetSpeed() or 0
+	wrapper:SetSpeed(walkSpeed)
 	wrapper:SetJumpForce(canMove and comp:GetJumpForce() or 0)
 	
 	local gravityScale = 1
@@ -93,6 +94,7 @@ function MovementController.ProcessEntity(comp, dt)
 	local hardClaimed = { X = false, Y = false, Z = false }
 	local softAccum = { X = 0, Y = 0, Z = 0 }
 	local softBudget = { X = 0, Y = 0, Z = 0 } -- maior MaxForce entre as Soft que reivindicam o eixo
+	local softClaimed = { X = false, Y = false, Z = false }
 	local hasAnyForce = false
 	local faceRequest: Vector3? = nil
 	local faceResponsiveness: number? = nil
@@ -223,6 +225,7 @@ function MovementController.ProcessEntity(comp, dt)
 					elseif not hardClaimed[axis] then
 						softAccum[axis] += axisOf(velocity, axis)
 						softBudget[axis] = math.max(softBudget[axis], budget)
+						softClaimed[axis] = true
 					end
 				end
 			end
@@ -244,11 +247,15 @@ function MovementController.ProcessEntity(comp, dt)
 		end
 	end
 
+	-- Força Soft SOMA com a caminhada (D6, F46): o alvo do eixo é a caminhada pretendida mais a
+	-- soma das Soft. Antes o alvo era só a soma, e quem estava no vento perdia a locomoção no
+	-- eixo (andar contra a esteira era impossível). Eixo de Hard continua absoluto.
 	-- O orçamento Soft do eixo é o maior MaxForce entre as Soft que o reivindicam (F76): antes
 	-- era sempre Soft_Force_Strength, e o MaxForce pedido pela Force nunca valia.
+	local walk = Vector3.new(comp.Direction.X, 0, comp.Direction.Z) * walkSpeed
 	for _, axis in AXES do
-		if not hardClaimed[axis] and softAccum[axis] ~= 0 then
-			targetVelocity[axis] = softAccum[axis]
+		if not hardClaimed[axis] and softClaimed[axis] then
+			targetVelocity[axis] = axisOf(walk, axis) + softAccum[axis]
 			maxForce[axis] = softBudget[axis]
 			hasAnyForce = true
 		end
