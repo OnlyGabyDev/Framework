@@ -6,13 +6,19 @@ rodando num lugar que vá pra produção real.
 
 local ServerScriptService = game:GetService("ServerScriptService")
 local ServerStorage = game:GetService("ServerStorage")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local TestHarness = require(script.Parent.TestHarness)
 local DataManager = require(ServerScriptService.EntityData.DataManager)
 local SkillRunner = require(ServerScriptService.Modules.SkillRunner)
 local SkillFactory = require(ServerScriptService.Modules.SkillFactory)
+local SkillHandler = require(ServerScriptService.Modules.SkillHandler)
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
 local BaseSkills = require(ServerStorage.DataBase.SkillDatabase.BaseSkills)
+local Intents = require(ReplicatedStorage.Input.Intents)
+
+-- Componentes de uma entidade que casta pelo SkillHandler (mesmo conjunto da suíte de auditoria)
+local COMBAT = { "Character", "Health", "Status", "Movement", "Attributes", "Combat" }
 
 local function makeDummy(cframe: CFrame, components: {string}?, configs: {[string]: any}?, parentEntity: any?)
 	local model = Instance.new("Model")
@@ -40,6 +46,11 @@ local function makeRunner(entity: any, name: string, data: {[string]: any}, call
 	data.name = name
 	local skill = SkillFactory.GetSkill({ data = data, callbacks = callbacks })
 	return SkillRunner.new(skill, entity, name, StateTable.Enum.Types.Skill)
+end
+
+-- Aperto de botão pelo caminho real do input (SkillHandler.HandleIntent)
+local function press(entity: any, intent: string)
+	return SkillHandler.HandleIntent(entity.ID, Intents.NewEvent(intent, Intents.Kind.Activate, Intents.Gesture.Press))
 end
 
 task.wait(2) -- deixa o resto do jogo terminar de bootar
@@ -248,6 +259,20 @@ TestHarness.Run("F1.7 — runner:ApplyStatus não muta o opts e devolve ID utili
 	cleanup(caster)
 	cleanup(victimA)
 	cleanup(victimB)
+end)
+
+TestHarness.Run("F1.2 — onStart com erro devolve o cooldown", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	dummy.EquipSkill(Intents.Id.Ability2, { data = { name = "__TestBadStartCD", cooldown = 5, duration = 1 }, callbacks = {
+		onStart = function() error("[FW-DEBUG] onStart quebrado de propósito (teste F1.2)") end,
+	} })
+
+	local ok = press(dummy, Intents.Id.Ability2)
+	t.assert(ok == false, "Ativação com onStart quebrado deveria falhar")
+	t.assert(not dummy.HasCooldown("__TestBadStartCD"), "O cooldown seguiu contando depois do onStart com erro")
+	t.assert(dummy.GetActiveSkillCount("__TestBadStartCD") == 0, "Runner com onStart falho ficou ativo")
+
+	cleanup(dummy)
 end)
 
 task.wait(1)

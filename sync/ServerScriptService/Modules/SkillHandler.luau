@@ -180,10 +180,13 @@ local function activate(entityCore, event)
 		ChainHistory,
 		event)
 
-	if not runner then return false end --caso o runner seja apagado na criação devido a stack overflow.
-
-	-- onStart com erro: o runner já se cancelou e limpou sozinho (F14), a ativação falha
-	if not runner:start() then return false end
+	-- Runner não criado (stack overflow) ou onStart com erro (o runner já se cancelou e limpou
+	-- sozinho, F14): a ativação falha sem custo. O cooldown que acabou de começar é devolvido;
+	-- antes do cast a skill não estava em cooldown (checado acima)
+	if not runner or not runner:start() then
+		entityCore.ResetCooldown(skillName)
+		return false
+	end
 	track(entityCore, event, runner)
 	return true, skillName, cooldown
 end
