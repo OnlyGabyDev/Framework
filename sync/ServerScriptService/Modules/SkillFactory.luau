@@ -50,54 +50,44 @@ end
 
 
 
+-- Funções padrão dos status (dado estático: antes a tabela era recriada a cada ApplyStatus)
+local StatusDefaults = {
+	onStart = function() end,
+	onStep = function() end,
+	onEnd = function() end,
+	onCancel = function() end,
+	onStop = function() end,
+	onRecast = function() return false end, -- fallback
+}
+
 function SkillFactory.GetStatus(originalData)
-	local defaults = {
-		onStart = function() end,
-		onStep = function() end,
-		onEnd = function() end,
-		onCancel = function() end,
-		onStop = function() end,
-		onRecast = function() return false end, -- fallback
-	}
-
-	-- Criamos um novo container superficial para não mutar a tabela estática congelada
-	local status = {
-		data = originalData.data,
-		ID = originalData.ID,
-		StatusController = originalData.StatusController
-	}
-
 	local originalCallbacks = originalData.callbacks or {}
-	local newCallbacks = {}
 
-	-- Repassa o ctx (com ctx.reason, F54) ao callback original. O retorno do onCancel é
-	-- descartado de propósito: status não recusa cancelamento, porque RemoveStatus já tirou a
-	-- entrada do registro antes de encerrar e um veto deixaria o runner órfão.
-	newCallbacks.onEnd = function(selfRunner, ...)
-		if originalCallbacks.onEnd then originalCallbacks.onEnd(selfRunner, ...) end
-		if status.StatusController then
-			status.StatusController:RemoveById(status.ID)
-		end
-	end
-	
-	newCallbacks.onCancel = function(selfRunner, ...)
-		if originalCallbacks.onCancel then originalCallbacks.onCancel(selfRunner, ...) end
-		if status.StatusController then
-			status.StatusController:RemoveById(status.ID)
-		end
-	end
+	-- Status NÃO pode recusar cancelamento: o onCancel repassa o ctx (com ctx.reason, F54) e
+	-- descarta o retorno. O RemoveStatus tira a entrada do registro antes de encerrar o runner;
+	-- se um status pudesse vetar, o runner seguiria vivo fora do registro. Para permitir veto um
+	-- dia, o RemoveStatus teria de respeitá-lo (só desregistrar depois do fim confirmado).
+	local newCallbacks = {
+		onCancel = function(selfRunner, ...)
+			if originalCallbacks.onCancel then originalCallbacks.onCancel(selfRunner, ...) end
+		end,
+	}
 
-	-- Delega chamadas não interceptadas para o original, ou depois pros fallbacks
+	-- O resto vem do original, ou dos fallbacks
 	setmetatable(newCallbacks, {
-		__index = function(t, key)
-			if originalCallbacks[key] then return originalCallbacks[key] end
-			return defaults[key]
+		__index = function(_, key)
+			local original = originalCallbacks[key]
+			if original then return original end
+			return StatusDefaults[key]
 		end
 	})
 
-	status.callbacks = newCallbacks
-
-	return status
+	-- Container raso novo: não muta a tabela estática (congelada) do status
+	return {
+		data = originalData.data,
+		ID = originalData.ID,
+		callbacks = newCallbacks,
+	}
 end
 
 

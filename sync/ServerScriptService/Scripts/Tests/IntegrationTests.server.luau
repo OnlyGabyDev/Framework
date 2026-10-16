@@ -417,6 +417,25 @@ run("F1.8 — stackOnSelf: ID do restack é o existente e o máximo renova a dur
 	cleanup(dummy)
 end)
 
+run("F1.10 — status: onCancel/onEnd recebem o ctx e o cancel não tem veto", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Health", "Status" })
+	local got = {}
+	local vetoing = { data = { name = "__TestStatusVeto" }, callbacks = {
+		onCancel = function(_, ctx) got.cancelReason = ctx and ctx.reason; return false end,
+		onEnd = function(_, ctx) got.endReason = ctx and ctx.reason end,
+	} }
+	dummy.ApplyStatus(vetoing, { Duration = 5 })
+	local runner = dummy.GetStatus("__TestStatusVeto")[1].runner
+
+	t.assert(dummy.RemoveStatus("__TestStatusVeto") == true, "RemoveStatus falhou")
+	local Cancel = StateTable.Enum.EndReasons.Cancel
+	t.assert(got.cancelReason == Cancel and got.endReason == Cancel,
+		string.format("ctx.reason não chegou (onCancel %s, onEnd %s)", tostring(got.cancelReason), tostring(got.endReason)))
+	t.assert(runner:IsEnded(), "O onCancel com return false vetou o fim: runner órfão fora do registro")
+
+	cleanup(dummy)
+end)
+
 task.wait(1)
 TestHarness.Summary()
 platform:Destroy()
