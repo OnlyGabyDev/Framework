@@ -6,6 +6,9 @@ local AreaBehaviors = {}
 -- A Force tem Key (F29): cada OnStay RENOVA a mesma força em vez de empilhar outra. A Key é
 -- Type + zona quando opts.Area vem (2º argumento dos callbacks do AreaEffect); sem a zona, é
 -- uma força por entidade e Type. opts.Key sobrescreve as duas.
+-- Força de ambiente é externa: por padrão empurra mesmo quem não pode se mover (Root/Stun),
+-- como a doc do MovementComponent pede para vento e knockback (F30). RequiresControl = true
+-- é opt-in.
 -- opts = { Area: AreaEffect?, Key: string?, Duration: number?, Hard: boolean?, RequiresControl: boolean?, MaxForce: number? }
 function AreaBehaviors.DirectionalForce(entity, direction, speed, forceType, opts)
     opts = opts or {}
@@ -23,7 +26,7 @@ function AreaBehaviors.DirectionalForce(entity, direction, speed, forceType, opt
         Speed = speed,
         Direction = direction, -- função () -> Vector3, reavaliada pelo MovementController
         Hard = opts.Hard or false,
-        RequiresControl = opts.RequiresControl ~= false,
+        RequiresControl = opts.RequiresControl == true,
         MaxForce = opts.MaxForce,
     })
 end
