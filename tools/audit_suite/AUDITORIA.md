@@ -205,7 +205,7 @@ Para corrigir: guardar os IDs dos grabs no runner e soltá-los com `self:Own(...
 
 ### Achados novos (16/10/2026, na aplicação do lote P0)
 
-Encontrados ao aplicar e testar o P0. F75 a F84 seguem abertos. F85 a F91 foram corrigidos junto com o item do P0 que dependia deles e ficam aqui pelo histórico. Linhas conferidas no código de 16/10.
+Encontrados ao aplicar e testar o P0. F75 a F84 seguem abertos, menos o F76, corrigido no Passo 0 do F05. F85 a F91 foram corrigidos junto com o item do P0 que dependia deles e ficam aqui pelo histórico; o F92 apareceu no teste do validador do F05 e foi corrigido junto. Linhas conferidas no código de 16/10.
 
 Decisão do usuário (16/10): não matar o Humanoid quando o HP do framework zera é intencional; o que acontece com HP 0 fica a critério do dev final. O F75 trata só da inconsistência entre as regras de morte que o motor já aplica.
 
@@ -228,6 +228,7 @@ Decisão do usuário (16/10): não matar o Humanoid quando o HP do framework zer
 | F89 | Baixa | `SkillRunner.luau:312` | Limpeza registrada com `Own()` depois do fim do runner nunca rodava (ex.: `onHit` atrasado, grab nunca solto) | Leitura | **Corrigido em 16/10**: roda na hora |
 | F90 | Baixa | `SkillRunner.luau:196` | `OUT.onStart` era emitido depois do fim quando a skill se encerrava dentro do próprio `onStart` | Leitura | **Corrigido em 16/10**: não anuncia início depois do fim |
 | F91 | Baixa | `StatusComponent.luau:226` | O laço de status `exclusive` removia entradas durante o `pairs` do mesmo grupo (callbacks de fim podem inserir chaves) | Leitura | **Corrigido em 16/10**: snapshot dos nomes |
+| F92 | Média | `CameraOverride.luau:232-238` | No Lock (e ao dirigir outro corpo) o cliente troca o `moveFunction` por uma função vazia, mas `Humanoid:Move` persiste até a próxima chamada: quem estava andando quando o Lock chegou seguia na última direção até o Unlock, no meio da cutscene. Com o validador do F05 (caminhada zerada no Lock) isso virava correção num player legítimo | Teste de 16/10: player andando, Lock por 1 s: seguiu andando, 2 correções | **Corrigido em 16/10**: o cliente para o corpo (`Move` zero e `Jump = false`) ao suspender o controle nativo. Medido: 0,7 stud no segundo de Lock, 0 correções |
 
 ## Brechas de abstração e assunções escondidas
 

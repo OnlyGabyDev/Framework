@@ -230,6 +230,10 @@ function CameraOverride.Init()
 		end
 
 		if isLocked or suspendNative then
+			-- Humanoid:Move persiste até a próxima chamada: sem parar o corpo aqui, quem estava
+			-- andando quando o Lock chegou seguia na última direção até o Unlock (F92)
+			NATIVE_MOVE(player, Vector3.zero, false)
+			if Controls.humanoid then Controls.humanoid.Jump = false end
 			Controls.moveFunction = function() end
 			Controls._nativeJumpSuspended = true
 		else
