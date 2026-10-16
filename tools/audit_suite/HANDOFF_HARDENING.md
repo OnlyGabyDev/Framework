@@ -8,12 +8,16 @@ está feita, e algumas premissas estão erradas (ver "Reconciliação").
 Reporte ao usuário em português, de forma direta: ele quer críticas, não elogios. **Depois de cada item
 concluído, mande o placar de achados abertos** no formato `(0 crít, X alta, X méd, X baixa)`.
 
-## Estado em 16/10/2026
+## Estado em 16/10/2026 (fim do 2º chat: Fase 1 pela metade)
 
 - Branch `audit/suite-p0`, sem push. Commits desde `d6a0fc6`: `88f16ec` (fim de linha LF), `4d5ee9a` (P0
   itens 1 a 4), `b5dc520` F29, `4ecd4c5` F30, `fd93280` F76, `6a246f1` F46, `efac924` F92, `fc4c75a` F05,
-  `68b2ec4` (janelas do F05 por ping) e o commit deste handoff.
-- **Placar: (0 crít, 13 alta, 33 méd, 16 baixa)**, 62 abertos de 93 achados (`AUDITORIA.md`, F01 a F93).
+  `68b2ec4` (janelas do F05 por ping), `b4bff46` (este handoff) e, no 2º chat, a Fase 1 até o F1.10:
+  `8a032a0` F1.3, `9a27c0b` F1.7, `f9f028f` F1.2, `fbadafd` F59, `e4979c8` F1.4/F1.5/F40, `7c3010c` F80,
+  `83f0941` F1.6, `130739e` F1.8/F77/F66, `42ff6cf` F1.10/F84.
+- **Placar: (0 crít, 13 alta, 29 méd, 14 baixa)**, 56 abertos de 93 achados (`AUDITORIA.md`, F01 a F93).
+- **Próximo: F1.15**, depois F1.17, F1.11, F1.12, F1.13, F1.14, F1.16 e F1.19 (ver "Fase 1: o que falta").
+  `IntegrationTests` com 16/16 no fim do 2º chat.
 - Working tree: só o ruído que o usuário mandou deixar fora dos commits, `sourcemap.json` e
   `sync/ReplicatedStorage/Assets/Weapons/Schema/Martelo/WeaponData__14070.luau` (pasta `Martelo` duplicada
   no Studio, F18). Não commite, não apague e não restaure sem perguntar.
@@ -133,15 +137,15 @@ print(f"({c['Crítica']} crít, {c['Alta']} alta, {c['Média']} méd, {c['Baixa'
 | Item | Estado | O que fazer |
 | --- | --- | --- |
 | F1.1 | Feito (F13) | Nada. O `TriggerSet:Emit` protege cada listener com `xpcall` |
-| F1.2 | Parcial (F14) | Devolver o cooldown quando o `onStart` falha (`SkillHandler.luau:172-186`) |
-| F1.3 | Aberto | Guarda de `IsEnded()` em `Recast` e `TriggerAction` (o handler já filtra com `liveRunners`) |
-| F1.4 | Aberto | Limpar o ActionState do runner no teardown do `endSkill`; o `warn("Skill não pode rodar!")` do `TrySelfCancel` está sem prefixo |
-| F1.5 | Aberto | `AddActiveSkill`/`AddHitboxOwner` só para `Types.Skill`. Nenhum status usa `onHit` hoje |
-| F1.6 | Aberto | Tirar o `BuildHistory` lixo do `SkillHandler.activate` e passar `nil` (ninguém consome `depth`/`rootOrigin`) |
-| F1.7 | Parcial (F09) | Clonar o `opts` antes de setar `Source` (`SkillRunner.luau:353-358`) |
-| F1.8 | Aberto (= F77 + D5) | ID existente no restack, renovar no máximo, `Duration` da reaplicação, campo `counter` morto |
+| F1.2 | **Feito** `f9f028f` | Cooldown devolvido quando o runner não nasce ou o `onStart` falha |
+| F1.3 | **Feito** `8a032a0` | `Recast` e `TriggerAction` recusam runner `Ended` |
+| F1.4 | **Feito** `e4979c8` | `endSkill` chama `RemoveActionState(self)` antes do `OUT.onEnd`; warn do `TrySelfCancel` com prefixo |
+| F1.5 | **Feito** `e4979c8` (= F40) | Só `Types.Skill` entra em `ActiveSkills`/vira owner; remoção do owner simétrica (Weapon sem Combat vazava) |
+| F1.6 | **Feito** `83f0941` | Cast por input nasce sem Lineage pai: depth 1, `rootOrigin` = caster |
+| F1.7 | **Feito** `9a27c0b` | `opts` clonado; `Target` só escolhe a entidade no runner. No `StatusComponent` o alvo é sempre o portador (Target de outra entidade: warn e ignorado) |
+| F1.8 | **Feito** `130739e` (= F77 + F66) | ID existente, renova no máximo (D5 padrão; `data.refreshOnMax = false` desliga), `Duration` da reaplicação vale, runner encerrado não recebe stack |
 | F1.9 | Feito (F08) | Nada |
-| F1.10 | Parcial (F87) | F84 (`StatusController` morto) e tirar a tabela `defaults` de dentro do `GetStatus` |
+| F1.10 | **Feito** `42ff6cf` (= F84) | `StatusController` e o wrapper de `onEnd` saíram; fallbacks estáticos |
 | F1.11 | Aberto, confirmado | Place Deferred: o `Stopped` da track velha apaga a nova (`AnimationComponent.luau:215-217`); conexões vazando; `LoadAnimation` a cada play; o M1 para com a key crua |
 | F1.12 | Aberto | API sobrevive a `RemoveComponent`/`Destroy`; `Destroy` por `pairs` e sem `OnRemoved`. A demo faz `RemoveComponent(AI)` (linha 241) |
 | F1.13 | Aberto | NPC com Model destruído fica no mapa; `Remove` só aceita Instance; `Get` dá warn em raycast |
@@ -155,7 +159,31 @@ print(f"({c['Crítica']} crít, {c['Alta']} alta, {c['Média']} méd, {c['Baixa'
 
 Ordem sugerida, das baratas para as que mexem em mais lugares: F1.3, F1.7, F1.2, F1.4 + F1.5, F1.6, F1.8,
 F1.10, F1.15, F1.17, F1.11, F1.12, F1.13, F1.14, F1.16, F1.19. Ao fim da Fase 1, relatório e **parada**,
-como o documento manda.
+como o documento manda. Feitos no 2º chat: até o F1.10, mais dois achados da auditoria no caminho (F59:
+`IntegrationTests` numa faixa própria por teste, em x ≥ 1400; F80: `OUT.onEnd` também sem Combat).
+
+### Notas do 2º chat para o relatório da Fase 1
+
+- **Como testar cada item (mais barato que a suíte por HTTP):** o `IntegrationTests` roda no boot do Play.
+  Cada item ganha um `run("F1.x — ...")` (o `run` põe o teste numa faixa própria; `makeDummy` recebe a
+  posição relativa a ela; helpers `makeRunner`, `press` e `COMBAT` no topo). Depois do Play, um
+  `execute_luau` no Server lendo `LogService:GetLogHistory()` até aparecer `[TestHarness]` dá o resultado
+  sem ler o console inteiro. A suíte por HTTP (BatchA/B etc.) **não** rodou no 2º chat: o aval do
+  `HttpEnabled` foi só para o 1º; peça de novo para a regressão completa no fim da Fase 1.
+- Os "Medido" da auditoria no 2º chat são resultado dos testes novos; o "antes" só foi medido no F59
+  (Tether 3,5 studs → 0,08/0,22). Nos outros o antes é por leitura do código.
+- **Correção falsa do anticheat (1 em ~6 Plays):** `[AntiCheat] Movimento recusado` em t = 4,3 s, antes da
+  possessão da demo, com o player parado no spawn (0, 0, −14), entre o hunter (0, 5, 0) e o alvo (0, 5, −20)
+  da `GrandIntegrationDemo`. Não reproduziu com trace por frame (sem hitch). Hipótese: empurrão físico de
+  NPC, que o F05 declara fora de escopo. Não parece vir da Fase 1 (nada nela mexe em movimento).
+- **Achado novo, não registrado ainda:** `onRecast`, `onRelease`, `onHit` e `onTrigger` não passam pelo
+  `protect` do `SkillRunner`. Um erro no `onRecast`/`onRelease` sobe até o `InputValidator`; o do `onHit`
+  é pego pelo `HitboxWrapper`. Registrar como F94 e decidir a política (warn e seguir, ou encerrar como o
+  `onStep`).
+- `SkillRunner.new` ainda faz a dança `skillModule.Lineage = nil ... = originalLineage` (muta o módulo
+  compartilhado; ninguém seta `Lineage` no módulo). Morto, inofensivo; limpar na Fase 2.
+- D5 seguiu o padrão `[x]` (renova no máximo), registrado no F1.8. `refreshOnMax` não tem doc de shape de
+  status (não existe dono único do formato de StatusData: regra 17, fica para o DOC da Fase 2).
 
 As Fases 2 e 3 não começaram. Várias falhas abertas da auditoria (lote P1) caem dentro delas: F79 (hitbox
 compartilhada) é o F2.4, F12/F16 (cooldown e loadout) são o F2.1 e o F2.2, F10/F11 (dano e escudos) são o
@@ -164,7 +192,7 @@ F2.7, e F31/F32/F33 (forças por massa) seguem soltas, sem item no documento.
 ### Linhas de base para regressão (16/10)
 
 BatchA 11/22, BatchB 5/12, BatchP 7/8 (P4 = F31), U2 com U2 e U3 passando (U1 = F19, P4b = F31),
-IntegrationTests 7/7, `ManualPossessionSeq` inteira, Env 9/13 (ENV1/ENV8 = F33, ENV4, ENV5),
+IntegrationTests 7/7 (16/16 depois do F1.10, com os testes novos), `ManualPossessionSeq` inteira, Env 9/13 (ENV1/ENV8 = F33, ENV4, ENV5),
 `__AuditSec` S1 34 studs / S2 revertido / S3 5,6 / S4 4,7 / S8 0 correções. Com 200 ms de lag e ping
 emulado, 0 correções em jogo legítimo.
 
