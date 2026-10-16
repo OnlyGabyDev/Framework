@@ -298,7 +298,7 @@ function CombatComponent:TrySelfCancel() : boolean
 					end
 				end
 			end
-			warn("Skill não pode rodar!")
+			warn("[CombatComponent] Skill não pode rodar: o ActionState ativo não é Self:", self.ActionState.name)
 			return false -- Encontrou ActionState mas não é Self
 		end
 	return true -- Nenhum ActionState ativo

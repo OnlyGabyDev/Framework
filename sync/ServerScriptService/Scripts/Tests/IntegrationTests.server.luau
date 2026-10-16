@@ -296,6 +296,50 @@ run("F1.2 — onStart com erro devolve o cooldown", function(t)
 	cleanup(dummy)
 end)
 
+run("F1.4 — ActionState sai junto com o runner que o setou", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local outCast = StateTable.ActionStates.Out.cast
+	-- Skill que seta um ActionState Out e "esquece" de remover
+	dummy.EquipSkill(Intents.Id.Ability2, { data = { name = "__TestForgetsState", cooldown = 0, duration = 0.1 }, callbacks = {
+		onStart = function(self) self.Entity.SetActionState(outCast, self) end,
+	} })
+	dummy.EquipSkill(Intents.Id.Ability3, { data = { name = "__TestNextSkill", cooldown = 0, duration = 0.1 }, callbacks = {} })
+
+	t.assert(press(dummy, Intents.Id.Ability2) == true, "A 1ª skill deveria ativar")
+	local state = dummy.GetActionState()
+	t.assert(state ~= nil and state.name == outCast.data.name, "O ActionState Out não foi setado")
+	t.wait(0.3)
+	t.assert(dummy.GetActionState() == nil, "O ActionState Out ficou preso depois do fim da skill")
+	t.assert(press(dummy, Intents.Id.Ability3) == true, "Skill nova recusada pelo ActionState de um runner morto")
+
+	dummy.StopAllActiveSkills(true)
+	cleanup(dummy)
+end)
+
+run("F1.5 — status homônimo não vira skill ativa nem bloqueia a skill", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local starts = 0
+	-- A skill aplica em si um status com o mesmo nome (ex.: skill "Roleta" e status "Roleta")
+	local sameName = { data = { name = "__TestRoleta" }, callbacks = {} }
+	dummy.EquipSkill(Intents.Id.Ability2, { data = { name = "__TestRoleta", cooldown = 0, duration = 0.1 }, callbacks = {
+		onStart = function(self)
+			starts += 1
+			self:ApplyStatus(sameName, { Duration = 5 })
+		end,
+	} })
+
+	t.assert(press(dummy, Intents.Id.Ability2) == true, "A 1ª ativação falhou")
+	t.wait(0.3) -- a skill acabou; o status homônimo segue no portador
+	t.assert(dummy.GetStatus("__TestRoleta") ~= nil, "O status homônimo deveria seguir ativo")
+	t.assert(dummy.GetActiveSkillCount("__TestRoleta") == 0, "O status entrou em ActiveSkills como se fosse a skill")
+	t.assert(press(dummy, Intents.Id.Ability2) == true and starts == 2,
+		"A 2ª ativação caiu no status em vez de criar runner novo (onStart " .. starts .. "x)")
+
+	dummy.StopAllActiveSkills(true)
+	t.assert(dummy.GetStatus("__TestRoleta") ~= nil, "StopAllActiveSkills derrubou o status junto com as skills")
+	cleanup(dummy)
+end)
+
 task.wait(1)
 TestHarness.Summary()
 platform:Destroy()

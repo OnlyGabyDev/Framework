@@ -172,11 +172,14 @@ function SkillRunner:start(): boolean
 	self.state = STATES.Casting --Estado de inicialização da skill
 
 
-	if self.Entity then
+	-- Só skills são "ativas" e donas da hitbox da arma. Um status homônimo de uma skill aparecia
+	-- em GetActiveSkills e o SkillHandler o tratava como a skill já ativa; e um status no
+	-- portador recebia o onHit de todo golpe da arma
+	if self.Entity and self.type == StateTable.Enum.Types.Skill then
 		if self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then
-			self.Entity.AddActiveSkill(self.skillName,self)	
+			self.Entity.AddActiveSkill(self.skillName,self)
 		end
-		
+
 		 if self.Entity:HasComponent(self.Entity.ComponentKey.Weapon) then
 			self.Entity.AddHitboxOwner(self) --Informa que o dono da skill é esse skillRunner, permitindo que o wrapper chame o onHit direto por aqui
 		end
@@ -418,11 +421,22 @@ function SkillRunner:endSkill(cancel, reason)
 	--do F13, que ficava em ActiveSkills e recebia o recast do próximo toque.
 	protect(self, "onEnd", self._fire, self, "onEnd", endContext(self, reason))
 
-	if self.Entity and self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then
-		self.Entity.RemoveActiveSkill(self.skillName, self)
+	if self.Entity and self.type == StateTable.Enum.Types.Skill then
+		if self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then
+			self.Entity.RemoveActiveSkill(self.skillName, self)
+		end
+		-- Simétrico ao start: com Weapon e sem Combat o runner ficava dono da hitbox para sempre
 		if self.Entity:HasComponent(self.Entity.ComponentKey.Weapon) then
 			self.Entity.RemoveHitboxOwner(self) --Limpa a hitbox
 		end
+	end
+
+	if self.Entity and self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then
+		-- A trava de ação deste runner sai com ele (só remove se for dele; idempotente). Uma skill
+		-- que esquecesse o RemoveActionState, ou desse erro antes dele, deixava o ActionState
+		-- apontando para um runner morto, e o TrySelfCancel recusava toda skill nova da entidade.
+		-- Antes do OUT.onEnd: um listener de fim pode castar outra skill
+		self.Entity.RemoveActionState(self)
 
 		self.Entity:Emit(StateTable.Enum.Roles.OUT, StateTable.Enum.Breakpoints.onEnd, endContext(self, reason))
 	end
