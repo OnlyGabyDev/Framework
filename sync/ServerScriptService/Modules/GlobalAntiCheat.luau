@@ -43,8 +43,8 @@ média ninguém passa da velocidade permitida; o máximo ganho de uma vez é cr�
 
 Movimento feito pelo servidor não vira correção: no servidor, o CFrame-changed da raiz só dispara
 para escrita de script. A física do cliente, inclusive um CFrame forçado por exploit, não dispara
-(medido em 16/10). Cada escrita abre Movement_Trust_Seconds de confiança; a correção do próprio
-validador é descontada (SelfWrites).
+(medido em 16/10). Cada escrita abre a janela de confiança (Movement_Trust_Seconds + atraso de rede
+do player); a correção do próprio validador é descontada (SelfWrites).
 
 Fora de escopo (F05): noclip (CheckNoClip), subida contínua até a velocidade de pulo (voo),
 compensação de latência, empurrão físico fora das Forces (colisão, Explosion) e veículos (com o
@@ -69,7 +69,15 @@ Liga a validação à raiz do corpo nativo. Dono do formato de tracked.Move:
 	LastWarnAt: number,
 }
 ]]
-local function bindMovement(tracked, root: BasePart, humanoid: Humanoid)
+-- Atraso de rede do player, somado às janelas de latência e de confiança: o fim de uma Force, Stun
+-- ou Lock acontece no servidor, chega ao cliente depois e o movimento dele volta mais tarde ainda.
+-- Fator 2 porque a doc não diz se o GetNetworkPing é ida-e-volta ou um sentido; errar para cima só
+-- deixa mais tolerante quem tem lag. No Studio o GetNetworkPing dá 0 (o atraso simulado não entra).
+local function latencyPad(player: Player): number
+	return Settings.Movement_Ping_Factor * player:GetNetworkPing()
+end
+
+local function bindMovement(player: Player, tracked, root: BasePart, humanoid: Humanoid)
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = { root.Parent }
@@ -84,7 +92,7 @@ local function bindMovement(tracked, root: BasePart, humanoid: Humanoid)
 		CreditUp = 0,
 		PeakH = 0, PeakHUntil = 0,
 		PeakV = 0, PeakVUntil = 0,
-		TrustUntil = os.clock() + Settings.Movement_Trust_Seconds, -- spawn: o servidor acabou de posicionar o corpo
+		TrustUntil = os.clock() + Settings.Movement_Trust_Seconds + latencyPad(player), -- spawn: o servidor acabou de posicionar o corpo
 		SelfWrites = 0, SelfWriteAt = 0,
 		Owned = false,
 		LastWarnAt = -math.huge,
@@ -95,7 +103,7 @@ local function bindMovement(tracked, root: BasePart, humanoid: Humanoid)
 			return
 		end
 		move.SelfWrites = 0
-		move.TrustUntil = os.clock() + Settings.Movement_Trust_Seconds
+		move.TrustUntil = os.clock() + Settings.Movement_Trust_Seconds + latencyPad(player)
 	end)
 	tracked.Move = move
 	return move
@@ -117,10 +125,10 @@ local function rebase(move)
 end
 
 -- Velocidade permitida com memória curta: uma maior (um Dash que acabou de terminar no servidor)
--- segue valendo por Movement_Latency_Window, porque o cliente ainda está aplicando a Force.
-local function holdPeak(peak: number, peakUntil: number, value: number, now: number): (number, number)
+-- segue valendo pela janela de latência, porque o cliente ainda está aplicando a Force.
+local function holdPeak(peak: number, peakUntil: number, value: number, now: number, window: number): (number, number)
 	if value >= peak or now >= peakUntil then
-		return value, now + Settings.Movement_Latency_Window
+		return value, now + window
 	end
 	return peak, peakUntil
 end
@@ -167,8 +175,10 @@ local function validateMovement(player: Player, tracked, dt: number, now: number
 	local move = tracked.Move
 	if not move or move.Root ~= root then
 		unbindMovement(tracked)
-		move = bindMovement(tracked, root, humanoid)
+		move = bindMovement(player, tracked, root, humanoid)
 	end
+
+	local pad = latencyPad(player)
 
 	-- Corpo do servidor (possessão) não é validado: o servidor já manda nele. Quando ele volta ao
 	-- player abre a janela de confiança, porque o servidor o moveu enquanto era o dono.
@@ -178,7 +188,7 @@ local function validateMovement(player: Player, tracked, dt: number, now: number
 		return
 	elseif not move.Owned then
 		move.Owned = true
-		move.TrustUntil = now + Settings.Movement_Trust_Seconds
+		move.TrustUntil = now + Settings.Movement_Trust_Seconds + pad
 	end
 
 	if now < move.TrustUntil then
@@ -197,8 +207,9 @@ local function validateMovement(player: Player, tracked, dt: number, now: number
 	end
 	local groundH, groundV = groundSpeed(move)
 	local slack = Settings.Movement_Speed_Slack
-	move.PeakH, move.PeakHUntil = holdPeak(move.PeakH, move.PeakHUntil, walk + forceH + groundH + slack, now)
-	move.PeakV, move.PeakVUntil = holdPeak(move.PeakV, move.PeakVUntil, jump + forceV + groundV + slack, now)
+	local window = Settings.Movement_Latency_Window + pad
+	move.PeakH, move.PeakHUntil = holdPeak(move.PeakH, move.PeakHUntil, walk + forceH + groundH + slack, now, window)
+	move.PeakV, move.PeakVUntil = holdPeak(move.PeakV, move.PeakVUntil, jump + forceV + groundV + slack, now, window)
 
 	local burst = Settings.Movement_Burst_Seconds
 	local credit = math.min(move.Credit + move.PeakH * dt, move.PeakH * burst)

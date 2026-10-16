@@ -8,7 +8,8 @@ em português, de forma direta, com números antes → depois. O usuário quer c
 ## Estado em 16/10/2026: aplicado
 
 Um commit por item: F29 `b5dc520`, F30 `4ecd4c5`, F76 `fd93280`, F46 `6a246f1` (D6 = aditiva, decisão do
-usuário), F92 `efac924` e o validador do F05 no commit seguinte. O resto deste arquivo é o plano original.
+usuário), F92 `efac924`, o validador do F05 `fc4c75a` e a janela por ping no commit seguinte. O resto deste
+arquivo é o plano original.
 
 | Prova | Antes → depois |
 | --- | --- |
@@ -33,6 +34,13 @@ Desvios do plano, com o motivo:
   0 disparos para a física do cliente e para CFrame forçado no cliente, e 1 por escrita do servidor (3 escritas
   no mesmo frame = 3 disparos). A correção do próprio validador é descontada (`SelfWrites`).
 - **F92 corrigido junto**: o cliente não parava o corpo no Lock, falso positivo garantido.
+- **Janelas por ping.** Com 200 ms de atraso simulado (`settings().Network.IncomingReplicationLag = 0.2`),
+  andar e pular passaram, mas Dash ×3 (2 correções), voo da Ultimate (1) e Stun/Lock no meio da caminhada
+  (2) não: o fim da Force ou do Stun chega ao cliente e volta ao servidor depois que a janela de 0,35 s
+  fechou. As janelas de latência e de confiança agora somam `Movement_Ping_Factor` (2) × `GetNetworkPing`.
+  No Studio o `GetNetworkPing` dá 0 com o atraso simulado, então a prova foi com o ping emulado (+0,4 s nas
+  janelas): 0 correções nesses cenários, e S1 a S4 com lag ficaram iguais (S1 26 → 24,6; S3 5,8 → 4,9).
+  Falta conferir no servidor publicado se o `GetNetworkPing` é ida-e-volta ou um sentido.
 
 Limitações anotadas (fora de escopo): noclip; subida contínua até a velocidade de pulo (voo); compensação de
 latência; empurrão físico fora das Forces (colisão com NPC, Explosion); veículos (sentado não é validado);

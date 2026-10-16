@@ -57,12 +57,19 @@ return {
 	Movement_Excess_Limit = 4,
 
 	-- Por quanto tempo (s) uma velocidade permitida maior continua valendo depois de
-	-- cair: a Force que acabou no servidor ainda está sendo aplicada no cliente.
+	-- cair: a Force que acabou no servidor ainda está sendo aplicada no cliente. É a
+	-- base: o atraso de rede do player (Movement_Ping_Factor) soma em cima.
 	Movement_Latency_Window = 0.35,
 
 	-- Janela de confiança (s) depois de o servidor mover o corpo (teleporte, PivotTo,
 	-- volta da possessão): pacote antigo do cliente ainda em trânsito não vira correção.
+	-- Também é a base, com o atraso de rede somado.
 	Movement_Trust_Seconds = 0.5,
+
+	-- Quantas vezes o GetNetworkPing do player entra nas duas janelas acima. Sem isso,
+	-- com 200 ms de atraso Dash, voo e Stun/Lock viravam correção; 2 cobre o ping ser
+	-- ida-e-volta ou um sentido (a doc não diz).
+	Movement_Ping_Factor = 2,
 
 	-- Alcance (studs) do raycast do chão além da HipHeight, para somar plataforma móvel.
 	-- Cobre as pernas do R6 (HipHeight 0, 2 studs de perna) com folga.
