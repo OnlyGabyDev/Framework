@@ -210,6 +210,13 @@ function MovementController.ProcessEntity(comp, dt)
 				axes = { X = axes.X, Y = true, Z = axes.Z }
 			end
 
+			-- Teto de deslocamento por Forces (MovementComponent:GetForceSpeedBudget)
+			forceEntry.AppliedVelocity = Vector3.new(
+				axes.X and velocity.X or 0,
+				axes.Y and velocity.Y or 0,
+				axes.Z and velocity.Z or 0
+			)
+
 			local priority = data.Priority or 0
 			local budget = data.MaxForce or (hard and Settings.Hard_Force_Strength or Settings.Soft_Force_Strength)
 

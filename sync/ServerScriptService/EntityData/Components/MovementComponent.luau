@@ -244,6 +244,7 @@ function MovementComponent:AddForce(forceData)
 		Data = forceData,
 		ElapsedTime = 0,
 		CurrentDirection = nil,
+		AppliedVelocity = nil, -- escrito pelo MovementController: velocidade aplicada no último passo, só nos eixos reivindicados
 	}
 	if key then
 		self.ForcesByKey[key] = forceId
@@ -269,6 +270,24 @@ function MovementComponent:ClearForces()
 	end
 end
 
+--[[
+Quanto as Forces ativas deslocam a entidade além da caminhada: soma do módulo da velocidade
+que o MovementController aplicou a cada uma no último passo. Existe para quem precisa desse
+teto sem ler ActiveForces por fora (regra 17), como a validação de movimento do GlobalAntiCheat.
+@return horizontal (XZ), vertical (Y) em studs/s
+]]
+function MovementComponent:GetForceSpeedBudget(): (number, number)
+	local horizontal, vertical = 0, 0
+	for _, entry in pairs(self.ActiveForces) do
+		local applied = entry.AppliedVelocity
+		if applied then
+			horizontal += Vector3.new(applied.X, 0, applied.Z).Magnitude
+			vertical += math.abs(applied.Y)
+		end
+	end
+	return horizontal, vertical
+end
+
 local ExposeAPI = {
 	GetAirState = function(Component) return Component:GetAirState() end,
 	SetDirection = function(Component, dir) 
@@ -292,6 +311,7 @@ local ExposeAPI = {
 	AddForce = function(Component, ...) return Component:AddForce(...) end,
 	RemoveForce = function(Component, ...) return Component:RemoveForce(...) end,
 	ClearForces = function(Component) return Component:ClearForces() end,
+	GetForceSpeedBudget = function(Component) return Component:GetForceSpeedBudget() end,
 	SetFrozen = function(Component, f) Component.IsFrozen = f end,
 	SetMovement = function(Component) return Component:SetMovement() end,
 	GetMovementWrapper = function(Component) return Component.MovementWrapper end,

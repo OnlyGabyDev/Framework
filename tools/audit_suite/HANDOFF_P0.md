@@ -6,8 +6,9 @@ usuário em português, de forma direta: ele quer críticas, não elogios.
 
 ## Estado em 16/10/2026
 
-Itens 1 a 4 aplicados no Studio e no disco, **sem commit**. O item 5 (F05) tem plano aprovado e vai ser
-feito em outro chat pelo guia [`HANDOFF_F05.md`](HANDOFF_F05.md).
+Lote P0 completo. Itens 1 a 4 commitados em `4d5ee9a`. O item 5 (F05) foi aplicado no mesmo dia pelo guia
+[`HANDOFF_F05.md`](HANDOFF_F05.md), que traz os números e os commits. Desde então vale **1 commit por item**,
+com o ID na mensagem.
 
 | Item | Prova | Antes → depois |
 | --- | --- | --- |
@@ -15,6 +16,7 @@ feito em outro chat pelo guia [`HANDOFF_F05.md`](HANDOFF_F05.md).
 | 2. F06–F09, F39 | BatchA T08, T09, T10, T46, T50 | 5/10 órfãos; sobravam ID1, ID4, ID5; ID virava tabela; status no cadáver → 0 órfãos; sobram ID1, ID3, ID4, ID5; `"WantedID"`; recusado |
 | 3. F13, F14, F20, F54 | BatchB T20, T21; U2 U3; Caps K1 | runner fantasma; erro do `onStart` escapava; caster morto voando com 3 alvos; recarga interrompida recarregou 6 → tudo limpo; 0 ativas e 0 presos; 0 balas |
 | 4. F02–F04, F21–F24 | BatchP; sonda `ManualPossessionSeq`; log do cliente | 7 de 8 falhavam → 7 de 8 passam (o P4 falha só pela velocidade do rig, F31); sequência torre → enxame inteira; uma mensagem por troca |
+| 5. F05 | `__AuditSec` + exploiter; falsos positivos | speed hack 87 → 34 studs; teleporte revertido; Stun/Lock 43 → 5,6/4,7; 0 correções em jogo legítimo |
 
 Decisões do usuário: 4a = modelo B agora e Server Authority depois; 4b = pilha, configurável por chamada,
 por entidade e no padrão do módulo; 4c = o Possess pausa a IA do alvo e o Release restaura. O sync é

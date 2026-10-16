@@ -4,7 +4,7 @@ Suíte usada na auditoria "Framework de Combate — Auditoria de Falhas e Brecha
 A auditoria completa está em [`AUDITORIA.md`](AUDITORIA.md) (cópia em Markdown); a versão viva,
 com comentários, fica no claude.ai: https://claude.ai/code/artifact/46b99f1b-a621-440c-a492-107e7e5c1e9f.
 O lote P0 pronto para outra sessão aplicar está em [`HANDOFF_P0.md`](HANDOFF_P0.md) (itens 1 a 4 aplicados em 16/10/2026).
-O F05 (anticheat de movimento) tem guia próprio: [`HANDOFF_F05.md`](HANDOFF_F05.md).
+O F05 (anticheat de movimento) tem guia próprio: [`HANDOFF_F05.md`](HANDOFF_F05.md) (aplicado em 16/10/2026).
 Cada teste mede um comportamento e compara com o contrato esperado. Os IDs `F01..F74`
 são as falhas do doc; rode de novo depois de cada correção e compare com a coluna "auditoria".
 
@@ -39,6 +39,13 @@ Esta pasta fica **fora de `sync/`** de propósito: nada aqui vai para o place pe
 - `StreamingEnabled` está ligado: models longe do player podem não existir no cliente.
 - A BatchA mede vazamento do `MAX_RECURSION` e **restaura** o contador; se um teste seu vazar, chame
   `StateTable.ExitChain()` o número de vezes vazadas antes de continuar.
+- Para não transcrever os arquivos à mão (16/10): sirva esta pasta só no loopback
+  (`python -m http.server 8765 --bind 127.0.0.1`), ligue `HttpService.HttpEnabled` no modo Edit **com o
+  aval do dono do place** e busque o código com `HttpService:GetAsync` no `execute_luau` do servidor.
+  O cliente não faz HTTP: o servidor publica o código num `StringValue` e o `execute_luau` do cliente
+  cria o LocalScript. No fim, desligue o `HttpEnabled` e derrube o servidor.
+- O ack do `__AuditExploiter` (`SecAck`) é atributo gravado no cliente e **não replica** para o servidor:
+  a `__AuditSec` só avança no timeout de cada passo (8 s). A medida continua valendo.
 
 ## Arquivos e o que verificam
 
@@ -51,9 +58,9 @@ Esta pasta fica **fora de `sync/`** de propósito: nada aqui vai para o place pe
 | `server/__AuditBatchU` / `U2` | U1-U3, P4b | F19, F20, F24, F31, F50 | U2 tem os rigs desancorados (use o U2) | Grab < 2 studs; solta no cancel e na morte |
 | `server/__AuditCaps` | K1-K8, E1-E3 | F10, F43, F54, F55, F62 | 4 de 11 falharam | Recarga interrompida não recarrega |
 | `server/__AuditArena` | arena 300 s (atributo `ArenaDuration`) | estabilidade | 0 erros; 2.340 warns; até 3 mortos com skill | 0 erros; warns perto de 0; 0 mortos com skill |
-| `server/__AuditEnv` | ENV1-ENV14 | F29-F33, F44-F47 | 7 de 13 falharam (ENV11 foi artefato de timing) | Pesado empurrado; Root no vento empurrado |
-| `server/__AuditSec` + `client/__AuditExploiter` | S0-S8 | F05, F32 | speed hack 87 studs/s aceito | Correção pelo servidor |
-| `probes/WindAccumulation` | vento acumulando | F29 | 5 forças, 100 studs/s (config. 20) | 1 força, ~20 studs/s |
+| `server/__AuditEnv` | ENV1-ENV14 | F29-F33, F44-F47 | 7 de 13 falharam (ENV11 foi artefato de timing) | Pesado empurrado; Root no vento empurrado (16/10: 9/13; faltam ENV1 e ENV8 = F33, ENV4, ENV5) |
+| `server/__AuditSec` + `client/__AuditExploiter` | S0-S8 | F05, F32 | speed hack 87 studs/s aceito | Correção pelo servidor (16/10: S1 34 studs, S2 revertido, S3 5,6, S4 4,7, S8 0 correções) |
+| `probes/WindAccumulation` | vento acumulando | F29 | 5 forças, 100 studs/s (config. 20) | 1 força, ~20 studs/s (16/10: 1 força, 20,0) |
 | `probes/PlayerForces` | forças no player | F32 | Soft padrão: 0,6 stud (esperado 20) | ~20 studs |
 | `probes/DamageStatsAndChainLine` | stats e cadeia em linha | F43, F62 | dano 10 → 10; 51/80 mortos | dano muda pela fórmula; 80/80 |
 | `probes/PlayerUlt` + `client/__AuditUltDriver` | ult do player | F19 | 2/3 agarrados, erro 16,9 studs, 2 presos após cancel | 3/3, erro < 2, 0 presos |

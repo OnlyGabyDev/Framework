@@ -5,6 +5,40 @@ player continua simulado pelo cliente, e o servidor valida e corrige. O Server A
 (modelo A) fica para a reescrita do movimento. Trabalhe um passo por vez, prove cada um com teste e reporte
 em português, de forma direta, com números antes → depois. O usuário quer críticas, não elogios.
 
+## Estado em 16/10/2026: aplicado
+
+Um commit por item: F29 `b5dc520`, F30 `4ecd4c5`, F76 `fd93280`, F46 `6a246f1` (D6 = aditiva, decisão do
+usuário), F92 `efac924` e o validador do F05 no commit seguinte. O resto deste arquivo é o plano original.
+
+| Prova | Antes → depois |
+| --- | --- |
+| S1 speed hack (~120 studs/s por 1 s) | 87 → 34 studs (1 correção) |
+| S2 teleporte de 150 studs | aceito → revertido |
+| S3 / S4 andar sob Stun / Lock | 43 / 43 → 5,6 / 4,7 studs |
+| S5 a S8 | WalkSpeed do servidor fica 20; fuzz e spam sem erro; ventilador com 0 correções |
+| Falsos positivos | 0 correções: andar, pular, queda de 60, Dash ×3, voo da Ultimate (90 studs/s), tether a 60 studs/s, ventilador 35000 parado e contra, Stun e Lock no meio da caminhada, possessão e volta, respawn, `GrandIntegrationDemo` |
+| Regressão | BatchA 11/22, BatchB 5/12, BatchP 7/8, U2 com U2 e U3, IntegrationTests 7/7, `ManualPossessionSeq` inteira; Env 7/13 → 9/13 |
+
+Desvios do plano, com o motivo:
+
+- **Balde de crédito no lugar do balde com piso 0.** O plano zerava o `Excess` a cada correção (o cheater
+  ganharia 4 studs por ciclo) e não guardava crédito para a rajada de replicação (player com lag levaria
+  correção). Agora o crédito enche na velocidade permitida até `Movement_Burst_Seconds` dela, o movimento
+  aceito o gasta e a dívida nunca é perdoada. `DECAY` e `TELEPORT_LIMIT` saíram; entraram
+  `Movement_Burst_Seconds` (0,25) e `Movement_Latency_Window` (0,35), que segura o teto de uma Force por
+  um tempo depois de ela acabar no servidor.
+- **S1 ficou em 34 studs, acima dos ≤ 29 estimados.** A diferença é o crédito de rajada (0,25 s ≈ 6,75 studs).
+  Baixar `Movement_Burst_Seconds` aperta, ao custo de tolerar menos lag, e lag real não dá para medir no Studio.
+- **Confiança automática, sem `TrustPosition`.** A hipótese se provou: no servidor, o CFrame-changed da raiz deu
+  0 disparos para a física do cliente e para CFrame forçado no cliente, e 1 por escrita do servidor (3 escritas
+  no mesmo frame = 3 disparos). A correção do próprio validador é descontada (`SelfWrites`).
+- **F92 corrigido junto**: o cliente não parava o corpo no Lock, falso positivo garantido.
+
+Limitações anotadas (fora de escopo): noclip; subida contínua até a velocidade de pulo (voo); compensação de
+latência; empurrão físico fora das Forces (colisão com NPC, Explosion); veículos (sentado não é validado);
+NPC com Humanoid segue lento (F31); no vento, a parte da caminhada do player segue o input que chegou ao
+servidor (~1 RTT, consequência do D6). Para o modelo A, desligue `Movement_Validation_Enabled` em `Settings`.
+
 ## Contexto em 1 minuto
 
 - Repo Roblox/Luau. `sync/` é o **Script Sync nativo do Studio, bidirecional** (place UNTOLD BATTLEGROUNDS,
