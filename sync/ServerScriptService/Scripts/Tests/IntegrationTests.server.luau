@@ -210,5 +210,45 @@ TestHarness.Run("F1.3 — Recast e TriggerAction ignoram runner encerrado", func
 	cleanup(dummy)
 end)
 
+TestHarness.Run("F1.7 — runner:ApplyStatus não muta o opts e devolve ID utilizável", function(t)
+	local caster = makeDummy(CFrame.new(0, 5, 0), { "Health" })
+	local victimA = makeDummy(CFrame.new(4, 5, 0), { "Health", "Status" })
+	local victimB = makeDummy(CFrame.new(8, 5, 0), { "Health", "Status" })
+	local status = { data = { name = "__TestOptsStatus" }, callbacks = {} }
+	local runner1 = makeRunner(caster, "__TestOptsCaster1", { duration = 10 }, {})
+	local runner2 = makeRunner(caster, "__TestOptsCaster2", { duration = 10 }, {})
+	runner1:start()
+	runner2:start()
+
+	-- Constante de módulo congelada: antes o runner gravava Source nela (erro de escrita)
+	local idA = runner1:ApplyStatus(status, table.freeze({ Duration = 5, Target = victimA }))
+	t.assert(type(idA) == "string", "ApplyStatus com opts congelado deveria aplicar e devolver ID string")
+
+	-- A mesma tabela usada por dois casts: o Source do 1º não pode vazar para o 2º
+	local OPTS = { Duration = 5, Target = victimA }
+	runner1:ApplyStatus(status, OPTS)
+	OPTS.Target = victimB
+	local idB = runner2:ApplyStatus(status, OPTS)
+	t.assert(OPTS.Source == nil, "runner:ApplyStatus gravou Source no opts do chamador")
+
+	local entryB = victimB.GetStatus("__TestOptsStatus")
+	t.assert(entryB ~= nil and entryB[1].runner.Source == runner2, "Source do 2º cast ficou com o runner do 1º")
+	t.assert(entryB[1].runner.Entity == victimB, "O runner do status deveria agir no alvo")
+	t.assert(victimB.RemoveStatusByID(idB) == true, "RemoveStatusByID com o ID devolvido falhou")
+	t.assert(victimB.GetStatus("__TestOptsStatus") == nil, "Status seguiu ativo depois do RemoveStatusByID")
+
+	-- No componente, Target de outra entidade é ignorado (com warn): o status fica no portador
+	victimA.ApplyStatus(status, { Duration = 5, Target = victimB })
+	local entryA = victimA.GetStatus("__TestOptsStatus")
+	t.assert(entryA ~= nil and entryA[1].runner.Entity == victimA, "Target de outra entidade desviou o runner do portador")
+	t.assert(victimB.GetStatus("__TestOptsStatus") == nil, "Target de outra entidade aplicou o status no alvo errado")
+
+	runner1:endSkill(false)
+	runner2:endSkill(false)
+	cleanup(caster)
+	cleanup(victimA)
+	cleanup(victimB)
+end)
+
 task.wait(1)
 TestHarness.Summary()

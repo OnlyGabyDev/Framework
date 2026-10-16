@@ -104,21 +104,14 @@ end
 --=============================================================================
 
 --[[
-Aplica um status à entidade
-@param statusData - Dados do status TABLE
-@param duration - Duração do status NUMBER (opcional, pode ser definido em statusData)
-@param sourceSkill - SkillRunner responsável pela skill que aplicou o status ANY (opcional)
-@param ID - ID único do status STRING (opcional)
-@return ID do status STRING ou nil se não aplicado
-]]
---[[
-Aplica um status à entidade.
+Aplica um status à entidade. O alvo é sempre a própria entidade: para mirar outra, chame o
+ApplyStatus dela ou use runner:ApplyStatus(status, { Target = alvo }).
 @param statusData - Dados do status TABLE
 @param durationOrOpts - NUMBER (duração, estilo legado) OU TABLE de opções:
-	{ Duration: number?, Source: Runner|SkillProxy?, ID: string?, Target: EntityCore? }
+	{ Duration: number?, Source: Runner|SkillProxy?, ID: string? }
 @param sourceSkill - (só no estilo legado) Runner ou proxy de skill responsável
 @param ID - (só no estilo legado) ID único do status
-@param targetEntity - (só no estilo legado) EntityCore alvo, se != self.Entity
+@param targetEntity - (só no estilo legado) ignorado se for outra entidade, com warn
 @return ID do status STRING ou nil se não aplicado
 ]]
 function StatusComponent:ApplyStatus(statusData, durationOrOpts, sourceSkill, ID, targetEntity)
@@ -139,8 +132,14 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 
 	local duration = opts.Duration
 	local source = StateTable.ResolveRunner(opts.Source)
-	local target = opts.Target
 	local suppliedID = opts.ID
+
+	-- Um alvo diferente deixava o status registrado aqui (tags desta entidade) com o runner
+	-- agindo na outra
+	if opts.Target and opts.Target ~= self.Entity then
+		warn("[StatusComponent] ApplyStatus ignora Target de outra entidade; use runner:ApplyStatus(status, { Target = alvo }):",
+			statusData.data and statusData.data.name)
+	end
 
 	-- F39: entidade morta (ou sendo destruída) não recebe status. Configurável por entidade
 	-- (RefuseStatusOnDeath = false no config: nem checa a morte) e por status (um status que
@@ -204,7 +203,7 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 			return suppliedID
 		end
 
-		local runner = self:_CreateRunner(data, meta.name, duration, target, source)
+		local runner = self:_CreateRunner(data, meta.name, duration, source)
 		group[meta.name] = { data = data, counter = 1, runner = runner, sourceSkill = source, ID = suppliedID, seq = nextSeq(self) }
 		return self:_StartRunner(runner, suppliedID)
 	end
@@ -220,7 +219,7 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 			return nil
 		end
 
-		local runner = self:_CreateRunner(data, meta.name, duration, target, source)
+		local runner = self:_CreateRunner(data, meta.name, duration, source)
 		table.insert(list, { data = data, runner = runner, sourceSkill = source, ID = suppliedID, seq = nextSeq(self) })
 
 		group[meta.name] = list
@@ -249,7 +248,7 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 		previous.runner:endSkill(true)
 	end
 
-	local runner = self:_CreateRunner(data, meta.name, duration, target, source)
+	local runner = self:_CreateRunner(data, meta.name, duration, source)
 	group[meta.name] = { data = data, runner = runner, sourceSkill = source, ID = suppliedID, seq = nextSeq(self) }
 	return self:_StartRunner(runner, suppliedID)
 end
@@ -282,16 +281,14 @@ self.Effects e só então chama _StartRunner.
 	(acessível como self.Source dentro dos callbacks) e alimenta a Lineage do novo
 	runner, corrigindo Lineage.Origin (antes sempre virava o portador, nunca o caster).
 ]]
-function StatusComponent:_CreateRunner(data, name, duration, target, source)
+function StatusComponent:_CreateRunner(data, name, duration, source)
 
 	if duration then
 		data.runtimeDuration = duration
 	end
 
-	-- opts.Target é um EntityCore (contrato do ApplyStatus). Antes lia target.Entity, que não
-	-- existe num EntityCore, e o alvo era sempre ignorado.
-	local targetEntity = target or self.Entity
-	local runner = SkillRunner.new(data, targetEntity, name, StateEnum.Types.Status, source and source.Lineage)
+	-- O runner age na entidade que registra o status (é o portador: self.Entity nos callbacks)
+	local runner = SkillRunner.new(data, self.Entity, name, StateEnum.Types.Status, source and source.Lineage)
 
 	if runner then
 		runner.Source = source

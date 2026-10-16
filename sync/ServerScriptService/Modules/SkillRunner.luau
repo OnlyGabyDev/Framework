@@ -354,15 +354,23 @@ end
 
 --[[
 Aplica um status com Source = este runner por padrão (a skill pode sobrescrever via
-opts.Source, ou opts.Target pra mirar outra entidade).
+opts.Source, ou opts.Target pra mirar outra entidade). O opts do chamador não é alterado: uma
+skill que reusa uma tabela constante (local OPTS = { Duration = 2 }) fazia o primeiro runner
+gravar nela o próprio Source, que passava a valer para todo cast seguinte.
 ]]
 function SkillRunner:ApplyStatus(statusData, opts)
-	opts = opts or {}
-	opts.Source = opts.Source or self
-	local target = opts.Target or self.Entity
+	local statusOpts = table.clone(opts or {})
+	statusOpts.Source = statusOpts.Source or self
+	local target = statusOpts.Target or self.Entity
+	-- Target só escolhe a entidade: o StatusComponent aplica sempre na própria entidade
+	statusOpts.Target = nil
+	if not target then
+		warn("[SkillRunner] ApplyStatus sem entidade alvo:", self.skillName)
+		return nil
+	end
 	-- Assinatura de opts. A posicional legada recebia `opts` no lugar do ID: o ID virava a
 	-- própria tabela e opts.ID era ignorado.
-	return target.ApplyStatus(statusData, opts)
+	return target.ApplyStatus(statusData, statusOpts)
 end
 
 function SkillRunner:Stop(cancel : boolean?)
