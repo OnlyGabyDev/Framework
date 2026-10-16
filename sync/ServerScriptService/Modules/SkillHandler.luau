@@ -133,18 +133,6 @@ local function activate(entityCore, event)
 		return false
 	end
 
-	local ChainHistory
-	if not skill.data.ChainHistory then
-		local data = {
-			rootOrigin = entityCore,
-			rootSkill = skillName,
-			history = {skillName},
-			depth = 1,
-			chainStart = tick()
-		}
-		ChainHistory = StateTable.BuildHistory(data)
-	end
-
 	--Se já tiver uma instância ativa dessa skill e for maior do que o máximo
 	if #activeRunners > 0 and #activeRunners >= maxInstances then 
 		if maxInstances == 1 then
@@ -171,13 +159,15 @@ local function activate(entityCore, event)
 
 	local cooldown = startCooldown(entityCore, skill)
 
-	--inicializa o runner da skill
+	--inicializa o runner da skill. Cast por input é a raiz da cadeia: sem Lineage pai, o próprio
+	--runner vira a raiz (Depth 1, Origin = quem castou). Antes um nó raiz montado aqui com campos
+	--que o BuildHistory não lê deixava Root.Origin nil e Depth começando em 2
 	local runner = SkillRunner.new(
 		skill,
 		entityCore,
 		skillName,
 		StateTable.Enum.Types.Skill,
-		ChainHistory,
+		nil,
 		event)
 
 	-- Runner não criado (stack overflow) ou onStart com erro (o runner já se cancelou e limpou

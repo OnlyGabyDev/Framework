@@ -14,6 +14,7 @@ local SkillRunner = require(ServerScriptService.Modules.SkillRunner)
 local SkillFactory = require(ServerScriptService.Modules.SkillFactory)
 local SkillHandler = require(ServerScriptService.Modules.SkillHandler)
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
+local Lineage = require(ServerStorage.Modules.Combat.Lineage)
 local BaseSkills = require(ServerStorage.DataBase.SkillDatabase.BaseSkills)
 local Intents = require(ReplicatedStorage.Input.Intents)
 
@@ -354,6 +355,33 @@ run("F80 — OUT.onEnd é emitido também em entidade sem Combat", function(t)
 	t.assert(ends == 1 and reason == StateTable.Enum.EndReasons.Stop,
 		string.format("OUT.onEnd disparou %dx (reason %s)", ends, tostring(reason)))
 
+	cleanup(dummy)
+end)
+
+run("F1.6 — cast por input é a raiz da Lineage (depth 1, rootOrigin = caster)", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local seen = {}
+	local child = { data = { name = "__TestLineageChild" }, callbacks = {
+		onStart = function(_, ctx) seen.childDepth = ctx.depth; seen.childRoot = ctx.rootOrigin end,
+	} }
+	dummy.EquipSkill(Intents.Id.Ability2, { data = { name = "__TestLineageRoot", cooldown = 0, duration = 0.1 }, callbacks = {
+		onStart = function(self, ctx)
+			seen.depth = ctx.depth
+			seen.rootOrigin = ctx.rootOrigin
+			seen.history = Lineage.GetHistoryArray(self.Runner.Lineage)
+			self:ApplyStatus(child, { Duration = 1 })
+		end,
+	} })
+
+	t.assert(press(dummy, Intents.Id.Ability2) == true, "A ativação falhou")
+	t.assert(seen.depth == 1, "depth do cast por input deveria ser 1 (veio " .. tostring(seen.depth) .. ")")
+	t.assert(seen.rootOrigin == dummy, "rootOrigin deveria ser quem castou (veio " .. tostring(seen.rootOrigin) .. ")")
+	t.assert(#seen.history == 1 and seen.history[1] == "__TestLineageRoot",
+		"Histórico com nó raiz extra: " .. table.concat(seen.history, " > "))
+	t.assert(seen.childDepth == 2 and seen.childRoot == dummy,
+		"Status aplicado pela skill: depth " .. tostring(seen.childDepth) .. ", rootOrigin " .. tostring(seen.childRoot))
+
+	dummy.StopAllActiveSkills(true)
 	cleanup(dummy)
 end)
 
