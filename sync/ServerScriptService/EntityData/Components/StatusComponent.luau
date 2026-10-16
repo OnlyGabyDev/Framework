@@ -185,26 +185,34 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 	end
 
 	-- ===== STACK NA MESMA INSTÂNCIA =====
+	-- A reaplicação soma um stack na instância existente e devolve o ID DELA (o que o
+	-- RemoveStatusByID aceita; um ID novo, mesmo passado em opts.ID, não existiria). O Source
+	-- não muda: o crédito fica com quem aplicou o 1º stack. O contador é runner.skill.counter.
 	if StateTable.HasTrait(meta, StateEnum.Traits.Stackable) and meta.stackOnSelf then
 		local existing = group[meta.name]
-		if existing then
-			if existing.runner.skill.counter >= (meta.maxStacks or math.huge) then
-				return suppliedID
+		-- Runner encerrado ainda listado (reaplicação durante o próprio teardown, antes do
+		-- onFinish) não recebe stack: a aplicação vira uma instância nova
+		if existing and not existing.runner:IsEnded() then
+			local runner = existing.runner
+			local atMax = runner.skill.counter >= (meta.maxStacks or math.huge)
+			-- No máximo de stacks a reaplicação só renova a duração (D5); opt-out com
+			-- data.refreshOnMax = false, e aí ela não muda nada
+			if atMax and meta.refreshOnMax == false then
+				return existing.ID
 			end
-
-			existing.runner.skill.counter += 1
-
-			if existing.runner then
-				existing.runner.elapsedTime = 0
-				if existing.runner.Recast then
-					existing.runner:Recast()
-				end
+			if duration then
+				runner.skill.runtimeDuration = duration -- a duração da reaplicação passa a valer
 			end
-			return suppliedID
+			runner.elapsedTime = 0
+			if not atMax then
+				runner.skill.counter += 1
+				runner:Recast()
+			end
+			return existing.ID
 		end
 
 		local runner = self:_CreateRunner(data, meta.name, duration, source)
-		group[meta.name] = { data = data, counter = 1, runner = runner, sourceSkill = source, ID = suppliedID, seq = nextSeq(self) }
+		group[meta.name] = { data = data, runner = runner, sourceSkill = source, ID = suppliedID, seq = nextSeq(self) }
 		return self:_StartRunner(runner, suppliedID)
 	end
 

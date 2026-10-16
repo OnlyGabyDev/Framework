@@ -385,6 +385,38 @@ run("F1.6 — cast por input é a raiz da Lineage (depth 1, rootOrigin = caster)
 	cleanup(dummy)
 end)
 
+run("F1.8 — stackOnSelf: ID do restack é o existente e o máximo renova a duração", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Health", "Status" })
+	local Stackable = StateTable.Enum.Traits.Stackable
+	local stack = { data = { name = "__TestStack", stackOnSelf = true, maxStacks = 2, traits = { Stackable } }, callbacks = {} }
+
+	local id1 = dummy.ApplyStatus(stack, { Duration = 0.5 })
+	local id2 = dummy.ApplyStatus(stack, { Duration = 1 }) -- a duração da reaplicação passa a valer
+	t.assert(type(id1) == "string" and id2 == id1, "O restack devolveu um ID diferente do existente")
+	t.assert(dummy.GetStatusCounter("__TestStack") == 2, "Deveria ter 2 stacks")
+
+	t.wait(0.6) -- com a duração da 1ª aplicação (0,5 s) já teria expirado
+	local id3 = dummy.ApplyStatus(stack, { Duration = 1 }) -- no máximo: só renova
+	t.assert(id3 == id1, "A reaplicação no máximo criou outra instância (a duração do restack não valeu?)")
+	t.assert(dummy.GetStatusCounter("__TestStack") == 2, "Passou do máximo de stacks")
+	t.wait(0.6) -- 1,2 s desde o restack: sem a renovação no máximo já teria expirado
+	t.assert(dummy.GetStatus("__TestStack") ~= nil, "A reaplicação no máximo não renovou a duração")
+
+	t.assert(dummy.RemoveStatusByID(id2) == true, "RemoveStatusByID com o ID do restack falhou")
+	t.assert(dummy.GetStatus("__TestStack") == nil, "O status seguiu ativo depois do RemoveStatusByID")
+
+	-- Opt-out: com refreshOnMax = false a reaplicação no máximo não muda nada
+	local noRefresh = { data = { name = "__TestStackNoRefresh", stackOnSelf = true, maxStacks = 1, refreshOnMax = false,
+		traits = { Stackable } }, callbacks = {} }
+	dummy.ApplyStatus(noRefresh, { Duration = 0.8 })
+	t.wait(0.5)
+	dummy.ApplyStatus(noRefresh, { Duration = 0.8 })
+	t.wait(0.5)
+	t.assert(dummy.GetStatus("__TestStackNoRefresh") == nil, "refreshOnMax = false renovou a duração mesmo assim")
+
+	cleanup(dummy)
+end)
+
 task.wait(1)
 TestHarness.Summary()
 platform:Destroy()
