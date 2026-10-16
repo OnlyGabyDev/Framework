@@ -5,6 +5,8 @@ A auditoria completa está em [`AUDITORIA.md`](AUDITORIA.md) (cópia em Markdown
 com comentários, fica no claude.ai: https://claude.ai/code/artifact/46b99f1b-a621-440c-a492-107e7e5c1e9f.
 O lote P0 pronto para outra sessão aplicar está em [`HANDOFF_P0.md`](HANDOFF_P0.md) (itens 1 a 4 aplicados em 16/10/2026).
 O F05 (anticheat de movimento) tem guia próprio: [`HANDOFF_F05.md`](HANDOFF_F05.md) (aplicado em 16/10/2026).
+O próximo trabalho (Fases 0 a 3 do documento de hardening, reconciliado com o P0) está em
+[`HANDOFF_HARDENING.md`](HANDOFF_HARDENING.md): comece por ele num chat novo.
 Cada teste mede um comportamento e compara com o contrato esperado. Os IDs `F01..F74`
 são as falhas do doc; rode de novo depois de cada correção e compare com a coluna "auditoria".
 
