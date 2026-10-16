@@ -9,6 +9,8 @@ local ServerStorage = game:GetService("ServerStorage")
 
 local TestHarness = require(script.Parent.TestHarness)
 local DataManager = require(ServerScriptService.EntityData.DataManager)
+local SkillRunner = require(ServerScriptService.Modules.SkillRunner)
+local SkillFactory = require(ServerScriptService.Modules.SkillFactory)
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
 local BaseSkills = require(ServerStorage.DataBase.SkillDatabase.BaseSkills)
 
@@ -31,6 +33,13 @@ local function cleanup(entity: any)
 	local instance = entity.Instance
 	DataManager.Remove(instance)
 	if instance then instance:Destroy() end
+end
+
+-- Runner de skill descartável, com data e callbacks inline (não passa pelo loadout)
+local function makeRunner(entity: any, name: string, data: {[string]: any}, callbacks: {[string]: any})
+	data.name = name
+	local skill = SkillFactory.GetSkill({ data = data, callbacks = callbacks })
+	return SkillRunner.new(skill, entity, name, StateTable.Enum.Types.Skill)
 end
 
 task.wait(2) -- deixa o resto do jogo terminar de bootar
@@ -173,6 +182,31 @@ TestHarness.Run("Sprint 18 — AddComponent dinâmico dispara OnAdded", function
 	task.wait(0.1)
 
 	t.assert(ranBrain, "Brain nunca rodou — AIComponent.OnAdded não foi chamado no add dinâmico")
+	cleanup(dummy)
+end)
+
+--=============================================================================
+--  FASE 1 DO HARDENING (tools/audit_suite/HANDOFF_HARDENING.md)
+--=============================================================================
+
+TestHarness.Run("F1.3 — Recast e TriggerAction ignoram runner encerrado", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Health" })
+	local recasts, triggers = 0, 0
+	local runner = makeRunner(dummy, "__TestRecastEnded", { duration = 10 }, {
+		onRecast = function() recasts += 1 end,
+		onTrigger = function() triggers += 1; return true end,
+	})
+	runner:start()
+	t.assert(runner:Recast(true) == true, "Runner vivo deveria aceitar recast")
+	t.assert(runner:TriggerAction({}) == true, "Runner vivo deveria responder ao TriggerAction")
+
+	runner:endSkill(false)
+	t.assert(runner:Recast(true) == false, "Recast(checkOnly) respondeu true num runner encerrado")
+	t.assert(runner:Recast() == false, "Recast respondeu true num runner encerrado")
+	t.assert(runner:TriggerAction({}) == nil, "TriggerAction respondeu num runner encerrado")
+	t.assert(recasts == 0 and triggers == 1,
+		string.format("Callbacks rodaram depois do fim (onRecast %d, onTrigger %d)", recasts, triggers))
+
 	cleanup(dummy)
 end)
 

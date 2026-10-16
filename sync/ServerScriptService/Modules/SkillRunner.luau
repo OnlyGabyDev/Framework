@@ -246,9 +246,12 @@ function SkillRunner:onHit(data)
 end
 
 
---[[Recast de runner]]
+--[[Recast de runner. Runner encerrado não aceita recast: o SkillHandler já filtra os vivos,
+mas quem guardou a referência (stack de status, script de jogo) cairia no onRecast de uma
+skill morta]]
 function SkillRunner:Recast(checkOnly : boolean?,input)
-	
+	if self.state == STATES.Ended then return false end
+
 	if self.skill.callbacks.onRecast ~= nil then
 		
 		if checkOnly then return true end
@@ -282,6 +285,10 @@ Trigger externo, usado especialmente mas não exclusivamente por blocks e shield
 @param data - dados de quem deu trigger
 ]]
 function SkillRunner:TriggerAction(context)
+	-- Escudo/block encerrado não reage. Durante o próprio teardown (onEnd, OUT.onEnd) o cache de
+	-- tags do StatusComponent ainda aponta para este runner: ele só é invalidado no onFinish
+	if self.state == STATES.Ended then return nil end
+
     local skillSettings = self.skill.data
     local hasFilterConfig = skillSettings.ShieldsFrom or skillSettings.ShieldsFromType
 
