@@ -1,0 +1,4 @@
+# O Script Sync do Studio grava os scripts em LF. Sem esta linha, o core.autocrlf=true do
+# Git for Windows faz o checkout em CRLF, e cada regravação do sync deixa o arquivo como
+# "modificado" no git status sem nenhuma diferença de conteúdo.
+* text=auto eol=lf
