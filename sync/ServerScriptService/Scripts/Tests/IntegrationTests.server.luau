@@ -1,7 +1,7 @@
 --[[
 Roda uma vez no boot (Studio/PlayEmpty). Cada teste cria e limpa suas
-próprias entidades descartáveis. Ferramenta de sprint — não deixe isso
-rodando num lugar que vá pra produção real.
+próprias entidades descartáveis, numa faixa própria longe da origem. Ferramenta
+de sprint — não deixe isso rodando num lugar que vá pra produção real.
 ]]
 
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -20,12 +20,33 @@ local Intents = require(ReplicatedStorage.Input.Intents)
 -- Componentes de uma entidade que casta pelo SkillHandler (mesmo conjunto da suíte de auditoria)
 local COMBAT = { "Character", "Health", "Status", "Movement", "Attributes", "Combat" }
 
+-- Cada teste roda numa faixa própria, longe da origem: a GrandIntegrationDemo e o ventilador
+-- nascem lá, e o teste de Tether falhava por interferência (F59). makeDummy recebe a posição
+-- relativa ao chão da faixa do teste atual.
+local GROUND = Vector3.new(1400, 100, 1400) -- topo da plataforma, no início da 1ª faixa
+local ZONE_SPACING = 60
+local platform = Instance.new("Part")
+platform.Name = "__IntegrationTestsPlatform"
+platform.Anchored = true
+platform.Size = Vector3.new(2048, 2, 120)
+platform.CFrame = CFrame.new(GROUND + Vector3.new(1024 - ZONE_SPACING / 2, -1, 0))
+platform.Parent = workspace
+
+local zoneOrigin = CFrame.new(GROUND)
+local zoneCount = 0
+
+local function run(name: string, fn: (t: any) -> ())
+	zoneOrigin = CFrame.new(GROUND + Vector3.new(zoneCount * ZONE_SPACING, 0, 0))
+	zoneCount += 1
+	TestHarness.Run(name, fn)
+end
+
 local function makeDummy(cframe: CFrame, components: {string}?, configs: {[string]: any}?, parentEntity: any?)
 	local model = Instance.new("Model")
 	local root = Instance.new("Part")
 	root.Name = "HumanoidRootPart"
 	root.Size = Vector3.new(2, 2, 1)
-	root.CFrame = cframe
+	root.CFrame = zoneOrigin * cframe
 	root.Anchored = false
 	root.Parent = model
 	model.PrimaryPart = root
@@ -55,7 +76,7 @@ end
 
 task.wait(2) -- deixa o resto do jogo terminar de bootar
 
-TestHarness.Run("Sprint 1 — Block determinístico", function(t)
+run("Sprint 1 — Block determinístico", function(t)
 	local dummy = makeDummy(CFrame.new(0, 10, 0), { "Character", "Health", "Movement", "Status" })
 
 	dummy.ApplyStatus(StateTable.Status.GenericBlock, { Duration = 5, ID = "FirstBlock" })
@@ -71,7 +92,7 @@ TestHarness.Run("Sprint 1 — Block determinístico", function(t)
 	cleanup(dummy)
 end)
 
-TestHarness.Run("Sprint 6 — Floating não confunde com Falling", function(t)
+run("Sprint 6 — Floating não confunde com Falling", function(t)
 	local dummy = makeDummy(CFrame.new(0, 50, 0), { "Character", "Health", "Movement" })
 	dummy.SetMovement()
 	task.wait(0.1)
@@ -94,7 +115,7 @@ TestHarness.Run("Sprint 6 — Floating não confunde com Falling", function(t)
 	cleanup(dummy)
 end)
 
-TestHarness.Run("Sprint 8/9 — Tether gruda posição + reivindica ownership de servidor", function(t)
+run("Sprint 8/9 — Tether gruda posição + reivindica ownership de servidor", function(t)
 	local caster = makeDummy(CFrame.new(0, 5, 0))
 	local victim = makeDummy(CFrame.new(10, 5, 0))
 	caster.SetMovement()
@@ -124,7 +145,7 @@ TestHarness.Run("Sprint 8/9 — Tether gruda posição + reivindica ownership de
 	cleanup(victim)
 end)
 
-TestHarness.Run("Sprint 10 — Fork de TriggerSet propaga OUT.onHit do minion pro pai", function(t)
+run("Sprint 10 — Fork de TriggerSet propaga OUT.onHit do minion pro pai", function(t)
 	local summoner = makeDummy(CFrame.new(0, 5, 0))
 	local heard = false
 
@@ -147,7 +168,7 @@ TestHarness.Run("Sprint 10 — Fork de TriggerSet propaga OUT.onHit do minion pr
 	cleanup(minion)
 end)
 
-TestHarness.Run("Sprint 11 — ComboWindow marca e consome dentro da janela", function(t)
+run("Sprint 11 — ComboWindow marca e consome dentro da janela", function(t)
 	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Character", "Health", "Movement", "Status" })
 
 	BaseSkills.ComboWindow.Mark(dummy, "TestMarker", 0.3, { Foo = "bar" })
@@ -162,7 +183,7 @@ TestHarness.Run("Sprint 11 — ComboWindow marca e consome dentro da janela", fu
 	cleanup(dummy)
 end)
 
-TestHarness.Run("Sprint 13 — Link espelha movimento, Unlink corta", function(t)
+run("Sprint 13 — Link espelha movimento, Unlink corta", function(t)
 	local primary = makeDummy(CFrame.new(0, 5, 0), { "Character", "Health", "Movement", "Control" })
 	local secondary = makeDummy(CFrame.new(3, 5, 0), { "Character", "Health", "Movement", "Control" })
 	primary.SetMovement()
@@ -184,7 +205,7 @@ TestHarness.Run("Sprint 13 — Link espelha movimento, Unlink corta", function(t
 	cleanup(secondary)
 end)
 
-TestHarness.Run("Sprint 18 — AddComponent dinâmico dispara OnAdded", function(t)
+run("Sprint 18 — AddComponent dinâmico dispara OnAdded", function(t)
 	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Character", "Health", "Movement" })
 	dummy:AddComponent(dummy.ComponentKey.AI, {}, true)
 
@@ -200,7 +221,7 @@ end)
 --  FASE 1 DO HARDENING (tools/audit_suite/HANDOFF_HARDENING.md)
 --=============================================================================
 
-TestHarness.Run("F1.3 — Recast e TriggerAction ignoram runner encerrado", function(t)
+run("F1.3 — Recast e TriggerAction ignoram runner encerrado", function(t)
 	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Health" })
 	local recasts, triggers = 0, 0
 	local runner = makeRunner(dummy, "__TestRecastEnded", { duration = 10 }, {
@@ -221,7 +242,7 @@ TestHarness.Run("F1.3 — Recast e TriggerAction ignoram runner encerrado", func
 	cleanup(dummy)
 end)
 
-TestHarness.Run("F1.7 — runner:ApplyStatus não muta o opts e devolve ID utilizável", function(t)
+run("F1.7 — runner:ApplyStatus não muta o opts e devolve ID utilizável", function(t)
 	local caster = makeDummy(CFrame.new(0, 5, 0), { "Health" })
 	local victimA = makeDummy(CFrame.new(4, 5, 0), { "Health", "Status" })
 	local victimB = makeDummy(CFrame.new(8, 5, 0), { "Health", "Status" })
@@ -261,7 +282,7 @@ TestHarness.Run("F1.7 — runner:ApplyStatus não muta o opts e devolve ID utili
 	cleanup(victimB)
 end)
 
-TestHarness.Run("F1.2 — onStart com erro devolve o cooldown", function(t)
+run("F1.2 — onStart com erro devolve o cooldown", function(t)
 	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
 	dummy.EquipSkill(Intents.Id.Ability2, { data = { name = "__TestBadStartCD", cooldown = 5, duration = 1 }, callbacks = {
 		onStart = function() error("[FW-DEBUG] onStart quebrado de propósito (teste F1.2)") end,
@@ -277,3 +298,4 @@ end)
 
 task.wait(1)
 TestHarness.Summary()
+platform:Destroy()
