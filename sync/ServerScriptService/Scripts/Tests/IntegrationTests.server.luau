@@ -1491,6 +1491,56 @@ run("F51 — dono de inscrição por entidade: limpar o combo de um atacante nã
 	cleanup(attackerB)
 end)
 
+--=============================================================================
+--  DECISÕES D5–D17 (08/11/2026)
+--=============================================================================
+
+run("D5/F16 — loadout em camadas: o modo troca só os slots que declara", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local LAYERS = StateTable.Enum.LoadoutLayers
+	local function skill(name) return { data = { name = name, cooldown = 0, duration = 0.1 }, callbacks = {} } end
+	local base = { Slots = {
+		[Intents.Id.Primary] = skill("__M1"),
+		[Intents.Id.Dash] = skill("__Dash"),
+		[Intents.Id.Ability1] = skill("__BaseA1"),
+		[Intents.Id.Ultimate] = skill("__Ult"),
+	} }
+	dummy.ApplyLoadout(base)
+	local function nameAt(slot)
+		local s = dummy.GetSkillFromSlot(slot)
+		return s and s.data.name
+	end
+
+	dummy.ApplyLoadout({ Slots = { [Intents.Id.Ability1] = skill("__DualA1") } }, LAYERS.WeaponMode)
+	t.assert(nameAt(Intents.Id.Ability1) == "__DualA1", "A camada do modo não sobrescreveu o Ability1")
+	t.assert(nameAt(Intents.Id.Primary) == "__M1" and nameAt(Intents.Id.Dash) == "__Dash" and nameAt(Intents.Id.Ultimate) == "__Ult",
+		"O modo apagou slots que não declarou (F16)")
+
+	-- Trocar de modo troca só a camada do modo
+	dummy.ApplyLoadout({ Slots = { [Intents.Id.Ability1] = skill("__MergedA1") } }, LAYERS.WeaponMode)
+	t.assert(nameAt(Intents.Id.Ability1) == "__MergedA1", "A reaplicação da camada não trocou o slot")
+	t.assert(#dummy.GetLoadoutLayers() == 2, "Reaplicar a mesma camada criou outra")
+
+	-- false esvazia o slot da base enquanto a camada existir
+	dummy.ApplyLoadout({ Slots = { [Intents.Id.Dash] = false } }, "__Silencio")
+	t.assert(nameAt(Intents.Id.Dash) == nil, "Slots[slot] = false não esvaziou o slot")
+	dummy.RemoveLoadoutLayer("__Silencio")
+	t.assert(nameAt(Intents.Id.Dash) == "__Dash", "Remover a camada não devolveu o slot da base")
+
+	-- Sem a camada do modo, volta a base
+	dummy.RemoveLoadoutLayer(LAYERS.WeaponMode)
+	t.assert(nameAt(Intents.Id.Ability1) == "__BaseA1", "Sem a camada do modo a base não voltou")
+	t.assert(dummy.RemoveLoadoutLayer(LAYERS.Base) == false, "A camada Base não pode sair")
+
+	-- Um modo com o loadout inteiro: todos os slots na própria camada
+	dummy.ApplyLoadout({ Slots = {
+		[Intents.Id.Primary] = skill("__X1"), [Intents.Id.Dash] = skill("__X2"),
+		[Intents.Id.Ability1] = skill("__X3"), [Intents.Id.Ultimate] = skill("__X4"),
+	} }, LAYERS.WeaponMode)
+	t.assert(nameAt(Intents.Id.Primary) == "__X1" and nameAt(Intents.Id.Ultimate) == "__X4", "Loadout inteiro na camada não valeu")
+	cleanup(dummy)
+end)
+
 task.wait(1)
 TestHarness.Summary()
 platform:Destroy()

@@ -48,8 +48,13 @@ local Skill = {
             weaponComp:SetMode(self.pendingMode)
 
             local nextModeData = weaponComp:GetModeData()
+            -- O loadout do modo vai na camada WeaponMode: troca só os slots que o modo declara, e o
+            -- resto (M1, Dash, Ult da forma) continua. Modo sem Loadout tira a camada (D5, F16)
+            local layer = self.statusTable.Enum.LoadoutLayers.WeaponMode
             if nextModeData and nextModeData.Loadout then
-                self.Entity.ApplyLoadout(nextModeData.Loadout)
+                self.Entity.ApplyLoadout(nextModeData.Loadout, layer)
+            else
+                self.Entity.RemoveLoadoutLayer(layer)
             end
         end,
     }

@@ -84,6 +84,14 @@ enum.EndReasons = {
     Fizzle = "fizzle",      --A skill desistiu do cast (self:Fizzle()): o cast não aconteceu
 }
 
+--==== CAMADAS DE LOADOUT (D5, F16) ====--
+-- O loadout efetivo é a mesclagem das camadas, da Base para cima (a de cima vence no slot). O jogo
+-- pode criar camadas próprias com qualquer nome; estas são as que o motor usa.
+enum.LoadoutLayers = table.freeze({
+    Base = "Base",              --Forma do personagem (SetCharMode) e EquipSkill sem camada
+    WeaponMode = "WeaponMode",  --Modo da arma (WeaponTransform)
+})
+
 --==== COOLDOWN DE SKILL (D13; regras em ServerScriptService.Modules.CooldownPolicy) ====--
 enum.CooldownStart = table.freeze({
     Cast = "Cast",          --Começa na ativação, antes do onStart

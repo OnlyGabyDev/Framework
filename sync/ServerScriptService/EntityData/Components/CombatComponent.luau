@@ -35,8 +35,11 @@ function CombatComponent.new(entity, config)
 
 	self.Entity = entity
 
-	-- Skills disponíveis
+	-- Skills disponíveis: Loadout é o EFETIVO (mesclagem das camadas, só leitura para os outros);
+	-- quem escreve escreve numa camada (D5, F16)
 	self.Loadout = {}
+	self.LoadoutLayers = { [StateEnum.LoadoutLayers.Base] = {} } -- [camada] = { [slot] = skill | false }
+	self.LoadoutOrder = { StateEnum.LoadoutLayers.Base }          -- de baixo para cima
 
 	--Cache pra evitar require duplicado
 	self.SkillCache = {}
@@ -351,39 +354,96 @@ end
 --[[
 Atualiza o loadout de Skills (func interna)
 ]]
-function CombatComponent:_ApplyLoadout(loadoutData)
-	if typeof(loadoutData) ~= "table" then warn("[CombatComponent],ApplyFunc, Loadout =~ table"); return end
+--=============================================================================
+--  LOADOUT EM CAMADAS (D5, F16)
+--=============================================================================
+--[[
+O loadout efetivo (self.Loadout) é a mesclagem das camadas, da Base para cima: a camada de cima
+vence no slot. Um modo de arma ou forma escreve na SUA camada e só troca os slots que declara;
+antes o ApplyLoadout apagava o loadout inteiro, e depois do WeaponTransform só sobrava o Ability1.
+Um modo que queira o loadout inteiro declara todos os slots na própria camada. Slots[slot] = false
+esvazia o slot de propósito (a Base fica escondida enquanto a camada existir).
+]]
 
-	local StructureCheck = loadoutData.Slots ~= nil or loadoutData.List ~= nil
-	assert(StructureCheck,"[CombatComponent] formatação de loadout inválida, confira tipo (slots ou list)") 
-	if not StructureCheck then return end
+-- Camada pelo nome (padrão Base); criada no topo da pilha na primeira escrita
+function CombatComponent:_Layer(layerName : string?)
+	layerName = layerName or StateEnum.LoadoutLayers.Base
+	local layer = self.LoadoutLayers[layerName]
+	if not layer then
+		layer = {}
+		self.LoadoutLayers[layerName] = layer
+		table.insert(self.LoadoutOrder, layerName)
+	end
+	return layer
+end
 
-
-	-- Limpa o atual
+function CombatComponent:_RebuildLoadout()
 	table.clear(self.Loadout)
-
-	local isList = loadoutData.List or false
-
-
-	if isList then
-		Log.Debug("loadout em lista:", loadoutData)
-		for _, skillKey in ipairs(loadoutData.List) do
-			self:AddSkill(skillKey) -- Salva no próximo slot livre
-		end
-	else
-		for slot, skillKey in pairs(loadoutData.Slots) do
-			self:EquipSkill(slot, skillKey) -- Override no slot definido
+	for _, layerName in self.LoadoutOrder do
+		for slot, skill in self.LoadoutLayers[layerName] do
+			self.Loadout[slot] = if skill == false then nil else skill
 		end
 	end
 end
 
 --[[
-Adiciona uma nova skill no loadout que ocupará o próximo slot livre
+Aplica um loadout numa camada (padrão Base), trocando só ESSA camada.
+@param loadoutData - { Slots = { [Intents.Id] = chave | skill | false } } ou { List = { chave, ... } }
+@param layerName - nome da camada (StateTable.Enum.LoadoutLayers ou um nome do jogo) STRING?
 ]]
-function CombatComponent:AddSkill(skillKey)
+function CombatComponent:_ApplyLoadout(loadoutData, layerName : string?)
+	if typeof(loadoutData) ~= "table" then warn("[CombatComponent],ApplyFunc, Loadout =~ table"); return end
+
+	local StructureCheck = loadoutData.Slots ~= nil or loadoutData.List ~= nil
+	assert(StructureCheck,"[CombatComponent] formatação de loadout inválida, confira tipo (slots ou list)")
+	if not StructureCheck then return end
+
+	-- Limpa só a camada pedida
+	table.clear(self:_Layer(layerName))
+
+	if loadoutData.List then
+		Log.Debug("loadout em lista:", loadoutData)
+		for _, skillKey in ipairs(loadoutData.List) do
+			self:AddSkill(skillKey, layerName) -- Próximo slot livre da camada
+		end
+	else
+		for slot, skillKey in pairs(loadoutData.Slots) do
+			if skillKey == false then
+				self:_Layer(layerName)[slot] = false -- slot esvaziado de propósito
+			else
+				self:EquipSkill(slot, skillKey, layerName)
+			end
+		end
+	end
+	self:_RebuildLoadout()
+end
+
+--[[ Tira uma camada (a Base não sai) e volta a valer o que estava embaixo ]]
+function CombatComponent:RemoveLoadoutLayer(layerName : string) : boolean
+	if layerName == StateEnum.LoadoutLayers.Base then
+		warn("[CombatComponent] A camada Base não pode ser removida; use ApplyLoadout para trocá-la")
+		return false
+	end
+	if not self.LoadoutLayers[layerName] then return false end
+	self.LoadoutLayers[layerName] = nil
+	table.remove(self.LoadoutOrder, table.find(self.LoadoutOrder, layerName))
+	self:_RebuildLoadout()
+	return true
+end
+
+--[[ Nomes das camadas, de baixo para cima ]]
+function CombatComponent:GetLoadoutLayers() : {string}
+	return table.clone(self.LoadoutOrder)
+end
+
+--[[
+Adiciona uma nova skill no próximo slot livre da camada (padrão Base)
+]]
+function CombatComponent:AddSkill(skillKey, layerName : string?)
+	local layer = self:_Layer(layerName)
 	for _, slot in ipairs(Intents.SkillOrder) do
-		if self.Loadout[slot] == nil then
-			return self:EquipSkill(slot, skillKey) and slot or nil
+		if layer[slot] == nil then
+			return self:EquipSkill(slot, skillKey, layerName) and slot or nil
 		end
 	end
 	warn("[CombatComponent] Loadout cheio, skill ignorada:", skillKey)
@@ -392,15 +452,15 @@ end
 
 
 --[[
-Equipa uma skill em um slot dedicado/especificado.
+Equipa uma skill em um slot dedicado/especificado, na camada pedida (padrão Base).
 ]]
-function CombatComponent:EquipSkill(slotIndex, skillKey)
-	
+function CombatComponent:EquipSkill(slotIndex, skillKey, layerName : string?)
+
 	if not Intents.IsButton(slotIndex) then
 		warn("[CombatComponent] Slot inválido (use Intents.Id):", slotIndex)
 		return false
 	end
-	
+
 	local skillPointer
 
 	-- Se for string, procura no database
@@ -438,17 +498,19 @@ function CombatComponent:EquipSkill(slotIndex, skillKey)
 
 	-- Cooldown não precisa de entrada inicial: sem entrada, a skill está pronta (CooldownPolicy)
 
-	-- Salva no slot
-	self.Loadout[slotIndex] = skillPointer
-	
+	-- Salva no slot da camada
+	self:_Layer(layerName)[slotIndex] = skillPointer
+	self:_RebuildLoadout()
+
 	return true
 end
 
 --[[
-Remove uma skill de um slot
+Remove uma skill de um slot da camada (padrão Base)
 ]]
-function CombatComponent:UnequipSlot(slotIndex)
-	self.Loadout[slotIndex] = nil
+function CombatComponent:UnequipSlot(slotIndex, layerName : string?)
+	self:_Layer(layerName)[slotIndex] = nil
+	self:_RebuildLoadout()
 end
 
 --[[
@@ -610,6 +672,7 @@ function CombatComponent:Destroy()
 	table.clear(self.Cooldowns)
 	table.clear(self.ActiveSkills)
 	table.clear(self.Loadout)
+	table.clear(self.LoadoutLayers)
 	table.clear(self.SkillCache)
 	table.clear(self.IntentRunners)
 	self.Entity = nil
@@ -655,6 +718,8 @@ local ExposeAPI = {
 	EquipSkill = function(component, ...) return component:EquipSkill(...) end,
 	AddSkill = function(component, ...) return component:AddSkill(...) end,
 	UnequipSlot = function(component, ...) return component:UnequipSlot(...) end,
+	RemoveLoadoutLayer = function(component, ...) return component:RemoveLoadoutLayer(...) end,
+	GetLoadoutLayers = function(component, ...) return component:GetLoadoutLayers(...) end,
 
 
 	--Validação
