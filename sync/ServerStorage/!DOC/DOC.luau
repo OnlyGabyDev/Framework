@@ -81,7 +81,9 @@
   
   --A criação de novos efeitos deve ser feita no StatusTable seguindo o padrão dos efeitos já existentes e da documentação presente no script, efeitos são lidos como skills pelo SkillRunner, então pode (e deve) utilizar eventos
   
-  --Para aplicar efeitos você deve usar as seguintes funções presentes do CombatData com os seguintes parametros:
+  --Para aplicar efeitos, de dentro de uma skill: self:ApplyStatus(status, { Target = alvo, Duration = s, ID = id? })
+  --(o runner vira o Source); fora de skill: entidade.ApplyStatus(status, { Duration = s, Source = runner?, ID = id? }).
+  --Devolve o ID; remova com entidade.RemoveStatusByID(id).
   
   --É uma boa prática tratar efeitos com IDs e só fazer a remoção também por IDs, assim evita que skills cruzem o mesmo dado e tentem acessar o mesmo status
   --Isso também da o poder de controlar se uma skill pode apagar vários status/estados de uma vez, ou apenas alguns especificos, dando mais controle geral pra criação
@@ -89,15 +91,16 @@
   
   - INTERAÇÃO COM QUEM FOR ATINGIDO:
   
-  --Quando quiser aplicar a função de uma habilidade, como causar dano, debuffs ou mudanças de estado, deve-se chamar o CombatData (geralmente no evento onHit) e buscar pelas seguintes funções:
+  --Para causar dano (geralmente no onHit da skill), use o runner como fonte:
   
-	 CD:TryHit(target,flags)
-	 vai retornar true se a interação tiver dado continuidade, a partir daqui pode ser feito algo como
+	 local ok, dano = self:Damage(alvo, quantidade)
+	 vai retornar ok = true se o hit conectou (passou por imunidade, bloqueio e proteções de stat). A partir daqui:
 	 
-	 if success then
-	 	CD:ApplyStatus(Status,targetED,duration,sourceSkill,ID)
-	 	ID não é obrigatorio e pode ser criado pelo própio aplicador dos status caso não tenha um, além disso, retorna o ID
+	 if ok then
+	 	self:ApplyStatus(Status, { Target = alvo, Duration = 2 })
 	 end
+	 
+	 Efeitos que acompanham o hit vão em data.effects da skill (ver "Sistemas de 08/11" no fim deste DOC).
   
   
   
@@ -208,7 +211,8 @@ InputHandler recebe o input do usuário e envia a informação ao server (passan
 
 -Server-
 
-SkillHandler capta o dado, pega o index, acessa o ServerStorage > Modules > CharData > Char > Data > Base > [index].name
+InputValidator recebe a intent (Intents.Id) e chama SkillHandler.HandleIntent, que pega a skill do slot no loadout
+(CombatComponent: camadas Base + modo, montadas a partir do CharacterDatabase e do SkillDatabase)
 
 Salva o Script da skill encontrado em:                                                      > Script > [Nome da skill]
 
@@ -301,11 +305,44 @@ Vale comentar que o block TEM segurança contra recursividade, mas a melhor form
 2 - usar a flag "MAX_RECURSION" pra controlar a quantidade de ações recusrivas a partir do mesmo block
 3 - caso o seu parry devolva dano IMEDIATO, use task.defer
 4 - você pode escolher somente uma das soluções, delay e permitir recursividade infinita ou MAX_RECURSION pra quebrar a cadeia.
-vale notar que MAX_RECURSION por padrão é 5.
+vale notar que MAX_RECURSION por padrão é 50 (StateTable.Enum.MAX_RECURSION).
 
 
 SECONDARY TYPE são tabelas de tipos pra permitir modificações de tipo em runTime, NÃO CONFUNDIR COM TYPE, uma vez que type dita como o sistema lidara com aquela skill
 
-qualquer modificação futura de tags que alterem comportamento, como uma nova trait de "instaCast" que ignora silence, devem ser checadas no CanContinue do CombatData
-]]
+qualquer modificação futura de tags que alterem comportamento, como uma nova trait de "instaCast" que ignora silence, devem ser checadas no CanContinue do CombatComponent
 
+=======================SISTEMAS DE 08/11/2026========================
+Cada sistema tem um dono único (regra 17): leia o cabeçalho do arquivo indicado antes de usar.
+
+COOLDOWN (ServerScriptService.Modules.CooldownPolicy): a skill declara cooldown e, opcional,
+cooldownPolicy = { start = Cast|End|Manual, recast = Blocked|Restart|Free|segundos, refund = {motivo = 0..1},
+charges = n, ignoreReduction = bool, maxReduction = 0..1 }. Skill com onRecast precisa declarar recast.
+Na skill: self:Fizzle() (desiste, devolve o cooldown), self:CommitCooldown() (start = Manual).
+Redução: stat CooldownReduction. Herança (skill roubada): CooldownPolicy.Transfer(de, para, nome, "Copy"|"Move").
+
+BLOQUEIO (StateTable.ResolveBlock): quem tem a tag block declara data.block = { mode = Full|Flat|Percent|Custom,
+value = n }. Sem block e sem onTrigger não bloqueia (e avisa). Custom exige onTrigger.
+
+EFEITOS ON-HIT (StateTable.ResolveEffect): data.effects = { status, { status = X, onBlocked = bool, onZeroDamage = bool } }.
+Padrão em Enum.EffectDefaults (bloqueado não aplica; 0 de dano aplica); a skill sobrescreve em data.effectPolicy.
+
+DANO (StateTable.MitigateDamage): DamageMult do atacante, depois as proteções do alvo em Enum.DamageMitigation
+(Defense multiplicativa, Armor subtrativa). A trait TrueDamage fura.
+
+LOADOUT (CombatComponent): camadas. ApplyLoadout(dados, camada?) troca só a camada (padrão Base);
+Slots[slot] = false esvazia; RemoveLoadoutLayer(camada). O modo da arma usa a camada WeaponMode.
+
+HITBOX DA ARMA: cada skill usa a sua: self:StartHitbox(duração) / self:StopHitbox(); o acerto vai só para ela.
+
+INSCRIÇÕES (Listen): Owner por entidade com StateTable.OwnerToken(entidade, "tag"), nunca string.
+
+FORÇAS: Soft e caminhada do NPC proporcionais à massa (Physics/Settings: Force_Mass_Scaling); MassScaling = false
+no config do Movement desliga por entidade. FollowTarget com feed-forward (MovementComponent, formato da Force).
+
+LOG: require(ReplicatedStorage.Logger).Channel("Canal").Debug/Info/Warn/Error/WarnOnce; nível em
+ReplicatedStorage.Config.LogConfig.
+
+TESTES: Tests/IntegrationTests roda no Play (resultado em workspace:GetAttribute("FW_TestSummary"));
+Tests/StaticChecks roda no modo Edit: require(Tests.StaticChecks)().
+]]
