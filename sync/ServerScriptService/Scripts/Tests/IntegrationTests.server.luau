@@ -1541,6 +1541,63 @@ run("D5/F16 — loadout em camadas: o modo troca só os slots que declara", func
 	cleanup(dummy)
 end)
 
+run("D9/F19 — grab da Ultimate: restante da skill, offset por alvo e colisão", function(t)
+	local CollisionGroups = require(ServerScriptService.Modules.Physics.CollisionGroups)
+	local caster = makeDummy(CFrame.new(0, 3, 0), COMBAT)
+	local targetA = makeDummy(CFrame.new(0, 3, -6), { "Character", "Health", "Status", "Movement" })
+	local targetB = makeDummy(CFrame.new(3, 3, -6), { "Character", "Health", "Status", "Movement" })
+	local Ultimate = require(ServerStorage.DataBase.SkillDatabase.Schema.Ultimate)
+	local skill = SkillFactory.GetSkill({ data = table.clone(Ultimate.data), callbacks = { onHit = Ultimate.callbacks.onHit } })
+	skill.data.name = "__TestUlt"
+	skill.data.duration = 2
+	local runner = SkillRunner.new(skill, caster, "__TestUlt", StateTable.Enum.Types.Skill)
+	runner:start()
+	t.wait(0.5)
+
+	runner:onHit({ target = targetA })
+	runner:onHit({ target = targetB })
+	runner:onHit({ target = targetA }) -- o mesmo alvo de novo não agarra duas vezes
+	local function grabOf(entity)
+		for _, force in entity:GetComponent(entity.ComponentKey.Movement).ActiveForces do
+			if force.Data.Type == "UltGrab" then return force.Data end
+		end
+	end
+	local grabA, grabB = grabOf(targetA), grabOf(targetB)
+	t.assert(grabA and grabB, "Os dois alvos deveriam estar agarrados")
+	t.assert(grabA.Duration <= 1.6 and grabA.Duration >= 1.2, string.format("Duração do grab deveria ser o restante (~1,5 s), foi %.2f", grabA.Duration))
+	t.assert(grabA.FollowOffset ~= grabB.FollowOffset, "Os dois alvos receberam o mesmo offset (empilham)")
+	local count = 0
+	for _, force in targetA:GetComponent(targetA.ComponentKey.Movement).ActiveForces do
+		if force.Data.Type == "UltGrab" then count += 1 end
+	end
+	t.assert(count == 1, "O mesmo alvo foi agarrado " .. count .. " vezes")
+	t.assert(targetA.GetRoot().CollisionGroup == CollisionGroups.Grabbed, "O agarrado não entrou no grupo de colisão")
+	t.assert(caster.GetRoot().CollisionGroup == CollisionGroups.Grabber, "O caster não entrou no grupo de colisão")
+
+	runner:endSkill(true)
+	t.assert(grabOf(targetA) == nil and grabOf(targetB) == nil, "O fim da skill não soltou os alvos")
+	t.assert(targetA.GetRoot().CollisionGroup == "Default" and caster.GetRoot().CollisionGroup == "Default",
+		"O grupo de colisão não foi restaurado")
+	cleanup(caster)
+	cleanup(targetA)
+	cleanup(targetB)
+end)
+
+run("F19 — FollowTarget com feed-forward acompanha o líder sem atraso", function(t)
+	local leader = makeDummy(CFrame.new(0, 3, 0), { "Character", "Health", "Movement" })
+	local follower = makeDummy(CFrame.new(0, 3, 4), { "Character", "Health", "Movement" })
+	leader.AddForce({ Type = "__TestRun", Duration = 1.5, Speed = 40, Direction = Vector3.new(1, 0, 0), Hard = true, IgnoreGravity = true })
+	follower.AddForce({ Type = "__TestFollow", Duration = 1.5, Hard = true, IgnoreGravity = true, RequiresControl = false,
+		FollowTarget = function() return leader.GetRoot() end, FollowOffset = Vector3.new(0, 0, 4),
+		FollowResponsiveness = 16, FollowMaxSpeed = 40 })
+	t.wait(1.0)
+	local desired = leader.GetRoot().Position + Vector3.new(0, 0, 4)
+	local err = ((follower.GetRoot().Position - desired) * Vector3.new(1, 0, 1)).Magnitude
+	t.assert(err < 2, string.format("Seguidor %.1f studs atrás do ponto (antes ~10)", err))
+	cleanup(leader)
+	cleanup(follower)
+end)
+
 task.wait(1)
 TestHarness.Summary()
 platform:Destroy()

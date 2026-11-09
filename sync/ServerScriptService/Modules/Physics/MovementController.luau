@@ -168,11 +168,17 @@ function MovementController.ProcessEntity(comp, dt)
 					local currentPosition = ownRoot and ownRoot.Position or desiredPosition
 					local toDesired = desiredPosition - currentPosition
 
-					velocity = toDesired * (data.FollowResponsiveness or 10)
-
-					if data.FollowMaxSpeed and velocity.Magnitude > data.FollowMaxSpeed then
-						velocity = velocity.Unit * data.FollowMaxSpeed
+					-- Feed-forward (F19): anda com a velocidade do líder e corrige só o erro. Antes a
+					-- velocidade era só a correção, limitada ao FollowMaxSpeed: com o líder na mesma
+					-- velocidade do limite o seguidor ficava 10 a 17 studs para trás
+					local correction = toDesired * (data.FollowResponsiveness or 10)
+					if data.FollowMaxSpeed and correction.Magnitude > data.FollowMaxSpeed then
+						correction = correction.Unit * data.FollowMaxSpeed
 					end
+					local leaderVelocity = if data.FollowFeedForward == false
+						then Vector3.zero
+						else anchor.AssemblyLinearVelocity
+					velocity = leaderVelocity + correction
 
 					direction = toDesired.Magnitude > 1e-4 and toDesired.Unit or (forceEntry.CurrentDirection or Vector3.new(0, 0, -1))
 					forceEntry.CurrentDirection = direction

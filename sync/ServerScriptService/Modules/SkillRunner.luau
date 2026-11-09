@@ -113,6 +113,7 @@ function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input) --Instanc
 	self.skill.Recast = function(_, ...) return self:Recast(...) end
 	self.skill.endSkill = function(_, ...) return self:endSkill(...) end
 	self.skill.Fizzle = function(_) return self:Fizzle() end
+	self.skill.GetRemainingTime = function(_) return self:GetRemainingTime() end
 	self.skill.CommitCooldown = function(_) return self:CommitCooldown() end
 
 	-- Ownership automático (Regra 2): a skill registra limpezas/inscrições aqui em vez de
@@ -395,6 +396,18 @@ skill que recusava o cancel deixava o runner vivo, errando a cada frame (F78).
 function SkillRunner:Abort()
 	self:endSkill(true, REASONS.Error)
 	if not self:IsEnded() then self:endSkill(false, REASONS.Error) end
+end
+
+--[[
+Segundos até o fim pela duração (runtimeDuration ou data.duration); nil se a skill não tem
+duração. Durante o castTime devolve a duração inteira (ela só começa a contar no Running).
+Usado para efeitos que devem acabar junto com a skill, como o grab da Ultimate (D9).
+]]
+function SkillRunner:GetRemainingTime(): number?
+	local duration = self.skill.runtimeDuration or self.skill.data.duration
+	if not duration then return nil end
+	if self.state ~= STATES.Running then return duration end
+	return math.max(0, duration - self.elapsedTime)
 end
 
 --[[

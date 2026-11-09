@@ -28,6 +28,13 @@
 		RequiresControl: boolean?,    -- default true. Force "mole" que precisa de controle é
 		                              -- cancelada se a entidade não puder se mover (Root/Stun).
 		                              -- Forces externas (knockback, vento) devem setar false.
+		FollowTarget: (BasePart | () -> BasePart?)?, -- modo tether: persegue a peça (+ offset) em vez
+		                              -- de andar numa Direction. Função = reavaliada a cada frame
+		FollowOffset: Vector3?,       -- offset do alvo (padrão zero)
+		FollowOffsetIsLocal: boolean?,-- true = offset no espaço da peça (gira junto)
+		FollowResponsiveness: number?,-- ganho da correção de posição (padrão 10)
+		FollowMaxSpeed: number?,      -- limite da CORREÇÃO, além da velocidade do líder (F19)
+		FollowFeedForward: boolean?,  -- default true: soma a velocidade do líder (sem atraso)
 		External: boolean?,           -- default = (RequiresControl == false). Externa é barrada por
 		                              -- canDisplace = false; a própria (dash) não (F47).
 		Duration: number,
