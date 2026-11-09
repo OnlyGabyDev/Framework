@@ -829,12 +829,18 @@ run("F82 — Lock sobrevive ao respawn (Register)", function(t)
 	end
 	local AntiCheat = require(ServerScriptService.Modules.GlobalAntiCheat)
 	local native = AntiCheat.GetNativeEntityId(player)
+	-- O roteamento de antes (o player pode estar possuindo um corpo da GrandIntegrationDemo): o
+	-- teste mexe direto no AntiCheat e precisa devolvê-lo, senão a pilha de possessão e o
+	-- roteamento ficam discordando para os testes seguintes
+	local routedBefore = AntiCheat.GetControlledEntityId(player)
 	t.assert(AntiCheat.LockPlayerInput(player), "Lock falhou")
 	AntiCheat.Register(player) -- o que o respawn faz
 	local stillLocked = AntiCheat.GetEntityID(player) == nil
 	local restored = AntiCheat.UnlockPlayerInput(player)
+	local afterUnlock = AntiCheat.GetEntityID(player)
+	AntiCheat.SetControlledEntity(player, routedBefore)
 	t.assert(stillLocked, "O Register (respawn) soltou o Lock")
-	t.assert(restored and AntiCheat.GetEntityID(player) == native, "O Unlock não devolveu o corpo nativo")
+	t.assert(restored and afterUnlock == native, "O Unlock não devolveu o corpo nativo")
 end)
 
 --=============================================================================
@@ -1071,7 +1077,7 @@ run("F83 — Lock durante a possessão manda o ID roteado ao cliente", function(
 		return
 	end
 	local AntiCheat = require(ServerScriptService.Modules.GlobalAntiCheat)
-	local native = AntiCheat.GetNativeEntityId(player)
+	local routedBefore = AntiCheat.GetControlledEntityId(player) -- devolvido no fim (ver F82)
 	local body = makeDummy(CFrame.new(0, 5, 0), { "Character", "Health" })
 
 	AntiCheat.SetControlledEntity(player, body.ID)
@@ -1079,12 +1085,12 @@ run("F83 — Lock durante a possessão manda o ID roteado ao cliente", function(
 	local locked, routed = AntiCheat._ControlStatePayload(player)
 	local inputCut = AntiCheat.GetEntityID(player) == nil
 	AntiCheat.UnlockPlayerInput(player)
-	AntiCheat.SetControlledEntity(player, native)
+	AntiCheat.SetControlledEntity(player, routedBefore)
 
 	t.assert(locked == true, "O payload não indicou Lock")
 	t.assert(routed == body.ID, "Lock mandou " .. tostring(routed) .. " em vez do corpo possuído (a câmera voltaria ao nativo)")
 	t.assert(inputCut, "Com Lock o input não foi cortado no servidor")
-	t.assert(AntiCheat.GetEntityID(player) == native, "O teste não devolveu o player ao corpo nativo")
+	t.assert(AntiCheat.GetEntityID(player) == routedBefore, "O teste não devolveu o roteamento de antes")
 
 	cleanup(body)
 end)
@@ -1782,6 +1788,41 @@ run("D11/F43 — fórmula de dano: Defense multiplicativa, Armor subtrativa, Dam
 	hit:endSkill(false)
 	cleanup(caster)
 	cleanup(victim)
+end)
+
+run("D15/F56 — a barra de vida segue o corpo que o player dirige", function(t)
+	local Players = game:GetService("Players")
+	local player = Players:GetPlayers()[1]
+	if not player or not player.Character or not player.Character:GetAttribute("EntityID") then
+		t.log("sem player com entidade neste Play: teste pulado")
+		return
+	end
+	local AC = require(ServerScriptService.Modules.GlobalAntiCheat)
+	local function viewers(entity)
+		return entity:GetComponent(entity.ComponentKey.Health):_HudViewers()
+	end
+	-- O corpo que o player dirige antes do teste (o nativo, ou um da GrandIntegrationDemo)
+	local before = DataManager.Get(AC.GetControlledEntityId(player))
+	t.assert(before and #viewers(before) == 1 and viewers(before)[1] == player, "Antes da possessão a barra deveria ser do corpo dirigido")
+	local body = makeDummy(CFrame.new(0, 5, 0), { "Character", "Health", "Movement", "Control" })
+	t.assert(#viewers(body) == 0, "Corpo não possuído não deveria mandar vida para ninguém")
+
+	local ControlModule = require(ServerScriptService.EntityData.Components.ControlComponent)
+	local possessed = body.Possess({ Player = player })
+	local onBody = viewers(body)
+	local onBefore = viewers(before)
+	local topDuring = ControlModule.GetPossessionOf(player)
+	local released = body.Release()
+	local topAfter = ControlModule.GetPossessionOf(player)
+	t.log(string.format("possess=%s release=%s antes=%s corpo=%s roteadoDepois=%s topoDurante=%s topoDepois=%s",
+		tostring(possessed), tostring(released), tostring(before.ID), tostring(body.ID),
+		tostring(AC.GetControlledEntityId(player)), tostring(topDuring and topDuring.Entity.ID),
+		tostring(topAfter and topAfter.Entity.ID)))
+
+	t.assert(#onBody == 1 and onBody[1] == player, "Durante a possessão a barra não seguiu o corpo controlado")
+	t.assert(#onBefore == 0, "Durante a possessão o corpo anterior ainda mandava a vida dele")
+	t.assert(#viewers(before) == 1, "Depois do Release a barra não voltou ao corpo anterior")
+	cleanup(body)
 end)
 
 task.wait(1)

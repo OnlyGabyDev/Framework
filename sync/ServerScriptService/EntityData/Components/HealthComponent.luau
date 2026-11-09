@@ -44,9 +44,39 @@ function HealthComponent:_UsesAttributes() : boolean
 	return self.Entity:HasComponent(self.Entity.ComponentKey.Attributes)
 end
 
+local function getAntiCheat()
+	return require(game:GetService("ServerScriptService").Modules.GlobalAntiCheat)
+end
+
+--[[
+Quem vê a barra de vida deste corpo: o player que está com ELE roteado (D15, F56). Candidatos: o
+dono nativo e quem o possui. Durante a possessão a HUD mostra o corpo controlado; antes mostrava
+sempre o corpo original. Antes do AntiCheat registrar o player (spawn), vale o dono nativo.
+]]
+function HealthComponent:_HudViewers(): {Player}
+	local entity = self.Entity
+	local candidates = {}
+	if entity.Player then candidates[entity.Player] = true end
+	if entity:HasComponent(entity.ComponentKey.Control) then -- dependência opcional (regra 16)
+		local controller = entity.GetController()
+		if controller and controller.Player then candidates[controller.Player] = true end
+	end
+
+	local AC = getAntiCheat()
+	local viewers = {}
+	for player in candidates do
+		local routed = AC.GetControlledEntityId(player)
+		if routed == nil and AC.GetNativeEntityId(player) == nil and player == entity.Player then
+			routed = entity.ID
+		end
+		if routed == entity.ID then table.insert(viewers, player) end
+	end
+	return viewers
+end
+
 function HealthComponent:_SyncClient()
-	if self.Entity:IsPlayer() then
-		UpdateHPBar:FireClient(self.Entity.Player, self.HP, self:GetMaxHP())
+	for _, player in self:_HudViewers() do
+		UpdateHPBar:FireClient(player, self.HP, self:GetMaxHP())
 	end
 end
 
@@ -348,6 +378,8 @@ end
 --=============================================================================
 
 local ExposeAPI = {
+	-- Manda a vida atual para quem dirige este corpo (chamado na troca de corpo da possessão)
+	SyncHealthHUD = function(component) return component:_SyncClient() end,
 	TakeDamage = function(component, ...) return component:TakeDamage(...) end,
 	Heal = function(component, ...) return component:Heal(...) end,
 	Die = function(component, ...) return component:Die(...) end,

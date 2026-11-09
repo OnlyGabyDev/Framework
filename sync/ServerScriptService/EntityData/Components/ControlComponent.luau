@@ -145,6 +145,12 @@ local function route(player: Player)
 		handBody(nativeCoreOf(player), player)
 		AC.SetControlledEntity(player, AC.GetNativeEntityId(player), false)
 	end
+	-- A HUD passa a mostrar o corpo que o player dirige agora (D15, F56)
+	local drivenId = AC.GetControlledEntityId(player)
+	local driven = drivenId and getDataManager().Get(drivenId)
+	if driven and driven:HasComponent(driven.ComponentKey.Health) then
+		driven.SyncHealthHUD()
+	end
 end
 
 -- Tira `component` da pilha do player. Se ele era o topo, o player volta pro anterior (que
