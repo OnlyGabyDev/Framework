@@ -145,6 +145,11 @@ local function route(player: Player)
 		handBody(nativeCoreOf(player), player)
 		AC.SetControlledEntity(player, AC.GetNativeEntityId(player), false)
 	end
+	-- Streaming em volta do corpo dirigido (F57): sem isso o corpo possuído longe do nativo nem
+	-- chegava a replicar para o cliente
+	local focusRoot = top and top.Entity:HasComponent(top.Entity.ComponentKey.Character) and top.Entity.GetRoot()
+	player.ReplicationFocus = focusRoot or nil
+
 	-- A HUD passa a mostrar o corpo que o player dirige agora (D15, F56)
 	local drivenId = AC.GetControlledEntityId(player)
 	local driven = drivenId and getDataManager().Get(drivenId)

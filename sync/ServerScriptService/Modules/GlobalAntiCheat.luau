@@ -17,9 +17,12 @@ local ControlStateChanged = RemoteEvents:WaitForChild("ControlStateChanged")
 -- Com Lock vai o ID ROTEADO (o que volta no Unlock): o cliente trata nil como "voltar ao próprio
 -- corpo" e um Lock durante a possessão levava a câmera de volta ao corpo nativo (F83). O corte
 -- do input é do servidor (GetEntityID = nil); o cliente só usa o ID para a câmera.
+-- 4º valor (F57): o model do corpo roteado. O cliente procurava o model pelo EntityID nos filhos
+-- diretos do workspace e, com StreamingEnabled, não achava o corpo ainda não replicado
 local function controlStatePayload(tracked)
 	local routed = if tracked.Locked then tracked.PreLockID else tracked.ID
-	return tracked.Locked, routed, tracked.SuspendNative
+	local core = routed and DataManager.Get(routed)
+	return tracked.Locked, routed, tracked.SuspendNative, core and core.Instance or nil
 end
 
 local function notifyControlState(player: Player, tracked)

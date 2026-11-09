@@ -203,14 +203,22 @@ function CameraOverride.Init()
 	local ControlStateChanged = ReplicatedStorage.RemoteEvents:WaitForChild("ControlStateChanged")
 	local activeBeforeLock = false
 
-	ControlStateChanged.OnClientEvent:Connect(function(isLocked: boolean, entityID: string?, suspendNative: boolean?)
+	ControlStateChanged.OnClientEvent:Connect(function(isLocked: boolean, entityID: string?, suspendNative: boolean?, subject: Instance?)
 		if entityID then
-			for _, obj in ipairs(workspace:GetChildren()) do
-				if obj:GetAttribute("EntityID") == entityID then
-					CameraOverride.PossessedSubject = obj
-					workspace.CurrentCamera.CameraSubject = obj:FindFirstChild("Humanoid") or obj.PrimaryPart
-					break
+			-- O servidor manda o model (F57); a busca pelo atributo fica de reserva para um
+			-- servidor antigo ou um model que ainda não replicou
+			local found = (subject and subject:IsDescendantOf(workspace)) and subject or nil
+			if not found then
+				for _, obj in ipairs(workspace:GetChildren()) do
+					if obj:GetAttribute("EntityID") == entityID then
+						found = obj
+						break
+					end
 				end
+			end
+			if found then
+				CameraOverride.PossessedSubject = found
+				workspace.CurrentCamera.CameraSubject = found:FindFirstChildOfClass("Humanoid") or found.PrimaryPart
 			end
 			
 			-- Se for o próprio player (exemplo: depois do Unlock, Volta pra id do player original)
