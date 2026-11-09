@@ -155,7 +155,8 @@ local targetModel = buildDummyModel(CFrame.new(0, 5, -20), Color3.fromRGB(40, 20
 targetModel.Parent = workspace
 local target = DataManager.Create(targetModel, { "Character", "Health", "Movement", "Status" })
 target.SetMovement()
-target.ApplyStatus(StateTable.Status.GenericBlock, { Duration = 30 })
+-- (D17) Sem GenericBlock: a demo é para o alvo apanhar ("dano baixo para demorar a matar"); o
+-- bloqueio aplicado cru não bloqueava nada e só gerava aviso
 
 local function createHunterBrain()
 	local sinceLastAction = 0
