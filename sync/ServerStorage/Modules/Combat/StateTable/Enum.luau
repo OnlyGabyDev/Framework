@@ -39,6 +39,7 @@ enum.Traits = {
 
         --INTERAÇÕES
         TrueHit = "TrueHit",            --Ignora iFrame
+        TrueDamage = "TrueDamage",      --Ignora as proteções de stat (Defense, Armor: D11)
         SoftCancel = "LightCancel",     --Cancelamento fraco (TODO)
         HeavyCancel = "HeavyCancel",    --Cancelamento forte (TODO)
     }
@@ -194,6 +195,7 @@ enum.Stats = {
     Weapon = "Weapon",
     GravityScale = "GravityScale",
     CooldownReduction = "CooldownReduction", --fração (0..1) tirada de toda contagem de cooldown que começa
+    Armor = "Armor",                         --proteção subtrativa (dano − Armor), ver DamageMitigation
 }
 
 enum.StatDefaults = table.freeze({
@@ -204,6 +206,24 @@ enum.StatDefaults = table.freeze({
     DamageMult = 1,
     GravityScale = 1,
     CooldownReduction = 0,
+    Armor = 0,
+})
+
+--==== FÓRMULA DE DANO (D11, F43) ====--
+-- Proteções do ALVO aplicadas em ordem, cada uma ligada a um stat (o jogo troca, reordena ou
+-- acrescenta). mode: Multiplicative = dano × 100 / (100 + stat) (stat negativo amplifica:
+-- dano × (2 − 100 / (100 − stat))); Flat = dano − stat. ignoredBy = traits que furam a proteção.
+-- O DamageMult do ATACANTE multiplica o dano antes (CombatComponent:ApplyDamage).
+enum.MitigationModes = table.freeze({
+    Multiplicative = "Multiplicative",
+    Flat = "Flat",
+})
+
+enum.DamageMitigation = table.freeze({
+    table.freeze({ stat = enum.Stats.Defense, mode = enum.MitigationModes.Multiplicative,
+        ignoredBy = table.freeze({ enum.Traits.TrueDamage }) }),
+    table.freeze({ stat = enum.Stats.Armor, mode = enum.MitigationModes.Flat,
+        ignoredBy = table.freeze({ enum.Traits.TrueDamage }) }),
 })
 
 -- O que o MOTOR faz quando o HP zera. O resto (Humanoid, animação, respawn) é do jogo: o

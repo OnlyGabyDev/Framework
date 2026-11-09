@@ -1745,6 +1745,45 @@ run("D6/F41 — efeitos on-hit: bloqueado não aplica, 0 de dano aplica, skill e
 	cleanup(victim)
 end)
 
+run("D11/F43 — fórmula de dano: Defense multiplicativa, Armor subtrativa, DamageMult e TrueDamage", function(t)
+	local Stats = StateTable.Enum.Stats
+	local caster = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local victim = makeDummy(CFrame.new(4, 5, 0), { "Character", "Health", "Attributes" })
+	local hit = makeRunner(caster, "__TestDmgFormula", { duration = 10 }, {})
+	hit:start()
+	local function dealt(amount, traits)
+		local ctx = StateTable.BuildContext(hit, amount)
+		if traits then ctx.traits = traits end
+		local _, d = victim.TakeDamage(ctx)
+		victim.Heal(1000)
+		return d
+	end
+	local function near(a, b) return type(a) == "number" and math.abs(a - b) < 0.01 end
+
+	victim.SetStat(Stats.Defense, 100)
+	victim.SetStat(Stats.Armor, 0)
+	t.assert(near(dealt(10), 5), "Defense 100 em 10 deveria dar 5")
+	victim.SetStat(Stats.Defense, -100)
+	t.assert(near(dealt(10), 15), "Defense −100 em 10 deveria dar 15")
+	victim.SetStat(Stats.Defense, 0)
+	victim.SetStat(Stats.Armor, 3)
+	t.assert(near(dealt(10), 7), "Armor 3 em 10 deveria dar 7")
+	victim.SetStat(Stats.Defense, 100)
+	t.assert(near(dealt(10), 2), "Defense 100 e depois Armor 3 em 10 deveria dar 2")
+	t.assert(near(dealt(10, { StateTable.Enum.Traits.TrueDamage }), 10), "TrueDamage deveria ignorar as proteções")
+
+	-- DamageMult do atacante, pelo caminho real (runner:Damage → ApplyDamage)
+	victim.SetStat(Stats.Defense, 0)
+	victim.SetStat(Stats.Armor, 0)
+	caster.SetStat(Stats.DamageMult, 2)
+	local _, viaSkill = hit:Damage(victim, 10)
+	t.assert(near(viaSkill, 20), "DamageMult 2 do atacante deveria dobrar o dano (" .. tostring(viaSkill) .. ")")
+
+	hit:endSkill(false)
+	cleanup(caster)
+	cleanup(victim)
+end)
+
 task.wait(1)
 TestHarness.Summary()
 platform:Destroy()

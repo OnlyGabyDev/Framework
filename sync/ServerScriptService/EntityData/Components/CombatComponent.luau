@@ -596,6 +596,11 @@ function CombatComponent:ApplyDamage(amount: number, source: any, targetEntity: 
 	local context = StateTable.BuildContext(source, amount)
 	context.targetEntity = targetEntity
 
+	-- DamageMult do atacante (D11, F43): multiplica o dano antes das proteções do alvo
+	if self.Entity:HasComponent(self.Entity.ComponentKey.Attributes) then
+		context.damage *= self.Entity.GetStat(StateEnum.Stats.DamageMult, StateEnum.StatDefaults.DamageMult)
+	end
+
 	-- 1. Emite OUT antes do hit conectar
 	self.Entity:Emit(StateEnum.Roles.OUT, StateEnum.Breakpoints.onHit, context)
 

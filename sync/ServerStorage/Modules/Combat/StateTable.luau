@@ -112,4 +112,8 @@ function StateTable.ResolveEffect(entry, sourceData)
 	return Helper.ResolveEffect(entry, sourceData)
 end
 
+function StateTable.MitigateDamage(damage, getStat, traits)
+	return Helper.MitigateDamage(damage, getStat, traits)
+end
+
 return StateTable

@@ -147,6 +147,35 @@ function Helper.ResolveEffect(entry, sourceData)
 	return status, pick("onBlocked"), pick("onZeroDamage")
 end
 
+--[[
+Dano depois das proteções de stat do alvo (D11, F43), na ordem de Enum.DamageMitigation.
+@param damage NUMBER
+@param getStat - (statName, default) -> number (o GetStat do alvo)
+@param traits - traits do hit {string}
+@return dano mitigado NUMBER (nunca negativo)
+]]
+function Helper.MitigateDamage(damage: number, getStat, traits): number
+	for _, protection in Enum.DamageMitigation do
+		local pierced = false
+		for _, trait in protection.ignoredBy or {} do
+			if table.find(traits or {}, trait) then pierced = true break end
+		end
+		if not pierced then
+			local value = getStat(protection.stat, Enum.StatDefaults[protection.stat] or 0)
+			if protection.mode == Enum.MitigationModes.Multiplicative then
+				if value >= 0 then
+					damage *= 100 / (100 + value)
+				else
+					damage *= 2 - 100 / (100 - value)
+				end
+			elseif protection.mode == Enum.MitigationModes.Flat then
+				damage -= value
+			end
+		end
+	end
+	return math.max(0, damage)
+end
+
 local ownerTokens = setmetatable({}, { __mode = "k" }) -- [entidade] = { [tag] = token }
 
 --[[

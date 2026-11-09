@@ -112,6 +112,12 @@ function HealthComponent:_TakeDamageInner(amountOrContext, source)
 		context.blocked = before > 0 and context.damage <= 0
 	end
 
+	-- Proteções de stat do alvo (Defense, Armor...: D11, F43). Dependência opcional de Attributes
+	-- (regra 16): sem ele não há stat de proteção. Antes Defense existia e nunca entrava no dano
+	if context.damage > 0 and self.Entity:HasComponent(self.Entity.ComponentKey.Attributes) then
+		context.damage = StateTable.MitigateDamage(context.damage, self.Entity.GetStat, context.traits)
+	end
+
 	-- Ponto de extensão declarativo (novo): cancelamento/mutação simples ANTES do HP mudar.
 	self.Entity:Emit(StateEnum.Roles.IN, StateEnum.Breakpoints.PreDamage, context)
 	if context.cancelled then
