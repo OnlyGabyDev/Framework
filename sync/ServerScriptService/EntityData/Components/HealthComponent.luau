@@ -93,7 +93,10 @@ function HealthComponent:_TakeDamageInner(amountOrContext, source)
 		context = StateTable.BuildContext(source, amountOrContext)
 	end
 
-	if context.damage <= 0 then return false, 0 end
+	-- Hit de 0 de dano só continua se tiver efeitos para aplicar (slow puro, marca: D6, F41)
+	local hasEffects = context.effects ~= nil and #context.effects > 0
+	local zeroDamageHit = context.damage <= 0
+	if zeroDamageHit and not hasEffects then return false, 0 end
 
 	-- Se tem StatusComponent, valida imunidades e aplica mitigação (block/parry).
 	-- Toda a lógica de "o que é block/iFrame" mora no StatusComponent agora (Regra 20).
@@ -103,7 +106,10 @@ function HealthComponent:_TakeDamageInner(amountOrContext, source)
 		if not canHit then
 			return false, reason
 		end
+		local before = context.damage
 		self.Entity.ApplyMitigation(context) -- pode reduzir/zerar context.damage
+		-- Bloqueado = o bloqueio zerou um hit que tinha dano (listeners e efeitos leem isso)
+		context.blocked = before > 0 and context.damage <= 0
 	end
 
 	-- Ponto de extensão declarativo (novo): cancelamento/mutação simples ANTES do HP mudar.
@@ -126,9 +132,17 @@ function HealthComponent:_TakeDamageInner(amountOrContext, source)
 		self:Die(context.source)
 	end
 
-	if context.effects ~= nil and statusComp then
-		for _, effectData in ipairs(context.effects) do
-			self.Entity.ApplyStatus(effectData, { Source = context.source })
+	-- Efeitos on-hit pela política declarada (D6, F41): antes um hit 100% bloqueado aplicava os
+	-- efeitos, e um hit de 0 de dano nunca chegava aqui (slow puro era impossível)
+	if hasEffects and statusComp then
+		local source = context.source
+		local sourceData = source and (source.skill and source.skill.data or source.data) or nil
+		for _, entry in ipairs(context.effects) do
+			local status, onBlocked, onZeroDamage = StateTable.ResolveEffect(entry, sourceData)
+			local skip = (context.blocked and not onBlocked) or (zeroDamageHit and not onZeroDamage)
+			if status and not skip then
+				self.Entity.ApplyStatus(status, { Source = source })
+			end
 		end
 	end
 

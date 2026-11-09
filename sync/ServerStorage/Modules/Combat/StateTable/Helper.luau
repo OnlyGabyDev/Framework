@@ -126,6 +126,27 @@ function Helper.BlockerMeta(blocker)
 	return (blocker.data and blocker.data.data) or (blocker.skillData and blocker.skillData.data)
 end
 
+--[[
+Resolve um efeito on-hit (D6, F41): o status e se ele vale para hit bloqueado e para hit de 0 de
+dano. Precedência: o próprio efeito > data.effectPolicy da skill de origem > Enum.EffectDefaults.
+@param entry - o status, ou { status = status, onBlocked = bool?, onZeroDamage = bool? }
+@param sourceData - data da skill/status que causou o hit TABLE?
+@return status, onBlocked BOOLEAN, onZeroDamage BOOLEAN
+]]
+function Helper.ResolveEffect(entry, sourceData)
+	local status, own = entry, nil
+	if type(entry) == "table" and entry.status ~= nil then
+		status, own = entry.status, entry
+	end
+	local skillPolicy = sourceData and sourceData.effectPolicy or nil
+	local function pick(key)
+		if own and own[key] ~= nil then return own[key] end
+		if skillPolicy and skillPolicy[key] ~= nil then return skillPolicy[key] end
+		return Enum.EffectDefaults[key]
+	end
+	return status, pick("onBlocked"), pick("onZeroDamage")
+end
+
 local ownerTokens = setmetatable({}, { __mode = "k" }) -- [entidade] = { [tag] = token }
 
 --[[

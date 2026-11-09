@@ -84,6 +84,15 @@ enum.EndReasons = {
     Fizzle = "fizzle",      --A skill desistiu do cast (self:Fizzle()): o cast não aconteceu
 }
 
+--==== EFEITOS ON-HIT (D6, F41) ====--
+-- Quando os efeitos de um hit (context.effects) são aplicados. Padrão do motor declarado aqui; a
+-- skill sobrescreve em data.effectPolicy = { onBlocked = ..., onZeroDamage = ... }, e cada efeito
+-- pode sobrescrever se declarado como { status = X, onBlocked = ..., onZeroDamage = ... }.
+enum.EffectDefaults = table.freeze({
+    onBlocked = false,    --Hit zerado pelo bloqueio NÃO aplica os efeitos
+    onZeroDamage = true,  --Hit de 0 de dano (slow puro, marca) aplica os efeitos
+})
+
 --==== CAMADAS DE LOADOUT (D5, F16) ====--
 -- O loadout efetivo é a mesclagem das camadas, da Base para cima (a de cima vence no slot). O jogo
 -- pode criar camadas próprias com qualquer nome; estas são as que o motor usa.

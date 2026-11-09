@@ -108,4 +108,8 @@ function StateTable.OwnerToken(entity, tag)
 	return Helper.OwnerToken(entity, tag)
 end
 
+function StateTable.ResolveEffect(entry, sourceData)
+	return Helper.ResolveEffect(entry, sourceData)
+end
+
 return StateTable

@@ -1712,6 +1712,39 @@ run("D8 — NPC com Humanoid usa o Humanoid", function(t)
 	cleanup(npc)
 end)
 
+run("D6/F41 — efeitos on-hit: bloqueado não aplica, 0 de dano aplica, skill e efeito sobrescrevem", function(t)
+	local caster = makeDummy(CFrame.new(0, 5, 0), { "Health" })
+	local victim = makeDummy(CFrame.new(4, 5, 0), { "Health", "Status" })
+	local slow = { data = { name = "__TestSlow" }, callbacks = {} }
+	local function hitWith(runnerData, damage)
+		local runner = makeRunner(caster, "__TestEffHit" .. tostring(math.random(1e6)), runnerData, {})
+		runner:start()
+		victim.TakeDamage(StateTable.BuildContext(runner, damage))
+		local applied = victim.GetStatus("__TestSlow") ~= nil
+		victim.RemoveStatus("__TestSlow")
+		runner:endSkill(false)
+		return applied
+	end
+
+	-- 0 de dano com efeito: aplica (padrão onZeroDamage = true)
+	t.assert(hitWith({ duration = 5, effects = { slow } }, 0) == true, "Hit de 0 de dano não aplicou o slow")
+	-- Efeito que pede onZeroDamage = false
+	t.assert(hitWith({ duration = 5, effects = { { status = slow, onZeroDamage = false } } }, 0) == false,
+		"O efeito com onZeroDamage = false foi aplicado num hit de 0")
+
+	-- Hit bloqueado (Full): não aplica por padrão; a skill pode pedir onBlocked = true
+	victim.ApplyStatus(blockStatus("__TestEffBlock", { block = { mode = StateTable.Enum.BlockModes.Full } }), { Duration = 10 })
+	t.assert(hitWith({ duration = 5, effects = { slow } }, 10) == false, "Hit 100% bloqueado aplicou o efeito")
+	t.assert(hitWith({ duration = 5, effects = { slow }, effectPolicy = { onBlocked = true } }, 10) == true,
+		"effectPolicy.onBlocked = true da skill não valeu")
+	victim.RemoveStatus("__TestEffBlock")
+
+	-- Hit normal: aplica
+	t.assert(hitWith({ duration = 5, effects = { slow } }, 5) == true, "Hit normal não aplicou o efeito")
+	cleanup(caster)
+	cleanup(victim)
+end)
+
 task.wait(1)
 TestHarness.Summary()
 platform:Destroy()
