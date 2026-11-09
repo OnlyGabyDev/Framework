@@ -78,6 +78,9 @@ function MovementComponent.new(entity, config)
 	-- compõe corretamente com o sistema de Forces abaixo.
 
 	-- Forças externas e Filtros
+	-- D7: forças proporcionais à massa (Settings.Force_Mass_Scaling); false = números fixos
+	-- para esta entidade (chefe "pesado" de propósito)
+	self.MassScaling = config and config.MassScaling
 	self.ActiveForces = {}
 	self.ForcesByKey = {} -- [Key] = forceId da Force ativa com essa Key (ver AddForce)
 	self.Filters = {} -- Filtros de interação/força
@@ -192,7 +195,10 @@ function MovementComponent:SetMovement()
 	end
 
 	-- Criamos o wrapper de movimentação.
-	self.MovementWrapper = EntityWrapper.CreateMovement(wrapper, {DrivesInput = self.Entity.Player == nil})
+	self.MovementWrapper = EntityWrapper.CreateMovement(wrapper, {
+		DrivesInput = self.Entity.Player == nil,
+		MassScaling = self.MassScaling, -- D7: false = forças e caminhada em números fixos
+	})
 
 	-- Regra 16: Dependência Opcional Explícita
 	if not self.Entity:HasComponent(self.Entity.ComponentKey.Status) then

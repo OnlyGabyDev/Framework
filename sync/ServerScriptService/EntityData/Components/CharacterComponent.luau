@@ -47,7 +47,9 @@ function CharacterComponent:SetEntity(Entity) : boolean
 	else
 		model = Entity
 		root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
-		humanoid = nil
+		-- NPC com Humanoid anda pelo Humanoid (D8, F31). Antes o Humanoid de qualquer model que não
+		-- fosse player era ignorado, e o rig andava pelo ForceRig a ~1,6 stud/s
+		humanoid = model:FindFirstChildOfClass("Humanoid")
 	end
 
 	self.CharacterWrap = EntityWrapper.CreateCharacter({

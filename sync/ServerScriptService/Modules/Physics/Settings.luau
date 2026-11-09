@@ -18,6 +18,18 @@ return {
 	-- parecer um teleporte.
 	Soft_Force_Strength = 2500,
 
+	-- Forças proporcionais à massa (D7; F31, F32, F33). Com isto ligado, o orçamento padrão
+	-- de uma Force Soft e a força de caminhada do NPC sem Humanoid saem de aceleração × massa
+	-- do corpo (AssemblyMass): todo corpo responde igual, do dummy ao chefe. Antes eram
+	-- números fixos (2500 e 2000): o chefe não andava e o vento não o movia. Os valores
+	-- abaixo dão os números antigos num corpo de massa 10. Por entidade: MassScaling = false
+	-- no config do Movement volta aos números fixos (chefe "pesado" de propósito). Um
+	-- MaxForce declarado na Force continua absoluto; Hard continua Hard_Force_Strength.
+	Force_Mass_Scaling = true,
+	Soft_Force_Acceleration = 250, -- studs/s²
+	NPC_Walk_Acceleration = 200,   -- studs/s²
+	NPC_Walk_Force = 2000,         -- força fixa de caminhada quando MassScaling = false
+
 
 	-- Quão rápido (unidades arbitrárias de "rigidez") a AlignOrientation gira
 	-- o personagem pra encarar a direção de uma Force com FaceDirection = true.

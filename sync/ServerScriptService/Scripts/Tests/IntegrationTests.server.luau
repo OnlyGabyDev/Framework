@@ -1650,6 +1650,68 @@ run("D10/F79 — hitbox da arma por skill: liga, desliga e entrega só à dona",
 	owner:Destroy()
 end)
 
+run("D7/F31/F33 — força Soft e caminhada proporcionais à massa; MassScaling = false volta ao fixo", function(t)
+	local function body(cframe, size, configs)
+		local model = Instance.new("Model")
+		local root = Instance.new("Part")
+		root.Name = "HumanoidRootPart"
+		root.Size = size
+		root.CFrame = zoneOrigin * cframe
+		root.Parent = model
+		model.PrimaryPart = root
+		model.Parent = workspace
+		return DataManager.Create(model, { "Character", "Health", "Movement" }, configs)
+	end
+	local light = body(CFrame.new(-8, 3, 0), Vector3.new(2, 2, 1))
+	-- Chefe 8×10×8 (massa ~448): com os números fixos, 2500 / 448 ≈ 5,6 studs/s², abaixo do atrito
+	local boss = body(CFrame.new(8, 6, 0), Vector3.new(8, 10, 8))
+	local fixed = body(CFrame.new(22, 6, 0), Vector3.new(8, 10, 8), { Movement = { MassScaling = false } })
+	t.wait(0.5) -- assentar na plataforma
+	local function pushed(entity)
+		local start = entity.GetRoot().Position
+		entity.AddForce({ Type = "__TestWind", Duration = 0.8, Speed = 20, Direction = Vector3.new(0, 0, -1), RequiresControl = false })
+		return function() return ((entity.GetRoot().Position - start) * Vector3.new(1, 0, 1)).Magnitude end
+	end
+	local dl, db, df = pushed(light), pushed(boss), pushed(fixed)
+	t.wait(0.9)
+	local mLight, mBoss, mFixed = dl(), db(), df()
+	t.assert(mBoss > 8, string.format("Vento Soft moveu o chefe %.1f studs (antes 0)", mBoss))
+	t.assert(math.abs(mBoss - mLight) < 6, string.format("Leve %.1f e chefe %.1f deveriam andar parecido", mLight, mBoss))
+	t.assert(mFixed < mBoss * 0.3, string.format("MassScaling = false deveria manter o chefe pesado (andou %.1f; com escala %.1f)", mFixed, mBoss))
+
+	-- Caminhada: o chefe anda com a velocidade pedida
+	local start = boss.GetRoot().Position
+	boss.SetDirection(Vector3.new(1, 0, 0))
+	t.wait(1)
+	boss.SetDirection(Vector3.zero)
+	local walked = ((boss.GetRoot().Position - start) * Vector3.new(1, 0, 1)).Magnitude
+	t.assert(walked > 8, string.format("Chefe andou %.1f studs em 1 s (antes ~0)", walked))
+	cleanup(light)
+	cleanup(boss)
+	cleanup(fixed)
+end)
+
+run("D8 — NPC com Humanoid usa o Humanoid", function(t)
+	local model = Instance.new("Model")
+	local root = Instance.new("Part")
+	root.Name = "HumanoidRootPart"
+	root.Size = Vector3.new(2, 2, 1)
+	root.CFrame = zoneOrigin * CFrame.new(0, 5, 0)
+	root.Parent = model
+	model.PrimaryPart = root
+	local humanoid = Instance.new("Humanoid")
+	humanoid.Parent = model
+	model.Parent = workspace
+	local npc = DataManager.Create(model, { "Character", "Health", "Movement" })
+	local wrapper = npc:GetComponent(npc.ComponentKey.Movement).MovementWrapper
+	t.assert(wrapper._character:GetHumanoid() == humanoid, "O wrapper de character do NPC não pegou o Humanoid")
+	t.assert(wrapper.Move ~= nil and wrapper._desiredWalk == nil, "O NPC com Humanoid ficou com o movimento sem Humanoid")
+	npc.SetDirection(Vector3.new(1, 0, 0))
+	t.wait(0.3)
+	t.assert(humanoid.MoveDirection.Magnitude > 0.5, "O Humanoid não recebeu a direção de caminhada")
+	cleanup(npc)
+end)
+
 task.wait(1)
 TestHarness.Summary()
 platform:Destroy()

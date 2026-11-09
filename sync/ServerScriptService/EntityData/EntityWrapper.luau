@@ -236,7 +236,16 @@ end
 local NPCMovement = {}
 NPCMovement.__index = NPCMovement
 
-local NATIVE_WALK_FORCE = 2000
+local Settings = require(ServerScriptService.Modules.Physics.Settings)
+
+-- Força de caminhada do NPC sem Humanoid (D7, F31): aceleração × massa, ou o número fixo com
+-- MassScaling = false. Antes era sempre 2000: o chefe 5×7×4 não saía do lugar
+local function walkForceOf(self, root)
+	if not Settings.Force_Mass_Scaling or self.MassScaling == false or not root then
+		return Settings.NPC_Walk_Force
+	end
+	return Settings.NPC_Walk_Acceleration * root.AssemblyMass
+end
 
 function NPCMovement.new(characterWrapper)
 	local self = setmetatable({}, NPCMovement)
@@ -313,14 +322,15 @@ function NPCMovement:ApplyForceFrame(targetVelocity: Vector3, maxAxesForce: Vect
 	if not self._rig then return end
 
 	local finalVelocity, finalForce = targetVelocity, maxAxesForce
+	local walkForce = walkForceOf(self, self._character:GetRoot())
 
 	if maxAxesForce.X == 0 then
 		finalVelocity = Vector3.new(self._desiredWalk.X, finalVelocity.Y, finalVelocity.Z)
-		finalForce = Vector3.new(NATIVE_WALK_FORCE, finalForce.Y, finalForce.Z)
+		finalForce = Vector3.new(walkForce, finalForce.Y, finalForce.Z)
 	end
 	if maxAxesForce.Z == 0 then
 		finalVelocity = Vector3.new(finalVelocity.X, finalVelocity.Y, self._desiredWalk.Z)
-		finalForce = Vector3.new(finalForce.X, finalForce.Y, NATIVE_WALK_FORCE)
+		finalForce = Vector3.new(finalForce.X, finalForce.Y, walkForce)
 	end
 
 	self._rig:ApplyFrame(finalVelocity, finalForce)

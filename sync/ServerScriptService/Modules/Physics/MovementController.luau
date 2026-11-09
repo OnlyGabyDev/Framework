@@ -47,6 +47,18 @@ function MovementController.Unregister(comp)
 	end
 end
 
+--[[
+Orçamento padrão de uma Force Soft para esta entidade (D7): aceleração × massa, ou o número
+fixo quando a escala por massa está desligada (Settings ou MassScaling = false na entidade)
+]]
+local function softDefaultFor(comp, entity)
+	if not Settings.Force_Mass_Scaling or comp.MassScaling == false then
+		return Settings.Soft_Force_Strength
+	end
+	local root = entity.GetRoot()
+	return root and Settings.Soft_Force_Acceleration * root.AssemblyMass or Settings.Soft_Force_Strength
+end
+
 function MovementController.ProcessEntity(comp, dt)
 	local wrapper = comp.MovementWrapper
 	local entity = comp.Entity
@@ -54,6 +66,7 @@ function MovementController.ProcessEntity(comp, dt)
 	if not wrapper or not entity then
 		return
 	end
+	local softDefault -- calculado só se alguma Force Soft pedir
 
 	if comp.IsFrozen ~= comp._appliedFrozen then
 		comp._appliedFrozen = comp.IsFrozen
@@ -234,7 +247,15 @@ function MovementController.ProcessEntity(comp, dt)
 			)
 
 			local priority = data.Priority or 0
-			local budget = data.MaxForce or (hard and Settings.Hard_Force_Strength or Settings.Soft_Force_Strength)
+			local budget = data.MaxForce
+			if not budget then
+				if hard then
+					budget = Settings.Hard_Force_Strength
+				else
+					softDefault = softDefault or softDefaultFor(comp, entity)
+					budget = softDefault
+				end
+			end
 
 			for _, axis in AXES do
 				if axes[axis] then
