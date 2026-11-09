@@ -50,7 +50,12 @@ local function dispatch(player: Player, event)
 	if success and skillName and cooldown then
 		-- A UI é por SLOT, não por skill: manda a intent (o botão da tela carrega o mesmo atributo).
 		-- Assim trocar de personagem/forma ou roubar uma skill não exige nenhum elemento novo de UI.
-		SkillFired:FireClient(player, event.Intent, cooldown)
+		-- Cargas (D13): quantas restam, o máximo e a recarga corrente, para a HUD mostrar "2/3"
+		local core = DataManager.Get(ID)
+		local charges, maxCharges = core.GetCooldownCharges(skillName)
+		local snapshot = maxCharges and core.ExportCooldown(skillName)
+		SkillFired:FireClient(player, event.Intent, cooldown, charges, maxCharges,
+			snapshot and snapshot.remaining or nil, snapshot and snapshot.duration or nil)
 	end
 end
 
