@@ -1825,6 +1825,38 @@ run("D15/F56 — a barra de vida segue o corpo que o player dirige", function(t)
 	cleanup(body)
 end)
 
+run("F94 — erro em onRecast/onRelease/onHit/onTrigger vira warn e a skill segue", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Health" })
+	local boom = function() error("[FW-DEBUG] callback quebrado de propósito (teste F94)") end
+	local runner = makeRunner(dummy, "__TestEventErrors", { duration = 5 }, {
+		onRecast = boom, onRelease = boom, onHit = boom, onTrigger = boom,
+	})
+	runner:start()
+	local ok, err = pcall(function()
+		runner:Recast()
+		runner:Release({})
+		runner:onHit({})
+		runner:TriggerAction({})
+	end)
+	t.assert(ok, "Erro de callback de evento escapou: " .. tostring(err))
+	t.assert(not runner:IsEnded(), "Erro de callback de evento encerrou a skill")
+	runner:endSkill(false)
+	cleanup(dummy)
+end)
+
+run("F57 — o ControlStateChanged leva o model do corpo roteado", function(t)
+	local Players = game:GetService("Players")
+	local player = Players:GetPlayers()[1]
+	if not player or not player.Character or not player.Character:GetAttribute("EntityID") then
+		t.log("sem player com entidade neste Play: teste pulado")
+		return
+	end
+	local AC = require(ServerScriptService.Modules.GlobalAntiCheat)
+	local _, routed, _, subject = AC._ControlStatePayload(player)
+	local core = DataManager.Get(routed)
+	t.assert(core and subject == core.Instance, "O payload não trouxe o model do corpo roteado")
+end)
+
 task.wait(1)
 TestHarness.Summary()
 platform:Destroy()
