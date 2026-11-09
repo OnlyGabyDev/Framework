@@ -51,9 +51,12 @@ function HitboxWrapper.new(Entity, excludeSelf: boolean?)
 	self.Entity = Entity
 	
 	self.weapon = Entity.GetWeapon()
-	self.activeHitboxes = {} -- [nome] = hitbox ativo. "Ativo" é DERIVADO daqui (ver IsHitboxActive)
+	-- Uma sessão por dona (F79, D10): cada skill liga, desliga e recebe os acertos da SUA hitbox.
+	-- [owner | SHARED] = { active = { [nome] = hitbox }, hitTargets = { [ID] = true } }
+	-- Antes a hitbox era uma só: a 2ª skill tinha o StartHitbox recusado, o StopHitbox da limpeza
+	-- do M1 desligava a de quem estivesse usando, e todo acerto ia para o onHit de todas
+	self.sessions = {}
 	self.hitboxConfigs = {}
-	self.hitTargets = {}
 	
 	self.owners = {} --Será setado pelo SkillRunner, informando quem está rodando a skill
 
@@ -106,6 +109,20 @@ function HitboxWrapper:_discoverHitboxes()
 end
 
 
+-- Chave da sessão sem dona (StartHitbox chamado pela entidade, sem runner): o comportamento antigo,
+-- com o acerto entregue a todos os owners
+local SHARED = table.freeze({ shared = true })
+
+function HitboxWrapper:_session(owner)
+	local key = owner or SHARED
+	local session = self.sessions[key]
+	if not session then
+		session = { active = {}, hitTargets = {} }
+		self.sessions[key] = session
+	end
+	return session
+end
+
 --Informa a skill que está rodando pra facilitar aceso a função "onHit" sem código extra na skill
 function HitboxWrapper:AddOwner(owner)
 	if not self.owners then self.owners = {} end
@@ -126,10 +143,14 @@ function HitboxWrapper:AddOwner(owner)
 end
 
 
---Remove um dono da hitbox, caso ninguém esteja mais, limpa a callback
+--Remove um dono da hitbox (a sessão dele desliga), caso ninguém esteja mais, limpa a callback
 function HitboxWrapper:RemoveOwner(owner)
     if not self.owners then return self end
     self.owners[owner] = nil
+    if owner ~= nil then
+        self:StopHitbox(owner)
+        self.sessions[owner] = nil
+    end
 
     -- se ficou vazio, remove callback e para a hitbox
     local empty = true
@@ -143,16 +164,21 @@ function HitboxWrapper:RemoveOwner(owner)
 end
 
 
---Inicia a hitbox (caso ainda não ativa)
-function HitboxWrapper:StartHitbox(duration)
+--[[
+Inicia a hitbox da dona (caso a dela ainda não esteja ativa). Sem owner, a sessão compartilhada.
+@param duration - segundos NUMBER
+@param owner - o SkillRunner dono (recebe os acertos no onHit) ANY?
+]]
+function HitboxWrapper:StartHitbox(duration, owner)
 
-	if self:IsHitboxActive() then return false end
+	local session = self:_session(owner)
+	if next(session.active) ~= nil then return false end
 	if next(self.hitboxConfigs) == nil then
 		warn("[HitboxWrapper] Nenhuma hitbox configurada")
 		return false
 	end
 
-	table.clear(self.hitTargets)
+	table.clear(session.hitTargets)
 
 	--Pra cada dado na tabela de configuração das hitboxes (flags, nome e parte)
 	for name, config in pairs(self.hitboxConfigs) do
@@ -162,22 +188,22 @@ function HitboxWrapper:StartHitbox(duration)
 
 		if hitbox then
 			-- Registra ANTES do HitStart: o OnStopped precisa encontrar a entrada
-			self.activeHitboxes[name] = hitbox
+			session.active[name] = hitbox
 
 			hitbox:OnHit(function(result, segment)
-				self:_handleHit(result, segment, config, self.callback)
+				self:_handleHit(result, segment, config, session, owner)
 			end)
 
 			hitbox:OnStopped(function(clearCallbacks)
 				clearCallbacks()
-				self:_returnHitbox(name, hitbox)
+				self:_returnHitbox(session, name, hitbox)
 			end)
 
 			hitbox:HitStart(duration)
 		end
 	end
 
-	return next(self.activeHitboxes) ~= nil
+	return next(session.active) ~= nil
 end
 
 --Criação e/ou reutilização de hitboxes na pool global
@@ -210,10 +236,10 @@ function HitboxWrapper:_createOrReuseHitbox(part: Part)
 end
 
 --Devolve a hitbox à pool global. IDEMPOTENTE: OnStopped e StopHitbox podem chamar pro mesmo hitbox.
-function HitboxWrapper:_returnHitbox(name: string, hitbox)
+function HitboxWrapper:_returnHitbox(session, name: string, hitbox)
 	if not hitbox then return end
-	if self.activeHitboxes[name] ~= hitbox then return end
-	self.activeHitboxes[name] = nil
+	if session.active[name] ~= hitbox then return end
+	session.active[name] = nil
 
 	hitbox:HitStop()
 
@@ -233,8 +259,9 @@ function HitboxWrapper:_returnHitbox(name: string, hitbox)
 end
 
 
---Callback do onHit
-function HitboxWrapper:_handleHit(result: RaycastResult, segment, config: HitboxConfig, callback)
+--Callback do onHit: anti multi-hit por sessão; o acerto vai para a dona da sessão (sem dona:
+--para todos os owners, o comportamento antigo)
+function HitboxWrapper:_handleHit(result: RaycastResult, segment, config: HitboxConfig, session, owner)
 	if not result then return end
 
 
@@ -245,8 +272,8 @@ function HitboxWrapper:_handleHit(result: RaycastResult, segment, config: Hitbox
 	-- Anti multi-hit
 	--Vale notar que, caso a skill seja feita pra ter multi hit é necessário desligar a hitbox a cada hit e reativar depois do cooldown/ticks entre hits!
 	local targetId = targetEntity.ID
-	if self.hitTargets[targetId] then return end
-	self.hitTargets[targetId] = true
+	if session.hitTargets[targetId] then return end
+	session.hitTargets[targetId] = true
 
 	local hitResult: HitResult = {
 		target = targetEntity,
@@ -259,8 +286,15 @@ function HitboxWrapper:_handleHit(result: RaycastResult, segment, config: Hitbox
 		flags = config.flags,
 	}
 
-	--Se tiver um callback, executa (provavelmente onHit da skill)
-	if self.callback then
+	if owner ~= nil then
+		if type(owner.onHit) == "function" then
+			local success, err = pcall(owner.onHit, owner, hitResult)
+			if not success then
+				warn("[HitboxWrapper] Erro no onHit da dona:", err)
+			end
+		end
+	elseif self.callback then
+		--Sessão compartilhada: executa o callback de todos os owners (o comportamento antigo)
 		local success, err = pcall(self.callback, hitResult)
 		if not success then
 			warn("[HitboxWrapper] Erro no callback:", err)
@@ -268,25 +302,49 @@ function HitboxWrapper:_handleHit(result: RaycastResult, segment, config: Hitbox
 	end
 end
 
-
---Desativa a hitbox
-function HitboxWrapper:StopHitbox()
-	-- Snapshot: HitStop dispara OnStopped, que mexe em activeHitboxes durante a iteração
-	for name, hitbox in table.clone(self.activeHitboxes) do
-		hitbox:HitStop()                 -- dispara OnStopped -> _returnHitbox
-		self:_returnHitbox(name, hitbox) -- no-op se o OnStopped já devolveu
+local function stopSession(self, session)
+	-- Snapshot: HitStop dispara OnStopped, que mexe em session.active durante a iteração
+	for name, hitbox in table.clone(session.active) do
+		hitbox:HitStop()                          -- dispara OnStopped -> _returnHitbox
+		self:_returnHitbox(session, name, hitbox) -- no-op se o OnStopped já devolveu
 	end
-
-	table.clear(self.hitTargets)
+	table.clear(session.hitTargets)
 end
 
---Derivado do estado real: não existe mais flag isActive pra ficar presa quando o timer expira sozinho
-function HitboxWrapper:IsHitboxActive(): boolean
-	return next(self.activeHitboxes) ~= nil
+--Desativa a hitbox da dona (sem owner: a sessão compartilhada; all = true: todas)
+function HitboxWrapper:StopHitbox(owner, all: boolean?)
+	if all then
+		for _, session in self.sessions do stopSession(self, session) end
+		return
+	end
+	local session = self.sessions[owner or SHARED]
+	if session then stopSession(self, session) end
 end
 
-function HitboxWrapper:GetActiveHitboxes()
-	return self.activeHitboxes
+--Derivado do estado real: não existe mais flag isActive pra ficar presa quando o timer expira sozinho.
+--Com owner, só a sessão dele; sem owner, qualquer sessão
+function HitboxWrapper:IsHitboxActive(owner): boolean
+	if owner ~= nil then
+		local session = self.sessions[owner]
+		return session ~= nil and next(session.active) ~= nil
+	end
+	for _, session in self.sessions do
+		if next(session.active) ~= nil then return true end
+	end
+	return false
+end
+
+--Hitboxes ativas: da dona, ou de todas as sessões juntas (debug)
+function HitboxWrapper:GetActiveHitboxes(owner)
+	if owner ~= nil then
+		local session = self.sessions[owner]
+		return session and session.active or {}
+	end
+	local all = {}
+	for _, session in self.sessions do
+		for name, hitbox in session.active do all[name] = hitbox end
+	end
+	return all
 end
 
 function HitboxWrapper:GetHitboxConfigs()
@@ -296,7 +354,8 @@ end
 
 --Destrói a hitbox
 function HitboxWrapper:DestroyHitbox()
-	self:StopHitbox()
+	self:StopHitbox(nil, true)
+	table.clear(self.sessions)
 	self.Entity = nil
 	self.weapon = nil
 	self.raycastParams = nil
@@ -335,7 +394,7 @@ local ExposeAPI = {
 
 	-- Lifecycle
 	StartHitbox = function(component, ...) return component:StartHitbox(...) end,
-	StopHitbox = function(component) return component:StopHitbox() end,
+	StopHitbox = function(component, ...) return component:StopHitbox(...) end,
 	DestroyHitbox = function(component) return component:DestroyHitbox() end,
 
 	-- Owner (referência pra callback onHit da skill que inicializou a hitbox)
@@ -343,14 +402,15 @@ local ExposeAPI = {
 	RemoveOwner = function(component, owner) return component:RemoveOwner(owner) end,
 
 	-- State
-	IsHitboxActive = function(component) return component:IsHitboxActive() end,
+	IsHitboxActive = function(component, ...) return component:IsHitboxActive(...) end,
 
 	-- Debug / Utils
-	GetActiveHitboxes = function(component) return component:GetActiveHitboxes() end,
+	GetActiveHitboxes = function(component, ...) return component:GetActiveHitboxes(...) end,
 	GetHitboxConfigs = function(component) return component:GetHitboxConfigs() end,
 }
 
 return {
+	_class = HitboxWrapper, -- interno, para os testes (F79)
 	new = HitboxWrapper.new,
 	ExposeAPI = ExposeAPI,
 	IHitbox = IHitbox,

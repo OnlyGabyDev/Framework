@@ -1598,6 +1598,58 @@ run("F19 — FollowTarget com feed-forward acompanha o líder sem atraso", funct
 	cleanup(follower)
 end)
 
+run("D10/F79 — hitbox da arma por skill: liga, desliga e entrega só à dona", function(t)
+	local HitboxModule = require(ServerStorage.Modules.Combat.Hitbox.HitboxWrapper)
+	local ShapecastHitbox = require(ServerStorage.Modules.Combat.Hitbox.ShapecastHitbox)
+	-- Arma de teste: um model com a pasta Hitbox e uma parte com DmgPoint
+	local weapon = Instance.new("Model")
+	weapon.Name = "__TestWeaponF79"
+	local folder = Instance.new("Folder")
+	folder.Name = "Hitbox"
+	folder.Parent = weapon
+	local blade = Instance.new("Part")
+	blade.Name = "Blade"
+	blade.Anchored = true
+	blade.CFrame = zoneOrigin * CFrame.new(0, 5, 0)
+	local point = Instance.new("Attachment")
+	point.Name = ShapecastHitbox.Settings.Tag
+	point.Parent = blade
+	blade.Parent = folder
+	weapon.Parent = workspace
+	local owner = Instance.new("Model")
+	owner.Parent = workspace
+	local fakeEntity = { GetWeapon = function() return weapon end, Instance = owner }
+	local wrapper = HitboxModule.new(fakeEntity)
+
+	local hitsA, hitsB = 0, 0
+	local skillA = { onHit = function() hitsA += 1 end }
+	local skillB = { onHit = function() hitsB += 1 end }
+	wrapper:AddOwner(skillA)
+	wrapper:AddOwner(skillB)
+
+	t.assert(wrapper:StartHitbox(2, skillA) == true, "Skill A não ligou a hitbox")
+	t.assert(wrapper:StartHitbox(2, skillB) == true, "Skill B teve o StartHitbox recusado com a A ativa (F79)")
+	wrapper:StopHitbox(skillA) -- a limpeza da A
+	t.assert(not wrapper:IsHitboxActive(skillA), "A hitbox da A não desligou")
+	t.assert(wrapper:IsHitboxActive(skillB), "O StopHitbox da A desligou a hitbox da B (F79)")
+
+	-- Entrega: o acerto da sessão da B vai só para a B
+	local target = makeDummy(CFrame.new(0, 5, 0), { "Character", "Health" })
+	local sessionB = wrapper.sessions[skillB]
+	wrapper:_handleHit({ Instance = target.GetRoot(), Position = Vector3.zero, Normal = Vector3.yAxis, Distance = 0 },
+		nil, wrapper.hitboxConfigs.Blade, sessionB, skillB)
+	t.assert(hitsB == 1 and hitsA == 0, string.format("Acerto da B foi entregue: A=%d B=%d", hitsA, hitsB))
+
+	-- Fim da skill B (RemoveOwner) desliga a sessão dela
+	wrapper:RemoveOwner(skillB)
+	t.assert(not wrapper:IsHitboxActive(), "Depois do fim das duas skills ainda há hitbox ativa")
+
+	wrapper:DestroyHitbox()
+	cleanup(target)
+	weapon:Destroy()
+	owner:Destroy()
+end)
+
 task.wait(1)
 TestHarness.Summary()
 platform:Destroy()

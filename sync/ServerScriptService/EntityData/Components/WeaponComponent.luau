@@ -372,9 +372,10 @@ function WeaponComponent:StartHitbox(...)
 	return self.Hitbox and self.Hitbox:StartHitbox(...)
 end
 
-function WeaponComponent:StopHitbox()
+-- owner = o runner (cada skill tem a sua hitbox, F79); sem owner, a sessão compartilhada
+function WeaponComponent:StopHitbox(owner)
 	if self.Hitbox then
-		self.Hitbox:StopHitbox()
+		self.Hitbox:StopHitbox(owner)
 	end
 end
 
@@ -386,8 +387,8 @@ function WeaponComponent:RemoveHitboxOwner(owner)
 	return self.Hitbox and self.Hitbox:RemoveOwner(owner)
 end
 
-function WeaponComponent:IsHitboxActive()
-	return self.Hitbox and self.Hitbox:IsHitboxActive()
+function WeaponComponent:IsHitboxActive(owner)
+	return self.Hitbox and self.Hitbox:IsHitboxActive(owner)
 end
 
 function WeaponComponent:DestroyHitbox()

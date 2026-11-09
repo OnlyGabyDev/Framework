@@ -29,7 +29,7 @@ local Skill = {
 
 			self.Entity.SetActionState(statsTable.ActionStates.Self.selfCast, self)
 
-			self.Entity.StartHitbox(self.data.duration)
+			self:StartHitbox(self.data.duration) -- hitbox desta skill (F79)
 
 			self.forceID = self.Entity.AddForce({
 				Type = "UltFlight",

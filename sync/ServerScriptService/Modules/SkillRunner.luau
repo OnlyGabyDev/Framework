@@ -114,6 +114,8 @@ function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input) --Instanc
 	self.skill.endSkill = function(_, ...) return self:endSkill(...) end
 	self.skill.Fizzle = function(_) return self:Fizzle() end
 	self.skill.GetRemainingTime = function(_) return self:GetRemainingTime() end
+	self.skill.StartHitbox = function(_, duration) return self:StartHitbox(duration) end
+	self.skill.StopHitbox = function(_) return self:StopHitbox() end
 	self.skill.CommitCooldown = function(_) return self:CommitCooldown() end
 
 	-- Ownership automático (Regra 2): a skill registra limpezas/inscrições aqui em vez de
@@ -396,6 +398,20 @@ skill que recusava o cancel deixava o runner vivo, errando a cada frame (F78).
 function SkillRunner:Abort()
 	self:endSkill(true, REASONS.Error)
 	if not self:IsEnded() then self:endSkill(false, REASONS.Error) end
+end
+
+--[[
+Hitbox da arma DESTE runner (F79): liga, desliga e recebe os acertos sem afetar a de outra skill.
+A skill chama self:StartHitbox(duração) / self:StopHitbox(); a do runner sai sozinha no fim.
+]]
+function SkillRunner:StartHitbox(duration: number)
+	if not self.Entity or not self.Entity:HasComponent(self.Entity.ComponentKey.Weapon) then return false end
+	return self.Entity.StartHitbox(duration, self)
+end
+
+function SkillRunner:StopHitbox()
+	if not self.Entity or not self.Entity:HasComponent(self.Entity.ComponentKey.Weapon) then return end
+	self.Entity.StopHitbox(self)
 end
 
 --[[

@@ -29,8 +29,8 @@ local Skill = {
 			self.track = self.Entity.PlayAnimation(self.M1Start)
 			self.track.Looped = false
 			
-			self.Entity.StartHitbox(self.data.duration)
-			
+			self:StartHitbox(self.data.duration) -- a hitbox deste M1, não a da arma inteira (F79)
+
 			self.cleanUp = function()
 				if self.stateID then
 					self.Entity.RemoveStatusByID(self.stateID)
@@ -38,7 +38,7 @@ local Skill = {
 				end
 				self.Entity.RemoveActionState(self.Runner)
 				self.Entity.StopAnimation(self.M1Start, 0.2)
-				self.Entity.StopHitbox()
+				self:StopHitbox()
 			end
 
 			self.Entity.OnMarker(tostring(self.M1Start), "End", function()
@@ -63,8 +63,8 @@ local Skill = {
 				self.track = self.Entity.PlayAnimation(self.M1S2)
 				self.track.Looped = false
 				
-				self.Entity.StopHitbox() -- zera hitTargets do 1º golpe: o 2º pode acertar o mesmo alvo
-				self.Entity.StartHitbox(self.data.duration)
+				self:StopHitbox() -- zera hitTargets do 1º golpe: o 2º pode acertar o mesmo alvo
+				self:StartHitbox(self.data.duration)
 				self.damage = 2
 
 				self.cleanUp = function()
@@ -74,7 +74,7 @@ local Skill = {
 					end
 					self.Entity.RemoveActionState(self.Runner)
 					self:Stop(false)
-					self.Entity.StopHitbox()
+					self:StopHitbox()
 				end
 
 				self.Entity.OnMarker(tostring(self.M1S2), "End", function()
