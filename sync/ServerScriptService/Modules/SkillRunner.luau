@@ -251,9 +251,20 @@ function SkillRunner:_internalUpdate(dt)
 	
 end
 
+--[[
+Callbacks de evento pontual (onHit, onRecast, onRelease, onTrigger) com erro isolado (F94): o
+erro vira warn com traceback e a skill segue; antes o erro do onRecast/onRelease subia até o
+InputValidator. (O onStep, que erraria a cada frame, encerra a skill: SkillScheduler.)
+]]
+function SkillRunner:_fireEvent(breakpoint, ...)
+	local ok, result = protect(self, breakpoint, self._fire, self, breakpoint, ...)
+	if ok then return result end
+	return nil
+end
+
 --[[Callback ao atingir algo]]
 function SkillRunner:onHit(data)
-	self:_fire("onHit", data, self:BuildContext())
+	self:_fireEvent("onHit", data, self:BuildContext())
 end
 
 
@@ -269,7 +280,7 @@ function SkillRunner:Recast(checkOnly : boolean?,input)
 		
 		if input then self.input = input end
 		
-		self:_fire("onRecast", self:BuildContext())
+		self:_fireEvent("onRecast", self:BuildContext())
 		return true
 	end
 	return false
@@ -287,7 +298,7 @@ function SkillRunner:Release(input)
 	if not self.skill.callbacks.onRelease then return false end
 
 	self.input = input
-	self:_fire("onRelease", self:BuildContext())
+	self:_fireEvent("onRelease", self:BuildContext())
 	return true
 end
 
@@ -312,7 +323,7 @@ function SkillRunner:TriggerAction(context)
     end
 											--Então cancela o trigger
 		if self.skill.callbacks.onTrigger then
-    	    return self:_fire("onTrigger", context, self:BuildContext())
+    	    return self:_fireEvent("onTrigger", context, self:BuildContext())
     	end
 
     return self.statusTable.ResolveBlock(self.data, context)
