@@ -1,4 +1,5 @@
 local Enum = require(script.Parent.Parent.Parent.Enum)
+local Log = require(game:GetService("ReplicatedStorage").Logger).Channel("Bleed")
 
 local Bleed = {
 	data = {
@@ -21,14 +22,14 @@ local Bleed = {
 		onStart = function(self)
 			self._tickTimer = 0
 			-- O runner já está registrado quando o onStart roda: GetStatusCounter e self.counter batem.
-			warn("[Bleed] onStart - Stack atual:", self.counter)
+			Log.Debug("onStart, stack atual:", self.counter)
 		end,
 
 		onRecast = function(self)
 			-- Roda toda vez que uma nova stack é aplicada sobre a mesma instância
-			warn("[Bleed] onRecast - Nova stack aplicada! Total:", self.counter)
+			Log.Debug("onRecast, nova stack, total:", self.counter)
 			-- Se quiser checar o GetStatusCounter (agora ele funciona porque o runner já está salvo):
-			warn("[Bleed] GetStatusCounter confirma:", self.Entity.GetStatusCounter("Bleed"))
+			Log.Debug("GetStatusCounter confirma:", self.Entity.GetStatusCounter("Bleed"))
 		end,
 
 		onStep = function(self, dt, context)

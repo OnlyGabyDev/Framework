@@ -35,13 +35,19 @@ function AttributeComponents:GetStat(AttributeName, default)
         return self._cache[AttributeName]
     end
 
+    -- Sem base registrada o valor depende do default de QUEM pergunta: não entra no cache.
+    -- Antes a 1ª chamada gravava o resultado com o default dela e a 2ª, com outro default,
+    -- recebia o mesmo valor (F42)
+    local hasBase = self.BaseStats[AttributeName] ~= nil
     local base = self.BaseStats[AttributeName] or default or 0
     local mods = self.Modifiers[AttributeName]
 
     --Se não for um status complexo, o próprio base já é o resultado final
     if not mods then
-        self._cache[AttributeName] = base
-        self._dirty[AttributeName] = nil
+        if hasBase then
+            self._cache[AttributeName] = base
+            self._dirty[AttributeName] = nil
+        end
         return base
     end
 
@@ -77,8 +83,10 @@ function AttributeComponents:GetStat(AttributeName, default)
     -- Fórmula: ((Base + Flat) * (1 + %Add)) * %Mult)
     local result = math.max(0, ((finalBase + flatSum) * (1 + AddPercentSum)) * MultPercentTotal) -- Impede que atributos fiquem negativos
 
-    self._cache[AttributeName] = result
-    self._dirty[AttributeName] = nil
+    if hasBase then
+        self._cache[AttributeName] = result
+        self._dirty[AttributeName] = nil
+    end
     return result
 end
 
@@ -109,19 +117,31 @@ end
 --  GERENCIAMENTO
 --=============================================================================
 
---Adiciona um modificador com base num ID e nome de atributo
+--[[
+Adiciona um modificador com base num ID e nome de atributo. Com contagem de referência: o
+mesmo sourceID adicionado N vezes precisa de N RemoveModifier para sair. Antes duas zonas
+com o mesmo ID se anulavam: sair de uma tirava o efeito de quem seguia dentro da outra (F45).
+Reaplicar o mesmo ID atualiza Type/Value e soma 1 na contagem.
+]]
 function AttributeComponents:AddModifier(AttributeName, sourceID, type, value)
     if not self.Modifiers[AttributeName] then
         self.Modifiers[AttributeName] = {}
     end
-    self.Modifiers[AttributeName][sourceID] = { Type = type, Value = value }
+    local existing = self.Modifiers[AttributeName][sourceID]
+    local count = existing and (existing.Count or 1) + 1 or 1
+    self.Modifiers[AttributeName][sourceID] = { Type = type, Value = value, Count = count }
     self._dirty[AttributeName] = true
 end
 
---Remove o modificador pelo ID da origem
+--Remove UMA referência do modificador pelo ID da origem (sai de vez quando a contagem zera)
 function AttributeComponents:RemoveModifier(AttributeName, sourceID)
-    if self.Modifiers[AttributeName] then
-        self.Modifiers[AttributeName][sourceID] = nil
+    local mods = self.Modifiers[AttributeName]
+    local existing = mods and mods[sourceID]
+    if existing then
+        existing.Count = (existing.Count or 1) - 1
+        if existing.Count <= 0 then
+            mods[sourceID] = nil
+        end
     end
     self._dirty[AttributeName] = true
 end

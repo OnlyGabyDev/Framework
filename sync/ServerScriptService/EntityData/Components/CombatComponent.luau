@@ -14,10 +14,12 @@ type ActionStatesType = {
 
 local ServerStorage = game:GetService("ServerStorage")
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
+local Log = require(game:GetService("ReplicatedStorage").Logger).Channel("CombatComponent")
 local StateEnum = StateTable.Enum
 local SkillData = require(ServerStorage.DataBase.SkillDatabase)
 local CharData = require(ServerStorage.DataBase.CharacterDatabase)
 local Intents = require(game:GetService("ReplicatedStorage").Input.Intents)
+local CooldownPolicy = require(game:GetService("ServerScriptService").Modules.CooldownPolicy)
 
 local CombatComponent = {}
 CombatComponent.__index = CombatComponent
@@ -40,7 +42,7 @@ function CombatComponent.new(entity, config)
 	self.SkillCache = {}
 
 	-- Cooldown de skills
-	self.Cooldowns = {} -- [skillName] = tick() + cooldown
+	self.Cooldowns = {} -- [skillName] = entrada no formato do CooldownPolicy (ausente = pronta)
 
 	-- Skills ativas (runners)
 	self.ActiveSkills = {} -- [skillName] = {runner1, runner2, ...}
@@ -55,6 +57,8 @@ function CombatComponent.new(entity, config)
 
 	-- Regra de morte do motor (F20): padrão em Enum.DeathDefaults, override no config
 	self._cancelSkillsOnDeath = StateTable.ResolveDeathPolicy(config, "CancelSkillsOnDeath")
+	-- F75: morto não inicia cast novo (o motor já recusa dano e status e cancela as skills)
+	self._refuseCastOnDeath = StateTable.ResolveDeathPolicy(config, "RefuseCastOnDeath")
 
 	--Estado de cast
 	self.ActionState = {
@@ -66,144 +70,26 @@ function CombatComponent.new(entity, config)
 end
 
 --=============================================================================
---  SKILL DATA LOADING
---=============================================================================
-
---[[
-Inicializa a pasta de skills, carrega dados e inicializa cooldowns
-@return sucesso BOOLEAN
-]]
-function CombatComponent:LoadSkillsData() : boolean
-
-	if not self:_LoadFolders() then return false end
-
-	local skillsModule = self._formFolder:FindFirstChild("Skills")
-		and self._formFolder.Skills:FindFirstChild("Skills")
-
-	if not skillsModule then return false end
-
-	local success, skillsData = pcall(require, skillsModule)
-	if not success then return false end
-
-	self.SkillsData = skillsData
-
-	-- Inicializa cooldowns
-	for _, skillName in pairs(skillsData) do
-		self.Cooldowns[skillName] = 0
-	end
-
-	return true
-end
-
---[[
-Carrega as pastas de dados do personagem
-@return sucesso BOOLEAN
-]]
-function CombatComponent:_LoadFolders() : boolean
-
-	local charFolder = ServerStorage.Modules.CharData:FindFirstChild(self.ChosenChar)
-	if not charFolder then
-		warn("[CharacterComponent] Personagem não encontrado:", self.ChosenChar)
-		return false
-	end
-
-	local formFolder = charFolder:FindFirstChild(self.Mode)
-	if not formFolder then
-		warn("[CharacterComponent] Forma não encontrada:", self.Mode)
-		return false
-	end
-
-	self.charFolder = charFolder
-	self._formFolder = formFolder
-
-	return true
-end
-
-
---=============================================================================
---  SKILL GETTERS
---=============================================================================
-
---[[
-Devolve o nome da skill no índice fornecido
-@param index - índice da skill NUMBER
-@return nome da skill STRING ou nil se não encontrada
-]]
-function CombatComponent:GetSkillName(index : number) : string?
-	if not self.SkillsData then
-		warn("[CombatComponent] SkillsData não carregado")
-		return nil
-	end
-
-	return self.SkillsData[index]
-end
-
---[[
-Devevolve o script (não requirido) da skill no índice fornecido
-@param index - índice da skill (opcional se fornecer name) NUMBER
-@param name - nome da skill STRING (opcional, se fornecido, ignora index)
-]]
-function CombatComponent:GetSkillScript(index : number?, name : string?)
-	local charComp = self.Entity:GetComponent(self.Entity.ComponentKey.Character)
-	if not charComp then return nil end
-
-		local skillName = name or self:GetSkillName(index)
-		if not skillName then 
-			warn("[CombatComponent] GetSkillScript não recebeu um parametro!")
-			 return nil end
-
-
-	local skillScript = self._formFolder:FindFirstChild("Script")
-		and self._formFolder.Script:FindFirstChild(skillName)
-
-	return skillScript
-end
-
-
---[[
-Devevolve o módulo (requirido) da skill pelo nome ou index
-@param skillName - nome da skill (opcional, se fornecer index) STRING
-@param index - índice da skill NUMBER (opcional se fornecer name)
-@return módulo da skill TABLE ou nil se não encontrado
-]]
-function CombatComponent:GetSkillData(skillName : string, index : number?) : any?
-	local charComp = self.Entity:HasComponent(self.Entity.ComponentKey.Character)
-	if not charComp then return nil end
-
-	skillName = skillName or self:GetSkillName(index)
-	if not skillName then
-		warn("[CombatComponent] GetSkillData não recebeu um parametro!")
-		return nil end
-
-	local skillScript = self._formFolder:FindFirstChild("Script")
-		and self._formFolder.Script:FindFirstChild(skillName)
-
-	if not skillScript then return nil end
-
-	local success, skillModule = pcall(require, skillScript)
-	if not success or not skillModule then return nil end
-
-	return skillModule
-end
-
---=============================================================================
 --  COOLDOWN
 --=============================================================================
 
 
+-- As contas (cargas, recarga, redução, herança) são do CooldownPolicy; o componente só guarda
+-- os dados em self.Cooldowns, no formato declarado lá (regra 17).
+
 --[[
-Checa se a skill está em cooldown
+Checa se a skill está em cooldown (com cargas: sem nenhuma carga disponível)
 @param skillName - nome da skill STRING
 @return está em cooldown BOOLEAN
 ]]
 function CombatComponent:HasCooldown(skillName : string) : boolean
-	return (self.Cooldowns[skillName] or 0) > tick()
+	return not CooldownPolicy.StoreIsReady(self.Cooldowns, skillName)
 end
 
 --[[
-Define o cooldown de uma skill
+Define o tempo restante do cooldown de uma skill (com cargas: o da recarga corrente)
 @param skillName - nome da skill STRING
-@param customCooldown - cooldown customizado NUMBER (opcional, se não fornecido, busca no módulo da skill)
+@param customCooldown - segundos NUMBER (opcional, se não fornecido, busca no módulo da skill)
 ]]
 function CombatComponent:SetCooldown(skillName : string, customCooldown : number?)
 	local cd = customCooldown
@@ -215,35 +101,64 @@ function CombatComponent:SetCooldown(skillName : string, customCooldown : number
 	end
 
 	if cd then
-		self.Cooldowns[skillName] = tick() + cd
+		CooldownPolicy.StoreSetRemaining(self.Cooldowns, skillName, cd)
 	end
 end
 
 --[[
-Devolve o tempo restante do cooldown de uma skill
+Inicia uma contagem de `duration` segundos; com `maxCharges`, gasta uma carga
+(usado pelo CooldownPolicy no cast; scripts de jogo podem chamar direto)
+]]
+function CombatComponent:StartCooldown(skillName : string, duration : number, maxCharges : number?)
+	CooldownPolicy.StoreStart(self.Cooldowns, skillName, duration, maxCharges)
+end
+
+--[[
+Devolve o tempo restante do cooldown de uma skill (com cargas: 0 enquanto houver carga)
 @param skillName - nome da skill STRING
 @return tempo restante do cooldown NUMBER
 ]]
 function CombatComponent:GetCooldown(skillName : string) : number
-	return math.max(0, (self.Cooldowns[skillName] or 0) - tick())
+	return CooldownPolicy.StoreRemaining(self.Cooldowns, skillName)
 end
 
+--[[ Encurta a contagem corrente em `seconds` (reduções pontuais: on-hit, on-kill) ]]
+function CombatComponent:ReduceCooldown(skillName : string, seconds : number)
+	CooldownPolicy.StoreReduce(self.Cooldowns, skillName, seconds)
+end
+
+--[[ Devolve uma carga (skill sem cargas: fica pronta) ]]
+function CombatComponent:GrantCooldownCharge(skillName : string)
+	CooldownPolicy.StoreGrant(self.Cooldowns, skillName)
+end
+
+--[[ Cargas disponíveis e máximo (nil, nil se a skill não usa cargas) ]]
+function CombatComponent:GetCooldownCharges(skillName : string) : (number?, number?)
+	return CooldownPolicy.StoreCharges(self.Cooldowns, skillName)
+end
+
+--[[ Estado relativo (segundos restantes e cargas) para herança entre entidades ]]
+function CombatComponent:ExportCooldown(skillName : string)
+	return CooldownPolicy.StoreExport(self.Cooldowns, skillName)
+end
+
+function CombatComponent:ImportCooldown(skillName : string, snapshot)
+	CooldownPolicy.StoreImport(self.Cooldowns, skillName, snapshot)
+end
 
 --[[
-Reseta o cooldown de uma skill
+Reseta o cooldown de uma skill (com cargas: todas de volta)
 @param skillName - nome da skill STRING
 ]]
 function CombatComponent:ResetCooldown(skillName : string)
-	self.Cooldowns[skillName] = 0
+	CooldownPolicy.StoreReset(self.Cooldowns, skillName)
 end
 
 --[[
 Reseta todos os cooldowns de skills registrados
 ]]
 function CombatComponent:ResetAllCooldowns()
-	for skillName in pairs(self.Cooldowns) do
-		self.Cooldowns[skillName] = 0
-	end
+	table.clear(self.Cooldowns)
 end
 
 --=============================================================================
@@ -314,6 +229,10 @@ valida se a entidade pode continuar a ação
 @return sucesso BOOLEAN
 ]]
 function CombatComponent:CanContinue(skill) : boolean
+
+	if self._refuseCastOnDeath and StateTable.IsDead(self.Entity) then
+		return false
+	end
 
 	--Busca por tag de impedimento
 	if self.Entity:HasComponent(self.Entity.ComponentKey.Status) then
@@ -447,7 +366,7 @@ function CombatComponent:_ApplyLoadout(loadoutData)
 
 
 	if isList then
-		warn(loadoutData)
+		Log.Debug("loadout em lista:", loadoutData)
 		for _, skillKey in ipairs(loadoutData.List) do
 			self:AddSkill(skillKey) -- Salva no próximo slot livre
 		end
@@ -517,9 +436,7 @@ function CombatComponent:EquipSkill(slotIndex, skillKey)
 
 	if not skillPointer then return false end
 
-	-- Inicializa cooldown se precisar
-	local name = skillPointer.data.name
-	if not self.Cooldowns[name] then self.Cooldowns[name] = 0 end
+	-- Cooldown não precisa de entrada inicial: sem entrada, a skill está pronta (CooldownPolicy)
 
 	-- Salva no slot
 	self.Loadout[slotIndex] = skillPointer
@@ -566,35 +483,6 @@ end
 --  CHARACTER E FORMAS
 --=============================================================================
 
-function CombatComponent:SetChosenChar(Char)
- if self.ChosenChar == Char then return false end
-
-    self.ChosenChar = Char
-
-    -- Recarrega folders
-    if not self:_LoadFolders() then
-        return false
-    end
-
-    self:LoadSkillsData()
-
-    -- Atualiza stats
-    local stats = self.Entity.GetStats()
-    self.Entity.SetAttribute(StateTable.Enum.Stats.Speed, stats.speed or StateTable.Enum.Stats.Speed, 16)
-    self.Entity.SetAttribute(StateTable.Enum.Stats.JumpForce, stats.JumpPower or StateTable.Enum.Stats.JumpForce, 50)
-
-    -- Atualiza HP
-    local health = self.Entity:GetComponent(self.Entity.ComponentKey.Health)
-    if health and stats.MaxHP then
-        local ratio = self.Entity.GetHealthRatio()
-        health.MaxHP = stats.MaxHP
-        self.Entity.SetHP(stats.MaxHP * ratio) -- Mantém proporção
-    end
-
-    return true
-end
-
-
 function CombatComponent:GetChosenChar()
 	return self.ChosenChar
 end
@@ -636,7 +524,11 @@ Aplica dano a uma entidade alvo, acionando o pipeline OUT do atacante antes e de
 @return sucesso BOOLEAN, actualDamage NUMBER
 ]]
 function CombatComponent:ApplyDamage(amount: number, source: any, targetEntity: any)
-	if not targetEntity or type(targetEntity.TakeDamage) ~= "function" then return false, 0 end
+	-- O stub do EntityCore também é função: o guarda olha o componente (F65)
+	if not targetEntity or type(targetEntity.HasComponent) ~= "function"
+		or not targetEntity:HasComponent(targetEntity.ComponentKey.Health) then
+		return false, 0
+	end
 
 	-- Monta contexto base da ação ofensiva
 	local context = StateTable.BuildContext(source, amount)
@@ -660,14 +552,6 @@ end
 
 function CombatComponent:GetCharMode()
 	return self.Mode
-end
-
---[[
-Retorna as postas de forma e dados do personagem escolhido.
-@return FormFolder, CharFolder
-]]
-function CombatComponent:GetCharFolders()
-	return self._formFolder,self.charFolder
 end
 
 -- Aplica Stats
@@ -738,9 +622,6 @@ end
 
 local ExposeAPI = {
 	-- Getters skills
-	GetSkillName = function(component, ...) return component:GetSkillName(...) end,
-	GetSkillScript = function(component, ...) return component:GetSkillScript(...) end,
-	GetSkillData = function(component, ...) return component:GetSkillData(...) end,
 	GetSkillFromSlot = function(component, ...) return component:GetSkillFromSlot(...) end,
 
 	-- Cooldowns
@@ -748,6 +629,13 @@ local ExposeAPI = {
 	SetCooldown = function(component, ...) return component:SetCooldown(...) end,
 	GetCooldown = function(component, ...) return component:GetCooldown(...) end,
 	ResetCooldown = function(component, ...) return component:ResetCooldown(...) end,
+	StartCooldown = function(component, ...) return component:StartCooldown(...) end,
+	ReduceCooldown = function(component, ...) return component:ReduceCooldown(...) end,
+	GrantCooldownCharge = function(component, ...) return component:GrantCooldownCharge(...) end,
+	GetCooldownCharges = function(component, ...) return component:GetCooldownCharges(...) end,
+	ExportCooldown = function(component, ...) return component:ExportCooldown(...) end,
+	ImportCooldown = function(component, ...) return component:ImportCooldown(...) end,
+	ResetAllCooldowns = function(component, ...) return component:ResetAllCooldowns(...) end,
 
 	-- Active Skills
 	AddActiveSkill = function(component, ...) return component:AddActiveSkill(...) end,
@@ -759,7 +647,6 @@ local ExposeAPI = {
 
 	--Personagem/modo
 	GetChosenChar = function(component,...) return component:GetChosenChar(...) end,
-	SetChosenChar = function(component,...) return component:SetChosenChar(...) end,
 	GetCharMode = function(component,...) return component:GetCharMode(...) end,
 	SetCharMode = function(component,...) return component:SetCharMode(...) end,
 
@@ -780,7 +667,6 @@ local ExposeAPI = {
 	SetActionState = function(component,...) return component:SetActionState(...)end,
 	RemoveActionState = function(component,...) return component:RemoveActionState(...)end,
 
-	GetCharFolders = function(component,...) return component:GetCharFolders(...)end,
 	
 	
 	--Intents (hold, release) (NÃO é obrigação desse component, mas por precisar do redirect pra skill mantivemos aqui)

@@ -28,6 +28,8 @@
 		RequiresControl: boolean?,    -- default true. Force "mole" que precisa de controle é
 		                              -- cancelada se a entidade não puder se mover (Root/Stun).
 		                              -- Forces externas (knockback, vento) devem setar false.
+		External: boolean?,           -- default = (RequiresControl == false). Externa é barrada por
+		                              -- canDisplace = false; a própria (dash) não (F47).
 		Duration: number,
 		Speed: number | (elapsed: number, duration: number) -> number,
 		Direction: Vector3 | (elapsed: number, duration: number, ctx) -> Vector3,
@@ -50,6 +52,7 @@ MovementComponent.__index = MovementComponent
 local ServerScript = game:GetService("ServerScriptService")
 local ServerStorage = game:GetService("ServerStorage")
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
+local Log = require(game:GetService("ReplicatedStorage").Logger).Channel("MovementComponent")
 local MovementController = require(ServerScript.Modules.Physics.MovementController)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Utils = require(ReplicatedStorage.Utils)
@@ -156,17 +159,37 @@ function MovementComponent:GetAirState(): string
 end
 
 function MovementComponent:SetMovement()
-	if self.MovementWrapper then return false end 
+	if self.MovementWrapper then return false end
+
+	-- Sem Character não há corpo para mover: antes o wrapper nil derrubava o DataManager.Create
+	-- no meio e a entidade ficava meio registrada (F36)
+	if not self.Entity:HasComponent(self.Entity.ComponentKey.Character) then
+		warn("[MovementComponent] Entidade sem CharacterComponent; Movement desativado:", self.Entity.ID)
+		return false
+	end
 
 	local EntityWrapper = require(ServerScript.EntityData.EntityWrapper)
 	local wrapper = self.Entity.GetCharacterWrapper()
+	if not wrapper then
+		warn("[MovementComponent] CharacterComponent sem wrapper; Movement desativado:", self.Entity.ID)
+		return false
+	end
+
+	-- NPC: a física é do servidor (regra 10). Sem isso o auto-ownership dava a simulação do NPC
+	-- ao cliente mais próximo (F34). Possessão troca o dono depois, pelo ControlComponent
+	if self.Entity.Player == nil then
+		local root = self.Entity.GetRoot and self.Entity.GetRoot()
+		if root and root:IsA("BasePart") and root:CanSetNetworkOwnership() then
+			pcall(root.SetNetworkOwner, root, nil)
+		end
+	end
 
 	-- Criamos o wrapper de movimentação.
 	self.MovementWrapper = EntityWrapper.CreateMovement(wrapper, {DrivesInput = self.Entity.Player == nil})
 
 	-- Regra 16: Dependência Opcional Explícita
 	if not self.Entity:HasComponent(self.Entity.ComponentKey.Status) then
-		warn("[MovementComponent] Entidade sem StatusComponent. Tags como canMove/canDisplace serão ignoradas.")
+		Log.Debug("entidade sem StatusComponent: tags canMove/canDisplace ignoradas:", self.Entity.ID)
 	end
 
 	MovementController.Register(self)
@@ -322,4 +345,4 @@ local ExposeAPI = {
 	SetDrivesInput = function(Component, v) return Component:SetDrivesInput(v) end,
 }
 
-return { new = MovementComponent.new, ExposeAPI = ExposeAPI }
+return { new = MovementComponent.new, ExposeAPI = ExposeAPI, Requires = { "Character" } }

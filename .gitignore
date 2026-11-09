@@ -1,0 +1,5 @@
+# Contexto local dos agentes e notas de sprint: não vão para o repo (pedido do dono)
+.agents/
+sprints.md
+# Gerado pelo Script Sync do Studio a cada sessão
+sourcemap.json

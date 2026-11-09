@@ -1,4 +1,5 @@
 local TraitQuery = require(script.Parent.TraitQuery)
+local Log = require(game:GetService("ReplicatedStorage").Logger).Channel("TriggerSet")
 
 local TriggerSet = {}
 TriggerSet.__index = TriggerSet
@@ -18,6 +19,11 @@ local function isExpired(sub: any): boolean
 end
 
 function TriggerSet:Subscribe(sub: any)
+	if type(sub.Owner) == "string" then
+		-- F51: string é global entre entidades; use StateTable.OwnerToken(entidade, tag)
+		Log.WarnOnce(sub.Owner, "Owner em string ('" .. sub.Owner .. "') é compartilhado entre entidades;"
+			.. " use StateTable.OwnerToken(entidade, \"" .. sub.Owner .. "\")")
+	end
 	if not self.Subscriptions[sub.Role] then
 		self.Subscriptions[sub.Role] = {}
 	end
@@ -40,16 +46,21 @@ function TriggerSet:Subscribe(sub: any)
 	self._seq += 1
 	sub._seq = self._seq
 
+	-- Inserção ordenada (binária): Priority maior primeiro; empate fica na ordem de inscrição
+	-- (o _seq do novo é sempre o maior, então ele entra depois de todos de mesma Priority).
+	-- Antes a lista inteira era reordenada a cada inscrição: 3000 listeners = 3,2 s de CPU (F52)
 	local list = self.Subscriptions[sub.Role][sub.Breakpoint]
-	table.insert(list, sub)
-
-	table.sort(list, function(a, b)
-		local pa, pb = a.Priority or 0, b.Priority or 0
-		if pa ~= pb then
-			return pa > pb
+	local priority = sub.Priority or 0
+	local lo, hi = 1, #list + 1
+	while lo < hi do
+		local mid = (lo + hi) // 2
+		if (list[mid].Priority or 0) >= priority then
+			lo = mid + 1
+		else
+			hi = mid
 		end
-		return a._seq < b._seq
-	end)
+	end
+	table.insert(list, lo, sub)
 
 	return function()
 		self:Unsubscribe(sub)
@@ -86,6 +97,12 @@ function TriggerSet:Emit(role: string, breakpoint: string, context: any, ...)
 	local list = byRole and byRole[breakpoint]
 	if not list or #list == 0 then
 		return
+	end
+	-- Context padrão: Emit sem context dava erro fora do pcall (F48)
+	if context == nil then
+		context = { traits = {} }
+	elseif context.traits == nil then
+		context.traits = {}
 	end
 
 	for _, sub in table.clone(list) do

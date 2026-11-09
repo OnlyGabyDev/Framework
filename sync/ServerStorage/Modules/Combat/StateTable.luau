@@ -92,4 +92,20 @@ function StateTable.ResolveDeathPolicy(config, key)
 	return Helper.ResolveDeathPolicy(config, key)
 end
 
+function StateTable.IsDead(entity)
+	return Helper.IsDead(entity)
+end
+
+function StateTable.BlockerMeta(blocker)
+	return Helper.BlockerMeta(blocker)
+end
+
+function StateTable.ResolveBlock(meta, context)
+	return Helper.ResolveBlock(meta, context)
+end
+
+function StateTable.OwnerToken(entity, tag)
+	return Helper.OwnerToken(entity, tag)
+end
+
 return StateTable

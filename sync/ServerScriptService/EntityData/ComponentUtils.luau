@@ -5,6 +5,7 @@
 ]]
 
 local ComponentUtils = {}
+local Log = require(game:GetService("ReplicatedStorage").Logger).Channel("EntityCore")
 
 --[[
 require protegido que loga o ERRO REAL, não só "deu ruim". No lugar de um
@@ -68,7 +69,11 @@ function ComponentUtils.BuildStubs(componentRegistry: {[string]: any}, targetStu
 			for funcName in pairs(compData.ExposeAPI) do
 				if targetStubs[funcName] == nil then
 					targetStubs[funcName] = function(...)
-						warn("[EntityCore] Componente ignorado:", compName, "| Func:", funcName)
+						-- 1ª chamada por componente+função em Warn; as seguintes só em Debug (antes
+						-- era um warn por chamada: centenas por segundo num loop)
+						Log.WarnOnce(compName .. "." .. funcName,
+							"Componente ausente:", compName, "| Func:", funcName,
+							"(as próximas chamadas iguais só aparecem em Debug)")
 					end
 				end
 			end

@@ -3,6 +3,7 @@ local ServerStorage = game:GetService("ServerStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
+local Log = require(game:GetService("ReplicatedStorage").Logger).Channel("Main")
 local DataManager = require(ServerScriptService.EntityData.DataManager)
 local component = require(ServerScriptService.EntityData.ComponentsExport)
 local AntiCheat = require(ServerScriptService.Modules.GlobalAntiCheat)
@@ -100,10 +101,10 @@ local function toggleMoveBlock(player)
 	local cd = ED.CombatData
 
 	if cd.GetStatus("Stun") then
-		warn("Stun removido!")
+		Log.Debug("Stun removido")
 		cd:Remove({ data = { name = "Stun" } })
 	else
-		warn("Stun aplicado!")
+		Log.Debug("Stun aplicado")
 		cd.ApplyStatus(StatusTable.States.stun, ED, 5) -- 5 segundos
 	end
 end

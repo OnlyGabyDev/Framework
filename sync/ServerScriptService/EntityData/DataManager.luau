@@ -1,4 +1,5 @@
 local EntityCore = require(script.Parent.EntityCore)
+local Log = require(game:GetService("ReplicatedStorage").Logger).Channel("DataManager")
 local CharacterDatabase = require(game.ServerStorage.DataBase.CharacterDatabase)
 
 local DataManager = {}
@@ -19,21 +20,19 @@ Caso Player, passar o Player Character (modelo do player), caso NPC, passar o mo
 function DataManager.Create(Entity, components : {}, configs : {[string]: any}?, parentEntity : any?)
 
 
-	warn("===========VITALS============")
-
 	if not Entity then
-		warn("[DataManager] Entidade não recebida, func Create")
+		Log.Warn("Entidade não recebida, func Create")
 		return nil
 	end
 	if not components then
-		warn("[DataManager] Componentes não recebidos, func Create")
+		Log.Warn("Componentes não recebidos, func Create")
 		return nil
 	end
 
 	--Gera um ID único pra entidade
 	local id,entityType = DataManager.CreateID(Entity)
 	
-	warn(entityType,"Registrado, ID:",id)
+	Log.Debug(entityType, "registrado, ID:", id)
 	
 	-- Respawn reaproveita o ID do player: destrói a entidade anterior ANTES de sobrescrever
 	local previous = entityMap.players[id]
@@ -67,7 +66,7 @@ function DataManager.Create(Entity, components : {}, configs : {[string]: any}?,
 		core:AddComponent(comp, configs and configs[comp] or {})
 		compList[#compList + 1] = comp
 	end
-	warn("[DataManager] Componentes adicionados:", compList)
+	Log.Debug("componentes de", id .. ":", table.concat(compList, ", "))
 
 	--Setta o wrapper no componente Character (vital)
 	if core:HasComponent(core.ComponentKey.Character) then
@@ -89,7 +88,7 @@ function DataManager.Create(Entity, components : {}, configs : {[string]: any}?,
 		Entity:SetAttribute("EntityID",id)
 		
 	else
-		warn("[DataManager] Entidade inválida, func Create")
+		Log.Warn("Entidade inválida, func Create")
 		return nil
 	end
 
@@ -100,8 +99,6 @@ function DataManager.Create(Entity, components : {}, configs : {[string]: any}?,
 	core.SetMovement()
 	end
 
-	warn("===========VITALS END=============")
-	
 	return core
 
 end
@@ -115,15 +112,17 @@ function DataManager.Get(Entity)
 
 	local id 
 
-	if typeof(Entity) ~= "string" then
-	id = Entity:GetAttribute("EntityID")
+	-- Entrada inválida (nil, número, tabela) devolve nil com warn em vez de erro: uma IA com
+	-- bug chamando Get(nil) derrubava o próprio loop (F49)
+	if typeof(Entity) == "Instance" then
+		id = Entity:GetAttribute("EntityID")
 	elseif typeof(Entity) == "string" then
-	id = Entity
+		id = Entity
 	end
 
 	
 	if typeof(id) ~= "string" then
-	warn("[DataManager] Entidade inválida, func Get")
+	Log.Warn("Entidade inválida, func Get")
 	return nil 
 	end
 
@@ -132,7 +131,7 @@ function DataManager.Get(Entity)
 		local mapCore = entityMap.NPCs[id] or entityMap.players[id]
 		return mapCore
 	else
-		warn("[DataManager] Recebido ID invalido,",id,"func get")
+		Log.Warn("Recebido ID inválido,", id, "func Get")
 		return nil
 	end
 
@@ -185,7 +184,7 @@ function DataManager.CreateID(Entity)
 
 		--Gera um ID baseado no UserID do Player
 		local id = "Player_" .. Entity.Player.UserId
-		return id,"Player"
+		return id, EntityCore.EntityTypes.Player
 			
 
 		--Se for uma entidade genérica, então:
@@ -197,7 +196,8 @@ function DataManager.CreateID(Entity)
 		   while entityMap.NPCs[id] do
 			   id = "Entity_" .. tostring(math.random(100000,999999))
 		   end
-		return id,"Entity"
+		-- Tipo do enum único (F38): antes gravava "Entity", e IsNPC() era sempre falso
+		return id, EntityCore.EntityTypes.NPC
 	end
 end
 

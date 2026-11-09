@@ -42,7 +42,8 @@ function CharacterComponent:SetEntity(Entity) : boolean
 	if typeof(Entity) == "table"  then
 		model = Entity.Model
 		humanoid = model.Humanoid
-		root = model:FindFirstChild("HumanoidRootPart") or Entity
+		-- Sem HRP usa a PrimaryPart; antes caía na própria tabela do player como root (F63)
+		root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
 	else
 		model = Entity
 		root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart

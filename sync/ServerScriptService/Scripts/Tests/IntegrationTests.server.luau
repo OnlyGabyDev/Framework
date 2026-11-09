@@ -436,6 +436,1061 @@ run("F1.10 — status: onCancel/onEnd recebem o ctx e o cancel não tem veto", f
 	cleanup(dummy)
 end)
 
+--=============================================================================
+--  LOTE 1 DOS PENDENTES DA AUDITORIA (08/11/2026)
+--=============================================================================
+
+local Traits = StateTable.Enum.Traits
+
+-- Status de bloqueio inline (o formato dos módulos de Status/Buffs)
+local function blockStatus(name: string, meta: {[string]: any})
+	meta.name = name
+	meta.tags = meta.tags or { [StateTable.Enum.Tags.block] = true }
+	return { data = meta, callbacks = {} }
+end
+
+run("F10 — Unbreakable e TrueBlock são lidos do meta do bloqueio", function(t)
+	local caster = makeDummy(CFrame.new(0, 5, 0), { "Health" })
+	local victim = makeDummy(CFrame.new(4, 5, 0), { "Health", "Status" })
+	local hit = makeRunner(caster, "__TestBreaker", { duration = 10 }, {})
+	hit:start()
+
+	local FULL = { mode = StateTable.Enum.BlockModes.Full }
+	victim.ApplyStatus(blockStatus("__TestUnbreakable", { traits = { Traits.Unbreakable }, block = FULL }), { Duration = 10 })
+	local ctx = StateTable.BuildContext(hit, 10)
+	ctx.traits = { Traits.BlockBreak }
+	victim.TakeDamage(ctx)
+	t.assert(victim.GetStatus("__TestUnbreakable") ~= nil, "BlockBreak quebrou um bloqueio Unbreakable")
+	victim.RemoveStatus("__TestUnbreakable")
+
+	victim.ApplyStatus(blockStatus("__TestTrueBlock", { traits = { Traits.TrueBlock }, block = FULL }), { Duration = 10 })
+	local hpBefore = victim.GetHP and victim.GetHP() or nil
+	local ctx2 = StateTable.BuildContext(hit, 10)
+	ctx2.traits = { Traits.TrueHit }
+	local _, dealt = victim.TakeDamage(ctx2)
+	t.assert((dealt == 0 or dealt == false or dealt == nil) and (hpBefore == nil or victim.GetHP() == hpBefore),
+		"TrueHit atravessou um bloqueio TrueBlock (dano " .. tostring(dealt) .. ")")
+
+	hit:endSkill(false)
+	cleanup(caster)
+	cleanup(victim)
+end)
+
+run("F11 — bloqueio declarado (Full) e o ShieldsFrom filtra", function(t)
+	local caster = makeDummy(CFrame.new(0, 5, 0), { "Health" })
+	local victim = makeDummy(CFrame.new(4, 5, 0), { "Health", "Status" })
+	local hit = makeRunner(caster, "__TestShieldHit", { duration = 10 }, {})
+	hit:start()
+
+	-- Bloqueio Full declarado que só barra DOT: hit comum passa, hit DOT é zerado
+	victim.ApplyStatus(blockStatus("__TestDotBlock", { ShieldsFrom = { Traits.DOT },
+		block = { mode = StateTable.Enum.BlockModes.Full } }), { Duration = 10 })
+	local plain = StateTable.BuildContext(hit, 10)
+	local _, dealtPlain = victim.TakeDamage(plain)
+	t.assert(dealtPlain == 10, "Hit sem a trait do ShieldsFrom foi bloqueado (dano " .. tostring(dealtPlain) .. ")")
+	local dot = StateTable.BuildContext(hit, 10)
+	dot.traits = { Traits.DOT }
+	local _, dealtDot = victim.TakeDamage(dot)
+	t.assert(dealtDot ~= 10, "Bloqueio Full deixou passar o hit DOT")
+	victim.RemoveStatus("__TestDotBlock")
+
+	-- Escudo de status (StatusShield: ShieldsFrom = DOT) barra a aplicação de um status DOT
+	victim.ApplyStatus(StateTable.Status.StatusShield, { Duration = 10 })
+	local dotStatus = { data = { name = "__TestDotStatus", traits = { Traits.DOT } }, callbacks = {} }
+	victim.ApplyStatus(dotStatus, { Duration = 5 })
+	t.assert(victim.GetStatus("__TestDotStatus") == nil, "StatusShield não barrou um status DOT")
+	local plainStatus = { data = { name = "__TestPlainStatus" }, callbacks = {} }
+	victim.ApplyStatus(plainStatus, { Duration = 5 })
+	t.assert(victim.GetStatus("__TestPlainStatus") ~= nil, "StatusShield barrou um status sem DOT")
+
+	hit:endSkill(false)
+	cleanup(caster)
+	cleanup(victim)
+end)
+
+run("F12 — recast roda com o cooldown da própria skill correndo", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local starts, recasts = 0, 0
+	-- Recast com o cooldown correndo agora é escolha declarada da skill (D13): recast = Free
+	dummy.EquipSkill(Intents.Id.Ability2, { data = { name = "__TestRecastCD", cooldown = 5, duration = 3,
+		cooldownPolicy = { recast = StateTable.Enum.RecastPolicy.Free } }, callbacks = {
+		onStart = function() starts += 1 end,
+		onRecast = function() recasts += 1 end,
+	} })
+
+	t.assert(press(dummy, Intents.Id.Ability2) == true, "1º toque não ativou")
+	t.assert(dummy.HasCooldown("__TestRecastCD"), "Cast não iniciou o cooldown")
+	local ok = press(dummy, Intents.Id.Ability2)
+	t.assert(ok == true and recasts == 1 and starts == 1,
+		string.format("Recast barrado pelo cooldown (ok %s, starts %d, recasts %d)", tostring(ok), starts, recasts))
+
+	dummy.StopAllActiveSkills()
+	t.assert(press(dummy, Intents.Id.Ability2) == false, "Cast novo ignorou o cooldown")
+
+	cleanup(dummy)
+end)
+
+run("F15 — encerrar runner de índice menor no update não roda o atual 2 vezes", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Health" })
+	local stepsB = 0
+	local first = makeRunner(dummy, "__TestSchedA", { duration = 10 }, {})
+	first:start()
+	local second = makeRunner(dummy, "__TestSchedB", { duration = 10 }, {
+		onStep = function()
+			stepsB += 1
+			if not first:IsEnded() then first:endSkill(false) end
+		end,
+	})
+	second:start()
+
+	local RunService = game:GetService("RunService")
+	local frames = 0
+	local conn = RunService.Heartbeat:Connect(function() frames += 1 end)
+	t.wait(0.5)
+	conn:Disconnect()
+	second:endSkill(false)
+	-- Folga de 1 frame entre o contador e o scheduler; antes o B rodava 2 vezes no frame do fim do A
+	t.assert(stepsB <= frames + 1, string.format("onStep do B rodou %d vezes em %d frames", stepsB, frames))
+
+	cleanup(dummy)
+end)
+
+run("F78 — erro no onStep encerra o runner mesmo com o onCancel recusando", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Health" })
+	local steps = 0
+	local runner = makeRunner(dummy, "__TestStepError", { duration = 10 }, {
+		onStep = function()
+			steps += 1
+			error("[FW-DEBUG] onStep quebrado de propósito (teste F78)")
+		end,
+		onCancel = function() return false end,
+	})
+	runner:start()
+	t.wait(0.3)
+	t.assert(runner:IsEnded(), "Runner com erro no onStep seguiu vivo")
+	t.assert(steps == 1, "onStep com erro rodou " .. steps .. " vezes")
+
+	cleanup(dummy)
+end)
+
+run("F75 — entidade morta não inicia cast novo", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local starts = 0
+	dummy.EquipSkill(Intents.Id.Ability2, { data = { name = "__TestDeadCast", cooldown = 0, duration = 1 }, callbacks = {
+		onStart = function() starts += 1 end,
+	} })
+	dummy.TakeDamage(10000)
+	t.assert(not dummy.IsAlive(), "A entidade não morreu")
+	t.assert(press(dummy, Intents.Id.Ability2) == false and starts == 0, "Entidade morta castou")
+
+	-- Override por entidade: RefuseCastOnDeath = false no config do Combat libera
+	local free = makeDummy(CFrame.new(4, 5, 0), COMBAT, { Combat = { RefuseCastOnDeath = false } })
+	free.EquipSkill(Intents.Id.Ability2, { data = { name = "__TestDeadCastFree", cooldown = 0, duration = 1 }, callbacks = {} })
+	free.TakeDamage(10000)
+	t.assert(press(free, Intents.Id.Ability2) == true, "RefuseCastOnDeath = false não liberou o cast")
+
+	cleanup(dummy)
+	cleanup(free)
+end)
+
+run("F28 — andar para a direita é classificado como Right", function(t)
+	local Utils = require(ReplicatedStorage.Utils)
+	local facing = Vector3.new(0, 0, -1)
+	t.assert(Utils.classifyDirection(Vector3.new(1, 0, 0), facing) == "Right",
+		"+X com facing -Z deu " .. Utils.classifyDirection(Vector3.new(1, 0, 0), facing))
+	t.assert(Utils.classifyDirection(Vector3.new(-1, 0, 0), facing) == "Left", "-X com facing -Z não deu Left")
+	t.assert(Utils.classifyDirection(Vector3.new(1, 0, -1), facing) == "ForwardRight", "Diagonal frente-direita errada")
+	-- Facing +X: a direita é +Z
+	t.assert(Utils.classifyDirection(Vector3.new(0, 0, 1), Vector3.new(1, 0, 0)) == "Right", "+Z com facing +X não deu Right")
+end)
+
+run("F26/F27 — HitStart zera o sweep do Blockcast e o timer dura o pedido", function(t)
+	local ShapecastHitbox = require(ServerStorage.Modules.Combat.Hitbox.ShapecastHitbox)
+	local part = Instance.new("Part")
+	part.Anchored = true
+	part.CFrame = zoneOrigin * CFrame.new(0, 5, 0)
+	local attachment = Instance.new("Attachment")
+	attachment.Name = ShapecastHitbox.Settings.Tag
+	attachment:SetAttribute("CastType", "Blockcast")
+	attachment:SetAttribute("CastSize", Vector3.one)
+	attachment.Parent = part
+	part.Parent = workspace
+
+	local hitbox = ShapecastHitbox.new(part)
+	local _, segment = next(hitbox:GetAllSegments())
+	t.assert(segment ~= nil, "Hitbox sem segmento")
+	segment.CastData._LastCFrameBlockCast = CFrame.new(0, 5000, 0)
+
+	local stoppedAt
+	hitbox:OnStopped(function() stoppedAt = os.clock() end)
+	local startedAt = os.clock()
+	hitbox:HitStart(1.0)
+	t.assert(segment.CastData._LastCFrameBlockCast ~= CFrame.new(0, 5000, 0), "HitStart manteve o sweep da ativação anterior")
+
+	t.wait(1.3)
+	t.assert(stoppedAt ~= nil, "A hitbox não parou")
+	local lasted = stoppedAt - startedAt
+	t.assert(math.abs(lasted - 1.0) < 0.06, string.format("HitStart(1.0) durou %.3f s", lasted))
+
+	hitbox:Destroy()
+	part:Destroy()
+end)
+
+run("F25 — replay na mesma key não perde a track nova", function(t)
+	local model = Instance.new("Model")
+	local root = Instance.new("Part")
+	root.Name = "HumanoidRootPart"
+	root.Size = Vector3.new(2, 2, 1)
+	root.CFrame = zoneOrigin * CFrame.new(0, 5, 0)
+	root.Parent = model
+	model.PrimaryPart = root
+	local humanoid = Instance.new("Humanoid")
+	Instance.new("Animator").Parent = humanoid
+	humanoid.Parent = model
+	model.Parent = workspace
+	local dummy = DataManager.Create(model, { "Character", "Health", "Animation" })
+	local anim = dummy:GetComponent(dummy.ComponentKey.Animation)
+	t.assert(anim ~= nil and anim.Animator ~= nil, "AnimationComponent sem Animator no dummy")
+
+	local first = anim:PlayAnimation(507766388, "__k", 0)
+	local second = anim:PlayAnimation(507766388, "__k", 0)
+	t.wait(0.3) -- o Stopped da 1ª (parada pelo replay) já disparou
+	t.assert(anim.Tracks.__k == second, "O Stopped da track antiga apagou a nova")
+	t.assert(first.Parent == nil, "A track parada não foi destruída")
+
+	anim:StopAllAnimations(0)
+	t.wait(0.3)
+	t.assert(not second.IsPlaying, "StopAllAnimations deixou a track tocando")
+
+	cleanup(dummy)
+end)
+
+--=============================================================================
+--  LOTE 2 DOS PENDENTES DA AUDITORIA (08/11/2026)
+--=============================================================================
+
+run("F35/F37/F38 — RemoveComponent tira a API, Events preenchido, NPC é NPC", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Character", "Health", "Status" })
+	t.assert(dummy:IsNPC(), "Entidade sem player não é NPC (Type = " .. tostring(dummy.Type) .. ")")
+	t.assert(not dummy:IsPlayer(), "NPC respondeu IsPlayer")
+
+	dummy:RemoveComponent(dummy.ComponentKey.Status)
+	t.assert(rawget(dummy, "ApplyStatus") == nil, "A API do componente removido seguiu na entidade")
+	local ok = pcall(dummy.ApplyStatus, { data = { name = "__TestRemoved" }, callbacks = {} }, {})
+	t.assert(ok, "A chamada à API removida deu erro em vez de cair no stub")
+
+	local Core = require(ServerScriptService.EntityData.EntityCore)
+	t.assert(next(Core.Events) ~= nil, "EntityCore.Events vazio (EventKey não copiado no registro)")
+
+	cleanup(dummy)
+end)
+
+run("F36/F49 — Movement sem Character e entradas inválidas não derrubam nada", function(t)
+	local ok, entity = pcall(makeDummy, CFrame.new(0, 5, 0), { "Health", "Movement" })
+	t.assert(ok and entity ~= nil, "Movement sem Character derrubou o DataManager.Create: " .. tostring(entity))
+	t.assert(DataManager.Get(entity.ID) == entity, "A entidade ficou meio registrada")
+	cleanup(entity)
+
+	local okGet, got = pcall(DataManager.Get, nil)
+	t.assert(okGet and got == nil, "DataManager.Get(nil) deu erro")
+	local okNum = pcall(DataManager.Get, 42)
+	t.assert(okNum, "DataManager.Get(42) deu erro")
+
+	local dummy = makeDummy(CFrame.new(4, 5, 0), COMBAT)
+	local okIntent, res = pcall(SkillHandler.HandleIntent, dummy.ID, nil)
+	t.assert(okIntent and res == false, "HandleIntent(id, nil) deu erro")
+	cleanup(dummy)
+end)
+
+run("F34 — NPC com Movement fica com a física no servidor", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Character", "Health", "Movement" })
+	local root = dummy.GetRoot()
+	t.assert(root:GetNetworkOwnershipAuto() == false, "NPC seguiu com auto-ownership")
+	t.assert(root:GetNetworkOwner() == nil, "NPC com dono cliente")
+	cleanup(dummy)
+end)
+
+run("F42 — GetStat sem base não cacheia o default", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Character", "Health", "Attributes" })
+	t.assert(dummy.GetStat("__TestNoBase", 5) == 5, "1ª chamada não devolveu o default")
+	t.assert(dummy.GetStat("__TestNoBase", 9) == 9, "2ª chamada com outro default devolveu o cache da 1ª")
+	dummy.SetStat("__TestWithBase", 3)
+	t.assert(dummy.GetStat("__TestWithBase", 9) == 3, "Com base registrada o default não pode valer")
+	cleanup(dummy)
+end)
+
+run("F44 — AreaEffect:Stop dispara o OnExit de quem estava dentro", function(t)
+	local AreaEffect = require(ServerStorage.Modules.Combat.AreaEffect)
+	local dummy = makeDummy(CFrame.new(0, 3, 0), { "Character", "Health" })
+	local center = zoneOrigin * CFrame.new(0, 3, 0)
+	local area = AreaEffect.new(function() return center end, "Box", Vector3.new(10, 10, 10), 30)
+	local entered, exited = 0, 0
+	area:OnEnter(function(e) if e == dummy then entered += 1 end end)
+	area:OnExit(function(e) if e == dummy then exited += 1 end end)
+	area:Start()
+	t.wait(0.3)
+	t.assert(entered == 1, "A entidade não entrou na zona (" .. entered .. ")")
+	area:Stop()
+	t.wait(0.1)
+	t.assert(exited == 1, "Stop não disparou o OnExit")
+	cleanup(dummy)
+end)
+
+run("F48/F52 — Emit sem context e ordem da inscrição ordenada", function(t)
+	local TriggerSet = require(ServerStorage.Modules.Combat.TriggerSet)
+	local set = TriggerSet.new()
+	local order = {}
+	local function sub(tag, priority)
+		set:Subscribe({ Role = "IN", Breakpoint = "__bp", Priority = priority,
+			Action = function() table.insert(order, tag) end })
+	end
+	sub("a0", 0); sub("b5", 5); sub("c0", 0); sub("d5", 5); sub("e9", 9); sub("f0", nil)
+	local list = set.Subscriptions.IN.__bp
+	local got = {}
+	for _, s in list do
+		table.insert(got, tostring(s.Priority or 0))
+	end
+	t.assert(table.concat(got, ",") == "9,5,5,0,0,0", "Ordem por Priority errada: " .. table.concat(got, ","))
+	t.assert(list[2]._seq < list[3]._seq and list[4]._seq < list[5]._seq, "Empate não manteve a ordem de inscrição")
+
+	local ok, err = pcall(function() set:Emit("IN", "__bp", nil) end)
+	t.assert(ok, "Emit com context nil deu erro: " .. tostring(err))
+
+	-- 3000 inscrições: a ordenação por inserção não pode custar segundos
+	local t0 = os.clock()
+	for i = 1, 3000 do
+		set:Subscribe({ Role = "IN", Breakpoint = "__big", Priority = i % 7, Action = function() end })
+	end
+	local spent = os.clock() - t0
+	t.assert(spent < 0.5, string.format("3000 inscrições levaram %.2f s", spent))
+end)
+
+run("F65 — ApplyDamage em alvo sem Health devolve false, 0", function(t)
+	local caster = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local wall = makeDummy(CFrame.new(4, 5, 0), { "Character" })
+	local ok, dealt = caster.ApplyDamage(10, nil, wall)
+	t.assert(ok == false and dealt == 0, "Alvo sem Health devolveu " .. tostring(ok) .. ", " .. tostring(dealt))
+	cleanup(caster)
+	cleanup(wall)
+end)
+
+run("F74 — regras de imunidade mescladas por tag", function(t)
+	local Helper = require(ServerStorage.Modules.Combat.StateTable.Helper)
+	local fake = { Status = {
+		A = { data = { tags = { __imm = true }, bypassBy = { "X", "Y" } } },
+		B = { data = { tags = { __imm = true }, bypassBy = { "Y", "Z" } } },
+	} }
+	local rules = Helper.BuildImmunityRules(fake)
+	local rule = rules.__imm
+	t.assert(rule ~= nil, "Regra mesclada ausente")
+	t.assert(#rule.bypassableBy == 1 and rule.bypassableBy[1] == "Y",
+		"Mescla deveria deixar só Y: " .. table.concat(rule.bypassableBy, ","))
+	t.assert(rule.name == "A+B", "Nome da regra mesclada: " .. tostring(rule.name))
+end)
+
+--=============================================================================
+--  LOTE 3 DOS PENDENTES DA AUDITORIA (08/11/2026)
+--=============================================================================
+
+run("F17 — ponto secundário sem Handle_<key> não reusa o Handle do primário", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Character", "Health", "Weapon" })
+	for _, armName in { "Right Arm", "Left Arm" } do
+		local arm = Instance.new("Part")
+		arm.Name = armName
+		arm.Size = Vector3.new(1, 2, 1)
+		arm.CFrame = dummy.Instance.PrimaryPart.CFrame
+		arm.Parent = dummy.Instance
+	end
+	local weapon = Instance.new("Model")
+	weapon.Name = "__TestWeapon"
+	local handle = Instance.new("Part")
+	handle.Name = "Handle"
+	handle.Parent = weapon
+	weapon.Parent = dummy.Instance
+
+	local comp = dummy:GetComponent(dummy.ComponentKey.Weapon)
+	comp:_AttachAllPoints(weapon, { primary = "Right Arm", secondary = "Left Arm" })
+	local motors = 0
+	for _, d in handle:GetChildren() do
+		if d:IsA("Motor6D") then motors += 1 end
+	end
+	t.assert(motors == 1, "O Handle recebeu " .. motors .. " Motor6D (o secundário reusou a peça)")
+	t.assert(comp.Motors.secondary == nil, "Ponto secundário sem Handle_secondary ganhou motor")
+
+	cleanup(dummy)
+end)
+
+run("F82 — Lock sobrevive ao respawn (Register)", function(t)
+	local Players = game:GetService("Players")
+	local player = Players:GetPlayers()[1]
+	if not player or not player.Character or not player.Character:GetAttribute("EntityID") then
+		t.log("sem player com entidade neste Play: teste pulado")
+		return
+	end
+	local AntiCheat = require(ServerScriptService.Modules.GlobalAntiCheat)
+	local native = AntiCheat.GetNativeEntityId(player)
+	t.assert(AntiCheat.LockPlayerInput(player), "Lock falhou")
+	AntiCheat.Register(player) -- o que o respawn faz
+	local stillLocked = AntiCheat.GetEntityID(player) == nil
+	local restored = AntiCheat.UnlockPlayerInput(player)
+	t.assert(stillLocked, "O Register (respawn) soltou o Lock")
+	t.assert(restored and AntiCheat.GetEntityID(player) == native, "O Unlock não devolveu o corpo nativo")
+end)
+
+--=============================================================================
+--  LOTE 4 DOS PENDENTES DA AUDITORIA (08/11/2026)
+--=============================================================================
+
+run("F45 — modificador com o mesmo ID de duas fontes usa contagem", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Character", "Health", "Attributes" })
+	dummy.SetStat("__TestSpeed", 10)
+	local Flat = StateTable.Enum.ModifierType.Flat
+	dummy.AddModifier("__TestSpeed", "SlowZone", Flat, -4) -- zona A
+	dummy.AddModifier("__TestSpeed", "SlowZone", Flat, -4) -- zona B, mesmo ID
+	dummy.RemoveModifier("__TestSpeed", "SlowZone") -- sai da A
+	t.assert(dummy.GetStat("__TestSpeed") == 6, "Sair de uma zona tirou o efeito da outra (" .. dummy.GetStat("__TestSpeed") .. ")")
+	dummy.RemoveModifier("__TestSpeed", "SlowZone")
+	t.assert(dummy.GetStat("__TestSpeed") == 10, "O modificador não saiu com a última referência")
+	cleanup(dummy)
+end)
+
+run("F47 — canDisplace = false barra força externa, não o dash próprio", function(t)
+	local dummy = makeDummy(CFrame.new(0, 3, 0), { "Character", "Health", "Status", "Movement" })
+	dummy.ApplyStatus({ data = { name = "__TestUnstoppable", tags = { [StateTable.Enum.Tags.canDisplace] = false } }, callbacks = {} }, { Duration = 5 })
+	local root = dummy.GetRoot()
+
+	local start = root.Position
+	dummy.AddForce({ Type = "__TestKnock", Duration = 0.4, Speed = 40, Direction = Vector3.new(1, 0, 0), RequiresControl = false })
+	t.wait(0.5)
+	local pushed = (root.Position - start) * Vector3.new(1, 0, 1)
+	t.assert(pushed.Magnitude < 2, string.format("Força externa deslocou %.1f studs com canDisplace = false", pushed.Magnitude))
+
+	start = root.Position
+	dummy.AddForce({ Type = "__TestDash", Duration = 0.4, Speed = 40, Direction = Vector3.new(1, 0, 0), Hard = true })
+	t.wait(0.5)
+	local dashed = (root.Position - start) * Vector3.new(1, 0, 1)
+	t.assert(dashed.Magnitude > 5, string.format("Dash próprio andou só %.1f studs com canDisplace = false", dashed.Magnitude))
+
+	cleanup(dummy)
+end)
+
+run("F50 — entidade criada ancorada ganha ForceRig e anda ao ser solta", function(t)
+	local model = Instance.new("Model")
+	local root = Instance.new("Part")
+	root.Name = "HumanoidRootPart"
+	root.Size = Vector3.new(2, 2, 1)
+	root.CFrame = zoneOrigin * CFrame.new(0, 3, 0)
+	root.Anchored = true
+	root.Parent = model
+	model.PrimaryPart = root
+	model.Parent = workspace
+	local dummy = DataManager.Create(model, { "Character", "Health", "Movement" })
+	root.Anchored = false
+	local start = root.Position
+	dummy.AddForce({ Type = "__TestPush", Duration = 0.4, Speed = 30, Direction = Vector3.new(1, 0, 0), Hard = true })
+	t.wait(0.5)
+	local moved = ((root.Position - start) * Vector3.new(1, 0, 1)).Magnitude
+	t.assert(moved > 5, string.format("Entidade nascida ancorada andou %.1f studs depois de solta", moved))
+	cleanup(dummy)
+end)
+
+run("F67 — exclusive remove também stacks em lista da mesma categoria", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Health", "Status" })
+	local Stackable = StateTable.Enum.Traits.Stackable
+	local cat = "__TestCat"
+	local stacked = { data = { name = "__TestStackList", category = cat, traits = { Stackable }, maxStacks = 3 }, callbacks = {} }
+	dummy.ApplyStatus(stacked, { Duration = 5 })
+	dummy.ApplyStatus(stacked, { Duration = 5 })
+	t.assert(#dummy.GetStatus("__TestStackList") == 2, "Setup: stack em lista não criou 2 instâncias")
+	dummy.ApplyStatus({ data = { name = "__TestExclusive", category = cat, exclusive = true }, callbacks = {} }, { Duration = 5 })
+	t.assert(dummy.GetStatus("__TestStackList") == nil, "exclusive não removeu a lista da mesma categoria")
+	t.assert(dummy.GetStatus("__TestExclusive") ~= nil, "O exclusive não ficou ativo")
+	cleanup(dummy)
+end)
+
+--=============================================================================
+--  TESTES DOS ITENS CORRIGIDOS SÓ COM LEITURA (08/11/2026)
+--=============================================================================
+
+run("F18 — pasta de arma duplicada resolve para a completa", function(t)
+	local WeaponModule = require(ServerScriptService.EntityData.Components.WeaponComponent)
+	local find = WeaponModule._findWeaponFolder
+	local weapons = Instance.new("Folder")
+
+	local only = Instance.new("Folder")
+	only.Name = "__Solo"
+	only.Parent = weapons
+	t.assert(find(weapons, "__Solo") == only, "Pasta única não foi achada")
+	t.assert(find(weapons, "__Nada") == nil, "Pasta inexistente devolveu algo")
+
+	-- A legada vem PRIMEIRO na ordem dos filhos (o FindFirstChild pegaria ela)
+	local legacy = Instance.new("Folder")
+	legacy.Name = "__Martelo"
+	legacy.Parent = weapons
+	local complete = Instance.new("Folder")
+	complete.Name = "__Martelo"
+	local model = Instance.new("Model")
+	model.Name = "__Martelo"
+	model.Parent = complete
+	complete.Parent = weapons
+	t.assert(weapons:FindFirstChild("__Martelo") == legacy, "Setup: a legada deveria vir primeiro")
+	t.assert(find(weapons, "__Martelo") == complete, "Duplicata resolveu para a pasta sem model")
+
+	-- Diferença só de capitalização também é duplicata (regra 19)
+	local lowerLegacy = Instance.new("Folder")
+	lowerLegacy.Name = "__machado"
+	lowerLegacy.Parent = weapons
+	local upperComplete = Instance.new("Folder")
+	upperComplete.Name = "__Machado"
+	local axe = Instance.new("Model")
+	axe.Name = "__Machado"
+	axe.Parent = upperComplete
+	upperComplete.Parent = weapons
+	t.assert(find(weapons, "__Machado") == upperComplete, "Duplicata por capitalização resolveu errado")
+
+	weapons:Destroy()
+end)
+
+run("F53 — runner sem onStep não monta context por frame", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Health" })
+	local function counting(runner)
+		local calls = 0
+		runner.BuildContext = function(self)
+			calls += 1
+			return SkillRunner.BuildContext(self)
+		end
+		return function() return calls end
+	end
+
+	local silent = makeRunner(dummy, "__TestNoStep", { duration = 10 }, {})
+	local silentCalls = counting(silent)
+	silent:start()
+	local afterStart = silentCalls()
+	t.wait(0.3)
+	t.assert(silentCalls() == afterStart,
+		string.format("Runner sem onStep montou %d contexts em 0,3 s", silentCalls() - afterStart))
+
+	local stepping = makeRunner(dummy, "__TestWithStep", { duration = 10 }, { onStep = function() end })
+	local steppingCalls = counting(stepping)
+	stepping:start()
+	t.wait(0.3)
+	t.assert(steppingCalls() > 5, "Runner com onStep não recebeu context (gancho do teste quebrado?)")
+
+	silent:endSkill(false)
+	stepping:endSkill(false)
+	cleanup(dummy)
+end)
+
+run("F63 — player sem HRP usa a PrimaryPart como root", function(t)
+	local CharacterModule = require(ServerScriptService.EntityData.Components.CharacterComponent)
+	local model = Instance.new("Model")
+	local torso = Instance.new("Part")
+	torso.Name = "Torso"
+	torso.Anchored = true
+	torso.CFrame = zoneOrigin * CFrame.new(0, 5, 0)
+	torso.Parent = model
+	model.PrimaryPart = torso
+	Instance.new("Humanoid").Parent = model
+	model.Parent = workspace
+
+	-- Formato de entidade de player ({ Model, Player }), sem passar pelo registro do DataManager
+	local comp = CharacterModule.new({ Instance = model }, {})
+	comp:SetEntity({ Model = model, Player = nil })
+	local root = comp:GetRoot()
+	t.assert(root == torso, "Root do player sem HRP: " .. tostring(root))
+
+	model:Destroy()
+end)
+
+run("F72 — WaitForMarker com timeout retorna no disparo", function(t)
+	local model = Instance.new("Model")
+	local root = Instance.new("Part")
+	root.Name = "HumanoidRootPart"
+	root.Size = Vector3.new(2, 2, 1)
+	root.CFrame = zoneOrigin * CFrame.new(0, 5, 0)
+	root.Parent = model
+	model.PrimaryPart = root
+	local humanoid = Instance.new("Humanoid")
+	Instance.new("Animator").Parent = humanoid
+	humanoid.Parent = model
+	model.Parent = workspace
+	local dummy = DataManager.Create(model, { "Character", "Health", "Animation" })
+	local anim = dummy:GetComponent(dummy.ComponentKey.Animation)
+
+	-- Marker controlado pelo teste (uma animação de verdade com marker exigiria asset próprio)
+	local marker = Instance.new("BindableEvent")
+	anim.GetMarkerSignal = function() return marker.Event end
+
+	task.delay(0.1, marker.Fire, marker)
+	local t0 = os.clock()
+	local fired = anim:WaitForMarker("__k", "Hit", 2)
+	local waited = os.clock() - t0
+	t.assert(fired == true, "WaitForMarker não viu o disparo")
+	t.assert(waited < 0.5, string.format("WaitForMarker esperou %.2f s com o marker em 0,1 s", waited))
+
+	t0 = os.clock()
+	local timedOut = anim:WaitForMarker("__k", "Hit", 0.3)
+	waited = os.clock() - t0
+	t.assert(timedOut == false, "Sem disparo deveria devolver false")
+	t.assert(waited >= 0.25 and waited < 0.7, string.format("Timeout de 0,3 s durou %.2f s", waited))
+
+	marker:Destroy()
+	cleanup(dummy)
+end)
+
+run("F81 — WeaponTransform dura TransformTime e troca o modo no fim", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), { "Character", "Health", "Status", "Movement", "Attributes", "Combat", "Weapon" })
+	local weapon = dummy:GetComponent(dummy.ComponentKey.Weapon)
+	local modeSet
+	-- Arma de teste: os modos vêm daqui, sem depender dos assets do place
+	weapon.GetCurrentMode = function() return "Merged" end
+	weapon.GetWeaponData = function()
+		return { Modes = { Dual = { TransformTime = 0.5 }, Merged = { TransformTime = 0.5 } } }
+	end
+	weapon.SetMode = function(_, mode) modeSet = mode; return true end
+	weapon.GetModeData = function() return {} end
+
+	local module = require(ServerStorage.DataBase.SkillDatabase.Schema.WeaponTransform)
+	local runner = SkillRunner.new(SkillFactory.GetSkill(module), dummy, "WeaponTransform", StateTable.Enum.Types.Skill)
+	runner:start()
+	t.wait(0.25)
+	t.assert(not runner:IsEnded(), "A transformação acabou antes do TransformTime (janela de 1 frame)")
+	t.assert(modeSet == nil, "O modo trocou antes do fim da transformação")
+	t.wait(0.45)
+	t.assert(runner:IsEnded(), "A transformação não terminou depois do TransformTime")
+	t.assert(modeSet == "Dual", "O modo não trocou para Dual no fim (" .. tostring(modeSet) .. ")")
+
+	cleanup(dummy)
+end)
+
+run("F83 — Lock durante a possessão manda o ID roteado ao cliente", function(t)
+	local Players = game:GetService("Players")
+	local player = Players:GetPlayers()[1]
+	if not player or not player.Character or not player.Character:GetAttribute("EntityID") then
+		t.log("sem player com entidade neste Play: teste pulado")
+		return
+	end
+	local AntiCheat = require(ServerScriptService.Modules.GlobalAntiCheat)
+	local native = AntiCheat.GetNativeEntityId(player)
+	local body = makeDummy(CFrame.new(0, 5, 0), { "Character", "Health" })
+
+	AntiCheat.SetControlledEntity(player, body.ID)
+	AntiCheat.LockPlayerInput(player)
+	local locked, routed = AntiCheat._ControlStatePayload(player)
+	local inputCut = AntiCheat.GetEntityID(player) == nil
+	AntiCheat.UnlockPlayerInput(player)
+	AntiCheat.SetControlledEntity(player, native)
+
+	t.assert(locked == true, "O payload não indicou Lock")
+	t.assert(routed == body.ID, "Lock mandou " .. tostring(routed) .. " em vez do corpo possuído (a câmera voltaria ao nativo)")
+	t.assert(inputCut, "Com Lock o input não foi cortado no servidor")
+	t.assert(AntiCheat.GetEntityID(player) == native, "O teste não devolveu o player ao corpo nativo")
+
+	cleanup(body)
+end)
+
+--=============================================================================
+--  D13 — POLÍTICA DE COOLDOWN DECLARADA (08/11/2026)
+--=============================================================================
+
+local CooldownPolicy = require(ServerScriptService.Modules.CooldownPolicy)
+local RECAST = StateTable.Enum.RecastPolicy
+local START = StateTable.Enum.CooldownStart
+
+-- Equipa uma skill inline no Ability2 de um dummy de combate
+local function equip(dummy, name, data, callbacks)
+	data.name = name
+	dummy.EquipSkill(Intents.Id.Ability2, { data = data, callbacks = callbacks or {} })
+	return function() return press(dummy, Intents.Id.Ability2) end
+end
+
+run("D13 — validação: onRecast sem recast declarado, cooldown inválido, M1", function(t)
+	local _, issues = CooldownPolicy.Validate({ name = "a", cooldown = 1 }, { onRecast = function() end })
+	t.assert(#issues == 1, "onRecast sem recast declarado deveria gerar 1 aviso (" .. #issues .. ")")
+	local policy = CooldownPolicy.Validate({ name = "a", cooldown = 1 }, { onRecast = function() end })
+	t.assert(policy.recast == RECAST.Restart, "Sem declaração o recast deveria cair no comportamento antigo (Restart)")
+
+	local bad, badIssues = CooldownPolicy.Validate({ name = "b" }, {})
+	t.assert(#badIssues >= 1 and bad.cooldown == 0, "cooldown ausente deveria avisar e usar 0")
+	local _, refundIssues = CooldownPolicy.Validate({ name = "c", cooldown = 1, cooldownPolicy = { refund = { cancel = 2, nada = 1 } } }, {})
+	t.assert(#refundIssues == 2, "refund fora de 0..1 e motivo desconhecido deveriam avisar (" .. #refundIssues .. ")")
+
+	local ok, issuesOk = CooldownPolicy.Validate({ name = "d", cooldown = 0 }, {})
+	t.assert(#issuesOk == 0 and ok.cooldown == 0 and ok.start == START.Cast, "cooldown = 0 declarado é válido")
+
+	local M1 = require(ServerStorage.DataBase.SkillDatabase.Schema.M1)
+	local m1Policy, m1Issues = CooldownPolicy.Validate(M1.data, M1.callbacks)
+	t.assert(#m1Issues == 0 and m1Policy.recast == RECAST.Restart,
+		"M1 deveria declarar recast = Restart sem avisos (" .. table.concat(m1Issues, "; ") .. ")")
+end)
+
+run("D13 — recast Restart: espera o cooldown e o reinicia (ritmo do combo do M1)", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local recasts = 0
+	local tap = equip(dummy, "__TestRestart", { cooldown = 0.3, duration = 5, cooldownPolicy = { recast = RECAST.Restart } },
+		{ onRecast = function() recasts += 1 end })
+	t.assert(tap() == true, "Cast não ativou")
+	t.assert(tap() == false and recasts == 0, "Recast passou com o cooldown do cast correndo")
+	t.wait(0.35)
+	t.assert(tap() == true and recasts == 1, "Recast não rodou depois do cooldown")
+	t.assert(dummy.HasCooldown("__TestRestart"), "Restart não reiniciou o cooldown")
+	t.assert(tap() == false and recasts == 1, "Recast seguinte passou sem esperar o cooldown reiniciado")
+	dummy.StopAllActiveSkills()
+	cleanup(dummy)
+end)
+
+run("D13 — recast Blocked: espera o cooldown e não o reinicia", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local recasts = 0
+	local tap = equip(dummy, "__TestBlocked", { cooldown = 0.3, duration = 5, cooldownPolicy = { recast = RECAST.Blocked } },
+		{ onRecast = function() recasts += 1 end })
+	tap()
+	t.assert(tap() == false, "Recast passou com o cooldown correndo")
+	t.wait(0.35)
+	t.assert(tap() == true and recasts == 1, "Recast não rodou depois do cooldown")
+	t.assert(not dummy.HasCooldown("__TestBlocked"), "Blocked reiniciou o cooldown")
+	t.assert(tap() == true and recasts == 2, "Sem cooldown o recast seguinte deveria passar")
+	dummy.StopAllActiveSkills()
+	cleanup(dummy)
+end)
+
+run("D13 — recast Free: ignora o cooldown e não o reinicia", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local recasts = 0
+	local tap = equip(dummy, "__TestFree", { cooldown = 5, duration = 5, cooldownPolicy = { recast = RECAST.Free } },
+		{ onRecast = function() recasts += 1 end })
+	tap()
+	t.wait(0.2)
+	t.assert(tap() == true and recasts == 1, "Free não deixou o recast passar com o cooldown correndo")
+	t.assert(dummy.GetCooldown("__TestFree") < 4.9, "Free reiniciou o cooldown")
+	dummy.StopAllActiveSkills()
+	cleanup(dummy)
+end)
+
+run("D13 — recast com intervalo numérico próprio", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local recasts = 0
+	local tap = equip(dummy, "__TestGap", { cooldown = 5, duration = 5, cooldownPolicy = { recast = 0.3 } },
+		{ onRecast = function() recasts += 1 end })
+	tap()
+	t.assert(tap() == false, "Recast passou antes do intervalo")
+	t.wait(0.35)
+	t.assert(tap() == true and recasts == 1, "Recast não passou depois do intervalo")
+	t.assert(tap() == false and recasts == 1, "O intervalo não recomeçou depois do recast")
+	t.assert(dummy.GetCooldown("__TestGap") < 4.7, "O intervalo próprio mexeu no cooldown")
+	dummy.StopAllActiveSkills()
+	cleanup(dummy)
+end)
+
+run("D13 — start = End: o cooldown começa no fim do runner", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local tap = equip(dummy, "__TestEnd", { cooldown = 2, duration = 0.3, cooldownPolicy = { start = START.End } })
+	t.assert(tap() == true, "Cast não ativou")
+	t.assert(not dummy.HasCooldown("__TestEnd"), "Cooldown começou no cast com start = End")
+	t.assert(tap() == false, "Segundo cast passou com o runner vivo (a trava é o maxInstances)")
+	t.wait(0.45)
+	t.assert(dummy.HasCooldown("__TestEnd") and dummy.GetCooldown("__TestEnd") > 1.5,
+		"Cooldown não começou no fim (" .. dummy.GetCooldown("__TestEnd") .. ")")
+	cleanup(dummy)
+end)
+
+run("D13 — start = Manual: sem commit não cobra, com commit cobra", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local tapSkip = equip(dummy, "__TestManualSkip", { cooldown = 2, duration = 0.2, cooldownPolicy = { start = START.Manual } })
+	tapSkip()
+	t.assert(not dummy.HasCooldown("__TestManualSkip"), "Manual cobrou o cooldown antes do commit")
+	t.wait(0.35)
+	t.assert(not dummy.HasCooldown("__TestManualSkip"), "Manual sem commit cobrou o cooldown no fim")
+
+	local committed
+	local tapCommit = equip(dummy, "__TestManualCommit", { cooldown = 2, duration = 0.2, cooldownPolicy = { start = START.Manual } }, {
+		onStart = function(self) committed = self:CommitCooldown() end,
+	})
+	tapCommit()
+	t.assert(committed == true and dummy.HasCooldown("__TestManualCommit"), "CommitCooldown não cobrou o cooldown")
+	cleanup(dummy)
+end)
+
+run("D13 — CommitCooldown fora de Manual não faz nada", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local result
+	local tap = equip(dummy, "__TestCommitCast", { cooldown = 0.5, duration = 0.2 }, {
+		onStart = function(self) result = self:CommitCooldown() end,
+	})
+	tap()
+	t.assert(result == false, "CommitCooldown com start = Cast deveria devolver false")
+	cleanup(dummy)
+end)
+
+run("D13 — Fizzle no onStart devolve o cooldown inteiro", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local reason
+	local tap = equip(dummy, "__TestFizzle", { cooldown = 5, duration = 3 }, {
+		onStart = function(self) self:Fizzle() end,
+		onEnd = function(_, ctx) reason = ctx.reason end,
+	})
+	tap()
+	t.assert(reason == StateTable.Enum.EndReasons.Fizzle, "onEnd não recebeu o motivo fizzle (" .. tostring(reason) .. ")")
+	t.assert(not dummy.HasCooldown("__TestFizzle"), "Fizzle cobrou o cooldown")
+	t.assert(dummy.GetActiveSkillCount("__TestFizzle") == 0, "Runner com Fizzle seguiu ativo")
+	cleanup(dummy)
+end)
+
+run("D13 — refund por motivo: cancelamento devolve metade", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local tap = equip(dummy, "__TestRefund", { cooldown = 4, duration = 5,
+		cooldownPolicy = { refund = { [StateTable.Enum.EndReasons.Cancel] = 0.5 } } })
+	tap()
+	dummy.StopAllActiveSkills(true)
+	local left = dummy.GetCooldown("__TestRefund")
+	t.assert(left > 1.6 and left < 2.1, string.format("Cancelamento com refund 0,5 deixou %.2f s de 4", left))
+	cleanup(dummy)
+end)
+
+run("D13 — erro no onStep encerra com motivo error e devolve o cooldown", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local reason
+	local tap = equip(dummy, "__TestStepErrCD", { cooldown = 5, duration = 3 }, {
+		onStep = function() error("[FW-DEBUG] onStep quebrado de propósito (teste D13)") end,
+		onEnd = function(_, ctx) reason = ctx.reason end,
+	})
+	tap()
+	t.wait(0.2)
+	t.assert(reason == StateTable.Enum.EndReasons.Error, "Motivo do fim por erro: " .. tostring(reason))
+	t.assert(not dummy.HasCooldown("__TestStepErrCD"), "Erro no onStep cobrou o cooldown")
+	cleanup(dummy)
+end)
+
+--=============================================================================
+--  D13 — CARGAS, REDUÇÃO DE COOLDOWN E HERANÇA (08/11/2026)
+--=============================================================================
+
+run("D13 — cargas: N usos, recarga uma por vez, emendando", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local name = "__TestCharges"
+	local tap = equip(dummy, name, { cooldown = 0.4, duration = 0.05, cooldownPolicy = { charges = 2 } })
+	t.assert(tap() == true, "1º uso falhou")
+	t.assert(dummy.GetCooldownCharges(name) == 1, "Sobrou " .. tostring(dummy.GetCooldownCharges(name)) .. " carga(s), esperado 1")
+	t.assert(not dummy.HasCooldown(name), "Com 1 carga a skill deveria estar disponível")
+	t.wait(0.1)
+	t.assert(tap() == true, "2º uso (2ª carga) falhou")
+	t.assert(dummy.HasCooldown(name), "Sem cargas a skill deveria estar em cooldown")
+	t.wait(0.1)
+	t.assert(tap() == false, "Usou sem carga")
+	t.wait(0.25) -- 0,45 s desde o 1º uso: a 1ª recarga terminou
+	t.assert(dummy.GetCooldownCharges(name) == 1, "A 1ª recarga não devolveu a carga")
+	t.wait(0.4) -- 0,85 s: a 2ª recarga (emendada na 1ª) terminou
+	local charges, max = dummy.GetCooldownCharges(name)
+	t.assert(charges == 2 and max == 2, string.format("Recarga emendada: %s de %s", tostring(charges), tostring(max)))
+	t.assert(dummy.GetCooldown(name) == 0, "Com cargas cheias o cooldown deveria ser 0")
+	cleanup(dummy)
+end)
+
+run("D13 — cargas: Fizzle e erro devolvem a carga", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local name = "__TestChargeFizzle"
+	local tap = equip(dummy, name, { cooldown = 3, duration = 1, cooldownPolicy = { charges = 2 } }, {
+		onStart = function(self) self:Fizzle() end,
+	})
+	tap()
+	t.assert(dummy.GetCooldownCharges(name) == 2, "Fizzle não devolveu a carga (" .. tostring(dummy.GetCooldownCharges(name)) .. ")")
+	cleanup(dummy)
+end)
+
+run("D13 — redução de cooldown pelo stat, opt-out e teto", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local CDR = StateTable.Enum.Stats.CooldownReduction
+	dummy.SetStat(CDR, 0.5)
+
+	equip(dummy, "__TestCDR", { cooldown = 4, duration = 0.05 })()
+	local reduced = dummy.GetCooldown("__TestCDR")
+	t.assert(reduced > 1.8 and reduced <= 2, string.format("50%% de redução em 4 s deu %.2f", reduced))
+
+	t.wait(0.1)
+	equip(dummy, "__TestCDRIgnore", { cooldown = 4, duration = 0.05, cooldownPolicy = { ignoreReduction = true } })()
+	t.assert(dummy.GetCooldown("__TestCDRIgnore") > 3.8, "ignoreReduction não ignorou a redução")
+
+	t.wait(0.1)
+	dummy.SetStat(CDR, 0.95)
+	equip(dummy, "__TestCDRCap", { cooldown = 4, duration = 0.05 })()
+	local capped = dummy.GetCooldown("__TestCDRCap")
+	t.assert(capped > 0.7 and capped <= 0.8, string.format("Teto de 80%%: 4 s deveria virar 0,8 (deu %.2f)", capped))
+
+	-- Mudar o stat no meio não reescala a contagem que já corre (documentado)
+	dummy.SetStat(CDR, 0)
+	t.assert(math.abs(dummy.GetCooldown("__TestCDRCap") - capped) < 0.1, "Mudar o stat reescalou a contagem em andamento")
+	cleanup(dummy)
+end)
+
+run("D13 — teto da redução por skill (95% e 50%) e valor inválido", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	dummy.SetStat(StateTable.Enum.Stats.CooldownReduction, 0.9)
+
+	equip(dummy, "__TestCap95", { cooldown = 4, duration = 0.05, cooldownPolicy = { maxReduction = 0.95 } })()
+	local high = dummy.GetCooldown("__TestCap95")
+	t.assert(high > 0.3 and high <= 0.4, string.format("Teto 95%% com 90%% de redução: 4 s deveria virar 0,4 (deu %.2f)", high))
+
+	t.wait(0.1)
+	equip(dummy, "__TestCap50", { cooldown = 4, duration = 0.05, cooldownPolicy = { maxReduction = 0.5 } })()
+	local low = dummy.GetCooldown("__TestCap50")
+	t.assert(low > 1.9 and low <= 2, string.format("Teto 50%%: 4 s deveria virar 2 (deu %.2f)", low))
+
+	t.wait(0.1)
+	equip(dummy, "__TestCapDefault", { cooldown = 4, duration = 0.05 })()
+	local default = dummy.GetCooldown("__TestCapDefault")
+	local expected = 4 * (1 - StateTable.Enum.CooldownDefaults.maxReduction)
+	t.assert(math.abs(default - expected) < 0.1, string.format("Sem declaração deveria valer o padrão (%.2f, deu %.2f)", expected, default))
+
+	local _, issues = CooldownPolicy.Validate({ name = "x", cooldown = 1, cooldownPolicy = { maxReduction = 1.5 } }, {})
+	t.assert(#issues == 1, "maxReduction fora de 0..1 deveria avisar")
+	local full = CooldownPolicy.Validate({ name = "y", cooldown = 1, cooldownPolicy = { maxReduction = 1 } }, {})
+	t.assert(full.maxReduction == 1, "maxReduction = 1 (sem teto) é válido")
+	cleanup(dummy)
+end)
+
+run("D13 — ReduceCooldown encurta a contagem corrente", function(t)
+	local dummy = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	equip(dummy, "__TestReduce", { cooldown = 4, duration = 0.05 })()
+	dummy.ReduceCooldown("__TestReduce", 1.5)
+	local left = dummy.GetCooldown("__TestReduce")
+	t.assert(left > 2.3 and left <= 2.5, string.format("4 s − 1,5 s deu %.2f", left))
+	dummy.ReduceCooldown("__TestReduce", 10)
+	t.assert(not dummy.HasCooldown("__TestReduce"), "Reduzir além do restante deveria deixar a skill pronta")
+	cleanup(dummy)
+end)
+
+run("D13 — herança de cooldown (skill roubada): Copy e Move, com cargas", function(t)
+	local owner = makeDummy(CFrame.new(0, 5, 0), COMBAT)
+	local thief = makeDummy(CFrame.new(4, 5, 0), COMBAT)
+	equip(owner, "__TestStolen", { cooldown = 4, duration = 0.05 })()
+	t.wait(0.1)
+
+	t.assert(CooldownPolicy.Transfer(owner, thief, "__TestStolen", "Copy"), "Transfer Copy falhou")
+	local a, b = owner.GetCooldown("__TestStolen"), thief.GetCooldown("__TestStolen")
+	t.assert(math.abs(a - b) < 0.05 and b > 3.5, string.format("Copy: dono %.2f, ladrão %.2f", a, b))
+
+	local thief2 = makeDummy(CFrame.new(8, 5, 0), COMBAT)
+	CooldownPolicy.Transfer(owner, thief2, "__TestStolen", "Move")
+	t.assert(thief2.GetCooldown("__TestStolen") > 3.5, "Move não levou o cooldown")
+	t.assert(not owner.HasCooldown("__TestStolen"), "Move deveria liberar o dono")
+
+	-- Com cargas: o estado das cargas vai junto
+	equip(owner, "__TestStolenCharges", { cooldown = 3, duration = 0.05, cooldownPolicy = { charges = 3 } })()
+	CooldownPolicy.Transfer(owner, thief, "__TestStolenCharges", "Copy")
+	local charges, max = thief.GetCooldownCharges("__TestStolenCharges")
+	t.assert(charges == 2 and max == 3, string.format("Cargas herdadas: %s de %s", tostring(charges), tostring(max)))
+
+	local wall = makeDummy(CFrame.new(12, 5, 0), { "Health" })
+	t.assert(CooldownPolicy.Transfer(owner, wall, "__TestStolen") == false, "Transfer para entidade sem Combat deveria falhar")
+
+	cleanup(owner)
+	cleanup(thief)
+	cleanup(thief2)
+	cleanup(wall)
+end)
+
+--=============================================================================
+--  D14 — BLOQUEIO DECLARADO (08/11/2026)
+--=============================================================================
+
+run("D14 — modos de bloqueio: Full, Flat, Percent e sem declaração", function(t)
+	local caster = makeDummy(CFrame.new(0, 5, 0), { "Health" })
+	local victim = makeDummy(CFrame.new(4, 5, 0), { "Health", "Status" })
+	local hit = makeRunner(caster, "__TestBlockModes", { duration = 10 }, {})
+	hit:start()
+	local MODES = StateTable.Enum.BlockModes
+	local function dealtWith(name, block)
+		victim.ApplyStatus(blockStatus(name, { block = block }), { Duration = 10 })
+		local _, dealt = victim.TakeDamage(StateTable.BuildContext(hit, 10))
+		victim.RemoveStatus(name)
+		return dealt
+	end
+
+	local full = dealtWith("__TestFull", { mode = MODES.Full })
+	t.assert(full ~= 10 and (full == 0 or full == false or type(full) == "string"), "Full deixou passar: " .. tostring(full))
+	t.assert(dealtWith("__TestFlat", { mode = MODES.Flat, value = 4 }) == 6, "Flat 4 em 10 deveria dar 6")
+	t.assert(dealtWith("__TestPercent", { mode = MODES.Percent, value = 0.25 }) == 7.5, "Percent 0,25 em 10 deveria dar 7,5")
+	t.assert(dealtWith("__TestUndeclared", nil) == 10, "Bloqueio sem declaração bloqueou (era implícito)")
+	t.assert(dealtWith("__TestCustomNoTrigger", { mode = MODES.Custom }) == 10, "Custom sem onTrigger bloqueou")
+
+	hit:endSkill(false)
+	cleanup(caster)
+	cleanup(victim)
+end)
+
+run("D14 — escudo de status: só Full barra status", function(t)
+	local victim = makeDummy(CFrame.new(0, 5, 0), { "Health", "Status" })
+	local MODES = StateTable.Enum.BlockModes
+	local dotStatus = { data = { name = "__TestDotStatus2", traits = { Traits.DOT } }, callbacks = {} }
+
+	victim.ApplyStatus(blockStatus("__TestFlatShield", { ShieldsFrom = { Traits.DOT }, block = { mode = MODES.Flat, value = 5 } }), { Duration = 10 })
+	victim.ApplyStatus(dotStatus, { Duration = 5 })
+	t.assert(victim.GetStatus("__TestDotStatus2") ~= nil, "Escudo Flat barrou um status (só Full barra)")
+	victim.RemoveStatus("__TestDotStatus2")
+	victim.RemoveStatus("__TestFlatShield")
+
+	victim.ApplyStatus(blockStatus("__TestNoDeclShield", { ShieldsFrom = { Traits.DOT } }), { Duration = 10 })
+	victim.ApplyStatus(dotStatus, { Duration = 5 })
+	t.assert(victim.GetStatus("__TestDotStatus2") ~= nil, "Escudo sem declaração barrou o status")
+	cleanup(victim)
+end)
+
+--=============================================================================
+--  ITEM 4 — HIGIENE (08/11/2026)
+--=============================================================================
+
+run("F64 — Logger: nível por canal e WarnOnce", function(t)
+	local Logger = require(ReplicatedStorage.Logger)
+	local LogService = game:GetService("LogService")
+	local seen = {}
+	local conn = LogService.MessageOut:Connect(function(message)
+		if message:find("__TestLog", 1, true) then table.insert(seen, message) end
+	end)
+
+	local log = Logger.Channel("__TestLog")
+	Logger.SetLevel("Warn", "__TestLog")
+	log.Debug("debug-escondido")
+	log.Info("info-escondido")
+	log.Warn("warn-visivel")
+	log.WarnOnce("k", "once-1")
+	log.WarnOnce("k", "once-2") -- repetição: só em Debug, escondida aqui
+	Logger.SetLevel("Off", "__TestLog")
+	log.Error("error-escondido")
+	t.wait(0.2)
+	conn:Disconnect()
+
+	local joined = table.concat(seen, "\n")
+	-- Busca literal (plain): "-" é quantificador nos padrões Lua
+	local function has(text) return joined:find(text, 1, true) ~= nil end
+	t.assert(not has("escondido"), "Mensagem abaixo do nível apareceu:\n" .. joined)
+	t.assert(has("warn-visivel") and has("once-1"), "Warn não apareceu:\n" .. joined)
+	t.assert(not has("once-2"), "WarnOnce repetiu em Warn")
+	t.assert(has("[__TestLog]"), "Prefixo do canal ausente")
+end)
+
+run("F51 — dono de inscrição por entidade: limpar o combo de um atacante não apaga o do outro", function(t)
+	local target = makeDummy(CFrame.new(0, 5, 0), { "Health" })
+	local attackerA = makeDummy(CFrame.new(4, 5, 0), { "Health" })
+	local attackerB = makeDummy(CFrame.new(8, 5, 0), { "Health" })
+	local ownerA = StateTable.OwnerToken(attackerA, "__TestCombo")
+	local ownerB = StateTable.OwnerToken(attackerB, "__TestCombo")
+	t.assert(ownerA ~= ownerB, "Atacantes diferentes receberam o mesmo token")
+	t.assert(StateTable.OwnerToken(attackerA, "__TestCombo") == ownerA, "O token da mesma entidade e tag mudou")
+
+	local firedA, firedB = 0, 0
+	local IN, Post = StateTable.Enum.Roles.IN, StateTable.Enum.Breakpoints.PostDamage
+	target:Listen({ Role = IN, Breakpoint = Post, Owner = ownerA, Action = function() firedA += 1 end })
+	target:Listen({ Role = IN, Breakpoint = Post, Owner = ownerB, Action = function() firedB += 1 end })
+	target:UnsubscribeByOwner(ownerA) -- o novo Dash do A limpa o combo antigo dele
+	target.TakeDamage(1)
+	t.assert(firedA == 0, "O combo do A não saiu")
+	t.assert(firedB == 1, "Limpar o combo do A apagou o do B")
+
+	cleanup(target)
+	cleanup(attackerA)
+	cleanup(attackerB)
+end)
+
 task.wait(1)
 TestHarness.Summary()
 platform:Destroy()

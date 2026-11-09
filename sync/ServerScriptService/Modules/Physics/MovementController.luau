@@ -99,7 +99,10 @@ function MovementController.ProcessEntity(comp, dt)
 	local faceRequest: Vector3? = nil
 	local faceResponsiveness: number? = nil
 
-	if tags.canDisplace then
+	-- canDisplace = false barra só as forças EXTERNAS (knockback, vento, grab de outro). As da
+	-- própria entidade (dash) seguem valendo; antes o bloco inteiro era pulado (F47). Externa =
+	-- data.External, ou, sem ele, RequiresControl == false (a convenção da doc das Forces)
+	do
 		-- Ordem determinística por criação (ID = "F_<contador>"): empate de Priority
 		-- entre duas Forces Hard sempre resolve pra mais recente, nunca pela ordem
 		-- arbitrária do pairs().
@@ -126,6 +129,13 @@ function MovementController.ProcessEntity(comp, dt)
 			local duration = data.Duration or 0.5
 			if forceEntry.ElapsedTime >= duration then
 				comp:RemoveForce(forceId)
+				continue
+			end
+
+			local external = data.External
+			if external == nil then external = data.RequiresControl == false end
+			if not tags.canDisplace and external and not data.Unstoppable then
+				comp:RemoveForce(forceId) -- quem não pode ser deslocado descarta a força externa
 				continue
 			end
 
@@ -244,12 +254,6 @@ function MovementController.ProcessEntity(comp, dt)
 			if wantsFace and direction.Magnitude > 1e-4 then
 				faceRequest = direction
 				faceResponsiveness = data.Responsiveness or Settings.Face_Direction_Responsiveness
-			end
-		end
-	else
-		for forceId, forceEntry in pairs(comp.ActiveForces) do
-			if not forceEntry.Data.Unstoppable then
-				comp:RemoveForce(forceId)
 			end
 		end
 	end

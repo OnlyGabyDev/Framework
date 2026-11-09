@@ -8,6 +8,8 @@ local DataManager = require(Server.EntityData.DataManager)
 local SkillFactory = require(Server.Modules.SkillFactory)
 local StateTable = require(Storage.Modules.Combat.StateTable)
 local Intents = require(ReplicatedStorage.Input.Intents)
+local Log = require(ReplicatedStorage.Logger).Channel("SkillHandler")
+local CooldownPolicy = require(Server.Modules.CooldownPolicy)
 
 --=============================================================================
 --  EIXOS (Move / Look)
@@ -84,12 +86,6 @@ function SkillHandler.GetGestureSpec(entityCore, intent)
 	return skill and skill.data and skill.data.input or nil
 end
 
-local function startCooldown(entityCore, skill)
-	local skillName = skill.data.name
-	entityCore.SetCooldown(skillName, skill.data.cooldown)
-	return entityCore.GetCooldown(skillName)
-end
-
 --[[
 Guarda qual runner a intent está segurando, para o Release chegar no runner certo
 ]]
@@ -125,39 +121,45 @@ local function activate(entityCore, event)
 	local maxInstances = skill.data.maxInstances --Guarda a quantidade máximas de instâncias permitida daquela skill
 	local activeRunners = liveRunners(entityCore, skillName) --Busca instâncias ativas (vivas) da skill na entidade
 
-	if entityCore.HasCooldown(skillName) then return false end --Se estiver em cooldown, retorne false.
-
 	--Busca por tags que impossibilitem a entidade de castar essa skill
-	if not entityCore.CanContinue(skill) then 
-		warn("[SkillHandler] Skill não pode rodar (canCast):", skillName)
+	if not entityCore.CanContinue(skill) then
+		Log.Debug("skill não pode rodar (canCast):", skillName)
 		return false
 	end
 
 	--Se já tiver uma instância ativa dessa skill e for maior do que o máximo
-	if #activeRunners > 0 and #activeRunners >= maxInstances then 
+	if #activeRunners > 0 and #activeRunners >= maxInstances then
 		if maxInstances == 1 then
 			local runner = activeRunners[1]
-			-- Tenta recast primeiro (runner permanece vivo, sem Stop)
+			-- Tenta recast primeiro (runner permanece vivo, sem Stop). Se o recast espera ou
+			-- reinicia o cooldown é a política declarada da skill (cooldownPolicy.recast, D13)
 			if runner:Recast(true) then
+				if not CooldownPolicy.CanRecast(entityCore, runner) then return false end
 				runner:Recast(nil, event)
+				CooldownPolicy.OnRecast(entityCore, runner)
 				track(entityCore, event, runner)
-				return true, skillName, startCooldown(entityCore, skill)
+				return true, skillName, entityCore.GetCooldown(skillName)
 			end
 			-- Sem onRecast: tenta cancelar e recriar a skill
 			if not entityCore.TrySelfCancel() then
 				return false
 			end
-			-- TrySelfCancel matou o runner antigo, cai pro fluxo de criação abaixo
+			-- O TrySelfCancel só derruba quem segura um ActionState Self. Se ninguém liberou a
+			-- vaga, o cast novo passaria do maxInstances (e, com start = End ou Manual, sem
+			-- cooldown nenhum): recusa
+			if #liveRunners(entityCore, skillName) >= maxInstances then
+				return false
+			end
 		else
 			return false
 		end
 	end
 
+	if entityCore.HasCooldown(skillName) then return false end --Cast novo respeita o cooldown
+
 	--Cancela a skill anterior se ela for responsável por um state Self
 	--Se obtiver retorno false (estado encontrado mas não é Self), sai do código
 	if not entityCore.TrySelfCancel() then return false end
-
-	local cooldown = startCooldown(entityCore, skill)
 
 	--inicializa o runner da skill. Cast por input é a raiz da cadeia: sem Lineage pai, o próprio
 	--runner vira a raiz (Depth 1, Origin = quem castou). Antes um nó raiz montado aqui com campos
@@ -170,15 +172,17 @@ local function activate(entityCore, event)
 		nil,
 		event)
 
-	-- Runner não criado (stack overflow) ou onStart com erro (o runner já se cancelou e limpou
-	-- sozinho, F14): a ativação falha sem custo. O cooldown que acabou de começar é devolvido;
-	-- antes do cast a skill não estava em cooldown (checado acima)
-	if not runner or not runner:start() then
-		entityCore.ResetCooldown(skillName)
+	if not runner then return false end -- stack overflow: nada foi cobrado
+
+	-- O cooldown começa (ou não) conforme a política declarada, ANTES do onStart: uma cadeia
+	-- que tente castar a mesma skill dentro do onStart já encontra o cooldown. onStart com erro
+	-- encerra o runner com o motivo error, e o refund padrão devolve o cooldown (F14, D13)
+	CooldownPolicy.OnActivate(entityCore, runner)
+	if not runner:start() then
 		return false
 	end
 	track(entityCore, event, runner)
-	return true, skillName, cooldown
+	return true, skillName, entityCore.GetCooldown(skillName)
 end
 
 local function release(entityCore, event)
@@ -194,6 +198,7 @@ a skill recebe a origem.
 @return sucesso BOOLEAN, skillName STRING?, cooldown NUMBER? (skillName/cooldown só em Activate)
 ]]
 function SkillHandler.HandleIntent(ID, event)
+	if type(event) ~= "table" then return false end -- F49: HandleIntent(id, nil) dava erro
 	local entityCore = DataManager.Get(ID) 	--Salva o EntityCore da entidade que chamou a função
 	if not entityCore then return false end
 

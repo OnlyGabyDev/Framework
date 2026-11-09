@@ -2,6 +2,7 @@
 
 local ServerScriptService = game:GetService("ServerScriptService")
 local ForceRig = require(ServerScriptService.Modules.Physics.ForceRig)
+local Log = require(game:GetService("ReplicatedStorage").Logger).Channel("EntityWrapper")
 
 local EntityWrapper = {}
 
@@ -131,7 +132,10 @@ function HumanoidMovement.new(characterWrapper)
 	self._character = characterWrapper
 
 	local root = characterWrapper:GetRoot()
-	self._rig = (root and not root.Anchored) and ForceRig.new(root) or nil
+	-- O rig nasce mesmo com a raiz ancorada: ancorada ela não se move, mas ao ser solta
+	-- (SetFrozen(false), script do jogo) as forças passam a valer. Antes a entidade criada
+	-- ancorada ficava imóvel para sempre, em silêncio (F50)
+	self._rig = root and ForceRig.new(root) or nil
 
 	return self
 end
@@ -239,7 +243,7 @@ function NPCMovement.new(characterWrapper)
 	self._character = characterWrapper
 
 	local root = characterWrapper:GetRoot()
-	self._rig = (root and not root.Anchored) and ForceRig.new(root) or nil
+	self._rig = root and ForceRig.new(root) or nil -- também com a raiz ancorada (F50)
 	self._currentSpeed = 0
 	self._desiredWalk = Vector3.zero 
 
@@ -357,11 +361,11 @@ EntityWrapper.CreateCharacter = function(params)
 	]]
 
 	if params[1] ~= nil then
-		warn("WRAPPER DE CHARACTER HUMANOIDE INSTANCIADO")
+		Log.Debug("wrapper de character humanoide instanciado")
 		return HumanoidCharacter.new(params[1],params[2])
 	else
 		-- NPC sem Humanoid
-		warn("WRAPPER DE CHARACTER NPC INSTANCIADO")
+		Log.Debug("wrapper de character NPC instanciado")
 		return NPChar.new(params[2])
 	end
 end

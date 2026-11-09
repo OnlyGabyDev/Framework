@@ -26,7 +26,7 @@ end
 -- Regra 16: dependência OPCIONAL de Health, declarada aqui num único ponto.
 -- Sem Health a entidade não morre, então nunca recusa status por isso.
 local function isDead(entity)
-	return entity:HasComponent(entity.ComponentKey.Health) and not entity.IsAlive()
+	return StateTable.IsDead(entity)
 end
 
 -- Encerra runners que JÁ saíram do registro: o onFinish deles não acha mais a entrada
@@ -240,7 +240,10 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 		-- aplicar status neste mesmo grupo enquanto o pairs ainda percorre ele.
 		local sameCategory = {}
 		for name, entry in pairs(group) do
-			local entryMeta = entry.data and entry.data.data
+			-- Stack em instâncias é uma LISTA de entradas: o meta vem da 1ª. Antes a lista não
+			-- tinha .data e o exclusive passava reto por ela (F67)
+			local first = asItems(entry)[1]
+			local entryMeta = first and first.data and first.data.data
 			if entryMeta and entryMeta.category == meta.category then
 				table.insert(sameCategory, name)
 			end
@@ -676,8 +679,12 @@ function StatusComponent:ApplyMitigation(context)
 	local blockRunner = owners[blockTag]
 	if not blockRunner then return end
 
+	-- As traits do bloqueio moram no meta (entry.data.data). Antes eram lidas em entry.data,
+	-- que é o módulo: Unbreakable e TrueBlock nunca valiam (F10)
+	local blockMeta = StateTable.BlockerMeta(blockRunner)
+
 	local skipBlock = (
-		not (blockRunner.data.traits and table.find(blockRunner.data.traits, StateEnum.Traits.TrueBlock))
+		not StateTable.HasTrait(blockMeta, StateEnum.Traits.TrueBlock)
 		and ignore
 	)
 	if skipBlock then return end
@@ -693,7 +700,7 @@ function StatusComponent:ApplyMitigation(context)
 			if blockBreak then break end
 		end
 
-		local unbreakable = blockRunner.data.traits and table.find(blockRunner.data.traits, StateEnum.Traits.Unbreakable)
+		local unbreakable = StateTable.HasTrait(blockMeta, StateEnum.Traits.Unbreakable)
 		if blockBreak and not unbreakable then
 			if blockRunner.runner then blockRunner.runner:Stop(true) end
 			broke = true
@@ -718,8 +725,10 @@ function StatusComponent:_GetShields()
 		for _, item in ipairs(asItems(entry)) do
 			local shieldsFrom = item.data.data.ShieldsFrom
 			if shieldsFrom ~= nil then
+				-- Guarda a ENTRADA: o _TriggerShield lê entry.runner. Antes guardava o runner, o
+				-- _TriggerShield lia runner.runner (nil) e escudo de status nunca barrava (F11)
 				for _, statusName in pairs(shieldsFrom) do
-					shields[statusName] = item.runner
+					shields[statusName] = item
 				end
 			end
 		end

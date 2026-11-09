@@ -61,7 +61,8 @@ callbacks = {
         
 		self.accumulatedBleedDamage = 0
 		self.isUltActive = false
-		local comboOwner = "DashBleedCombo"
+		-- Dono por entidade (F51): o mesmo token em todo Dash DESTE atacante, outro para os demais
+		local comboOwner = StateTable.OwnerToken(self.Entity, "DashBleedCombo")
 
 		-- Limpa combos residuais de Dashes anteriores para não vazar memória
 		self.Entity:UnsubscribeByOwner(comboOwner)

@@ -77,10 +77,45 @@ enum.EnginePriority = math.huge
 
 --Motivo do fim de um runner, entregue em ctx.reason no onCancel/onEnd (e no OUT.onEnd)
 enum.EndReasons = {
-    Cancel = "cancel",      --Cancelado (Stop(true), remoção do status, morte) ou erro no onStart/onStep
+    Cancel = "cancel",      --Cancelado (Stop(true), remoção do status, morte)
     Duration = "duration",  --A duração acabou
     Stop = "stop",          --A própria skill se encerrou sem cancelar (Stop(false))
+    Error = "error",        --Erro num callback (onStart/onStep): o motor encerrou o runner
+    Fizzle = "fizzle",      --A skill desistiu do cast (self:Fizzle()): o cast não aconteceu
 }
+
+--==== COOLDOWN DE SKILL (D13; regras em ServerScriptService.Modules.CooldownPolicy) ====--
+enum.CooldownStart = table.freeze({
+    Cast = "Cast",          --Começa na ativação, antes do onStart
+    End = "End",            --Começa no fim do runner
+    Manual = "Manual",      --Começa quando a skill chama self:CommitCooldown()
+})
+
+enum.RecastPolicy = table.freeze({
+    Blocked = "Blocked",    --Recast espera o cooldown e não o reinicia
+    Restart = "Restart",    --Recast espera o cooldown e o reinicia
+    Free = "Free",          --Recast ignora o cooldown e não o reinicia
+    -- ou um número: intervalo próprio entre cast/recasts, em segundos
+})
+
+-- Padrões explícitos da política (a skill sobrescreve no data.cooldownPolicy)
+enum.CooldownDefaults = table.freeze({
+    start = "Cast",
+    recastLegacy = "Restart",  --só para skill com onRecast que não declarou recast (com aviso)
+    refund = table.freeze({ error = 1, fizzle = 1 }), --erro e desistência não cobram o cooldown
+    maxReduction = 0.8,        --teto PADRÃO da redução de cooldown (design de jogo: troque aqui ou
+                               --por skill em cooldownPolicy.maxReduction, 0..1; 1 = sem teto)
+})
+
+--==== BLOQUEIO (D14) ====--
+-- Quem tem a tag block declara o que faz: data.block = { mode = BlockModes.X, value = n? }.
+-- Sem block e sem onTrigger, NÃO bloqueia (avisa uma vez). onTrigger, quando existe, decide.
+enum.BlockModes = table.freeze({
+    Full = "Full",          --Zera o dano; barra o status (escudo de status)
+    Flat = "Flat",          --Tira `value` do dano (não barra status)
+    Percent = "Percent",    --Tira a fração `value` (0..1) do dano (não barra status)
+    Custom = "Custom",      --Decidido pelo onTrigger (obrigatório)
+})
 
 
 
@@ -141,6 +176,7 @@ enum.Stats = {
     DamageMult = "DamageMult",
     Weapon = "Weapon",
     GravityScale = "GravityScale",
+    CooldownReduction = "CooldownReduction", --fração (0..1) tirada de toda contagem de cooldown que começa
 }
 
 enum.StatDefaults = table.freeze({
@@ -150,6 +186,7 @@ enum.StatDefaults = table.freeze({
     Defense = 0,
     DamageMult = 1,
     GravityScale = 1,
+    CooldownReduction = 0,
 })
 
 -- O que o MOTOR faz quando o HP zera. O resto (Humanoid, animação, respawn) é do jogo: o
@@ -159,6 +196,7 @@ enum.StatDefaults = table.freeze({
 enum.DeathDefaults = table.freeze({
     CancelSkillsOnDeath = true, -- CombatComponent: a morte cancela as skills ativas (F20)
     RefuseStatusOnDeath = true, -- StatusComponent: morto não recebe status novo (F39); data.allowOnDead fura por status
+    RefuseCastOnDeath = true, -- CombatComponent: morto não inicia cast novo (F75)
 })
 
 -- Limite de profundidade SÍNCRONA de uma cadeia dano<->status (TakeDamage/ApplyStatus se

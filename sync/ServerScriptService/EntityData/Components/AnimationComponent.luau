@@ -211,12 +211,19 @@ function AnimationComponent:PlayAnimation(animId : string | number, key : string
 	-- Armazena
 	self.Tracks[key] = track
 	
-	-- Auto-cleanup quando terminar
-	local connection = track.Stopped:Connect(function()
-		self.Tracks[key] = nil
+	-- Auto-cleanup quando terminar. Só limpa a key se ela ainda for desta track: antes o Stopped
+	-- da track antiga (parada pelo replay na mesma key) apagava a nova, que ficava órfã tocando;
+	-- a conexão sai junto e a track é destruída (o Animator tem limite de 64 tracks) (F25)
+	local connection
+	connection = track.Stopped:Connect(function()
+		connection:Disconnect()
+		if self.Tracks[key] == track then
+			self.Tracks[key] = nil
+		end
+		-- Deferido: outros ouvintes do mesmo Stopped (PlaySequence) ainda rodam antes
+		task.defer(track.Destroy, track)
 	end)
-	table.insert(self._connections, connection)
-	
+
 	return track
 end
 
@@ -378,16 +385,25 @@ function AnimationComponent:WaitForMarker(key : string, markerName : string, tim
 	if not signal then return false end
 	
 	if timeout then
-		local fired = false
-		local connection
+		-- Retorna no disparo do marker ou no timeout, o que vier antes. Antes esperava sempre o
+		-- timeout inteiro (F72)
+		local thread = coroutine.running()
+		local done = false
+		local connection, timer
 		connection = signal:Connect(function()
-			fired = true
-			if connection then connection:Disconnect() end
+			if done then return end
+			done = true
+			connection:Disconnect()
+			if timer then task.cancel(timer) end
+			task.spawn(thread, true)
 		end)
-		
-		task.wait(timeout)
-		if connection then connection:Disconnect() end
-		return fired
+		timer = task.delay(timeout, function()
+			if done then return end
+			done = true
+			connection:Disconnect()
+			task.spawn(thread, false)
+		end)
+		return coroutine.yield()
 	else
 		signal:Wait()
 		return true

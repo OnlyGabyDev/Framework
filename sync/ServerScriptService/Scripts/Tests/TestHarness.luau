@@ -4,7 +4,7 @@
 -- nova — Regra 3, não presuma que você quer isso).
 
 local TestHarness = {}
-local results = { passed = 0, failed = 0 }
+local results = { passed = 0, failed = 0, failures = {} }
 
 function TestHarness.Run(name: string, fn: (t: any) -> ())
 	local t = {}
@@ -28,13 +28,21 @@ function TestHarness.Run(name: string, fn: (t: any) -> ())
 		print(string.format("[PASS] %s", name))
 	else
 		results.failed += 1
+		table.insert(results.failures, name .. " — " .. tostring(err))
 		warn(string.format("[FAIL] %s — %s", name, tostring(err)))
 	end
 end
 
 function TestHarness.Summary(): boolean
 	print(string.format("[TestHarness] %d passou, %d falhou", results.passed, results.failed))
+	-- Também num atributo: o Output trunca quando há muito warn, e o atributo é legível de fora
+	workspace:SetAttribute("FW_TestSummary", game:GetService("HttpService"):JSONEncode(results))
 	return results.failed == 0
+end
+
+-- Leitura dos resultados fora do Output (o console trunca quando há muito warn)
+function TestHarness.Results()
+	return { passed = results.passed, failed = results.failed, failures = table.clone(results.failures) }
 end
 
 return TestHarness

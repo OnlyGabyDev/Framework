@@ -13,6 +13,7 @@ function IHitbox:DestroyHitbox() end
 HitboxWrapper.__index = HitboxWrapper
 
 local ShapecastModule = require(script.Parent.ShapecastHitbox)
+local Log = require(game:GetService("ReplicatedStorage").Logger).Channel("HitboxWrapper")
 
 -- Pool global
 local hitboxPool = {}
@@ -312,7 +313,7 @@ function HitboxWrapper.ClearPool()
 	end
 
 	table.clear(hitboxPool)
-	print("[HitboxWrapper] Pool limpo. Destruídas:", totalDestroyEntity)
+	Log.Debug("pool limpo, destruídas:", totalDestroyEntity)
 end
 -- Debug
 function HitboxWrapper.GetPoolStats()

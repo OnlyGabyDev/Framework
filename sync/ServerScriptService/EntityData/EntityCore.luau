@@ -5,10 +5,17 @@
 local EntityCore = {}
 EntityCore.ComponentKey = {}
 EntityCore.Events = {}
+-- Dono único dos tipos de entidade (F38): DataManager grava, IsPlayer/IsNPC leem
+EntityCore.EntityTypes = table.freeze({
+	Player = "Player",
+	NPC = "NPC",
+	Generic = "Generic",
+})
 
 local Storage = game:GetService("ServerStorage")
 local TriggerSet = require(Storage.Modules.Combat.TriggerSet)
 local ComponentUtils = require(script.Parent.ComponentUtils)
+local Log = require(game:GetService("ReplicatedStorage").Logger).Channel("EntityCore")
 
 local ComponentRegistry = {}
 local ComponentStubs = {} -- [funcName] = função de warn COMPARTILHADA entre todas as entidades
@@ -39,7 +46,7 @@ function EntityCore.new(instance : Model, entityType : string, entityID : string
 	-- Dados mínimos
 	self.ID = entityID or ("Entity_" .. tostring(tick()))
 	self.Instance = instance
-	self.Type = entityType or "Generic"
+	self.Type = entityType or EntityCore.EntityTypes.Generic
 	self.Components = {}
 	self.Player = Player or nil
 
@@ -202,6 +209,15 @@ function EntityCore:RemoveComponent(componentName : string)
 		component:Destroy()
 	end
 
+	-- A API exposta sai junto: a chamada volta a cair no stub (warn) em vez de ir para o
+	-- componente destruído, dar erro e vazar a cadeia (F35)
+	local registryData = ComponentRegistry[componentName]
+	if registryData and registryData.ExposeAPI then
+		for methodName in pairs(registryData.ExposeAPI) do
+			rawset(self, methodName, nil)
+		end
+	end
+
 	self.Components[componentName] = nil
 end
 
@@ -237,7 +253,7 @@ Retorna se a entidade é um Player
 @return é player BOOLEAN
 ]]
 function EntityCore:IsPlayer() : boolean
-	return self.Type == "Player"
+	return self.Type == EntityCore.EntityTypes.Player
 end
 
 --[[
@@ -245,7 +261,7 @@ Retorna se a entidade é um NPC
 @return é NPC BOOLEAN
 ]]
 function EntityCore:IsNPC() : boolean
-	return self.Type == "NPC"
+	return self.Type == EntityCore.EntityTypes.NPC
 end
 
 --[[
@@ -278,9 +294,10 @@ function EntityCore.RegisterComponent(name : string, componentModule : {[string]
 		ExposeAPI = componentModule.ExposeAPI,
 		InitPriority = componentModule.InitPriority,
 		Requires = componentModule.Requires,
+		EventKey = componentModule.EventKey, -- sem isso EntityCore.Events ficava sempre vazio (F37)
 	}
 
-	print("[EntityCore] Componente registrado:", name)
+	Log.Debug("componente registrado:", name)
 	
 end
 

@@ -5,6 +5,8 @@ local Skill = {
 
 	data = {
 		cooldown = 1,
+		-- O 2º golpe espera o cooldown do 1º e o reinicia: é isso que dá o ritmo do combo (D13)
+		cooldownPolicy = { recast = StateTable.Enum.RecastPolicy.Restart },
 		duration = 5,
 		castTime = 0,
 		tags = {[StateTable.Enum.Tags.block] = true},

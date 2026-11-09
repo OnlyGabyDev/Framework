@@ -5,6 +5,7 @@ local ServerScript = game:GetService("ServerScriptService")
 local Storage = game:GetService("ServerStorage")
 local StateTable = require(Storage.Modules.Combat.StateTable)
 local Utils = require(ReplicatedStorage.Utils)
+local CooldownPolicy = require(ServerScript.Modules.CooldownPolicy)
 
 local SkillRunner = {}
 SkillRunner.__index = SkillRunner
@@ -111,6 +112,8 @@ function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input) --Instanc
 	self.skill.TriggerAction = function(_, ...) return self:TriggerAction(...) end
 	self.skill.Recast = function(_, ...) return self:Recast(...) end
 	self.skill.endSkill = function(_, ...) return self:endSkill(...) end
+	self.skill.Fizzle = function(_) return self:Fizzle() end
+	self.skill.CommitCooldown = function(_) return self:CommitCooldown() end
 
 	-- Ownership automático (Regra 2): a skill registra limpezas/inscrições aqui em vez de
 	-- montar seu próprio "self.cleanUp" chamado à mão em onEnd E onCancel.
@@ -190,9 +193,7 @@ function SkillRunner:start(): boolean
 	--hora (F14): antes o erro escapava do SkillHandler e o runner ficava registrado, com o
 	--que o onStart tivesse feito até ali.
 	if not protect(self, "onStart", self._fire, self, "onStart", self:BuildContext()) then
-		self:endSkill(true)
-		-- Erro não aceita veto: se o onCancel recusou o cancel, encerra mesmo assim
-		if not self:IsEnded() then self:endSkill(false, REASONS.Cancel) end
+		self:Abort()
 		return false
 	end
 
@@ -231,7 +232,11 @@ function SkillRunner:_internalUpdate(dt)
 
 	--Se estiver running:
 	elseif self.state == STATES.Running then
-		self:_fire("onStep", dt, self:BuildContext())
+		-- Context só para quem tem onStep: antes todo runner alocava um por frame, inclusive os
+		-- sem onStep (3000 runners: frame médio de 25,7 ms) (F53)
+		if self.skill.callbacks.onStep then
+			self:_fire("onStep", dt, self:BuildContext())
+		end
 	end
 
 	local duration = self.skill.runtimeDuration or self.skill.data.duration
@@ -284,7 +289,9 @@ function SkillRunner:Release(input)
 end
 
 --[[
-Trigger externo, usado especialmente mas não exclusivamente por blocks e shields de efeitos
+Trigger externo, usado especialmente mas não exclusivamente por blocks e shields de efeitos.
+Com onTrigger, ele decide. Sem onTrigger, vale o data.block declarado (StateTable.ResolveBlock,
+D14); sem nenhum dos dois, não bloqueia e avisa uma vez. Nada implícito.
 @param data - dados de quem deu trigger
 ]]
 function SkillRunner:TriggerAction(context)
@@ -304,8 +311,8 @@ function SkillRunner:TriggerAction(context)
 		if self.skill.callbacks.onTrigger then
     	    return self:_fire("onTrigger", context, self:BuildContext())
     	end
-    
-    return nil
+
+    return self.statusTable.ResolveBlock(self.data, context)
 end
 
 
@@ -380,6 +387,32 @@ function SkillRunner:Stop(cancel : boolean?)
 	self:endSkill(cancel)
 end
 
+--[[
+Encerra por erro: tenta o cancel normal e, se o onCancel recusar, encerra mesmo assim. Erro
+não aceita veto (onStart no start, onStep no SkillScheduler). Antes o erro no onStep de uma
+skill que recusava o cancel deixava o runner vivo, errando a cada frame (F78).
+]]
+function SkillRunner:Abort()
+	self:endSkill(true, REASONS.Error)
+	if not self:IsEnded() then self:endSkill(false, REASONS.Error) end
+end
+
+--[[
+A skill desiste do cast (alvo não encontrado, condição que não bateu). Encerra com o motivo
+fizzle, que por padrão devolve o cooldown inteiro (Enum.CooldownDefaults.refund).
+]]
+function SkillRunner:Fizzle()
+	self:endSkill(false, REASONS.Fizzle)
+end
+
+--[[
+Confirma o cooldown de uma skill com cooldownPolicy.start = Manual (o cast de fato aconteceu).
+@return confirmou BOOLEAN
+]]
+function SkillRunner:CommitCooldown(): boolean
+	return CooldownPolicy.Commit(self)
+end
+
 
 --[[
 Finaliza a skill.
@@ -420,6 +453,11 @@ function SkillRunner:endSkill(cancel, reason)
 	--ctx.reason (F54). Um erro nele não pode pular a limpeza abaixo: era o "runner fantasma"
 	--do F13, que ficava em ActiveSkills e recebia o recast do próximo toque.
 	protect(self, "onEnd", self._fire, self, "onEnd", endContext(self, reason))
+
+	-- Cooldown do fim (start = End) e devolução por motivo (refund). Só runners de cast
+	if self._cooldownState then
+		protect(self, "CooldownPolicy.OnEnd", CooldownPolicy.OnEnd, self, reason)
+	end
 
 	if self.Entity and self.type == StateTable.Enum.Types.Skill then
 		if self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then

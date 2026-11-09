@@ -8,9 +8,48 @@ local RS = game:GetService("ReplicatedStorage")
 local Storage = game:GetService("ServerStorage")
 local HitboxWrapper = require(Storage.Modules.Combat.Hitbox.HitboxWrapper)
 local StateTable = require(Storage.Modules.Combat.StateTable)
+local Log = require(RS.Logger).Channel("WeaponComponent")
 
 local WeaponComponent = {}
 WeaponComponent.__index = WeaponComponent
+
+local warnedDuplicates = {} -- [pasta da arma] = true: o aviso de duplicata sai uma vez por servidor
+
+--[[
+Pasta da arma pelo nome. Nome duplicado (inclusive só na capitalização) é bug pela regra 19:
+avisa e usa a pasta COMPLETA (com o model). Antes o FindFirstChild escolhia pela ordem, e na
+pasta legada (sem model) o Clone dava erro (F18).
+]]
+local function findWeaponFolder(weaponsFolder: Instance, weaponName: string): Instance?
+	local lowered = string.lower(weaponName)
+	local matches = {}
+	for _, child in weaponsFolder:GetChildren() do
+		if string.lower(child.Name) == lowered then
+			table.insert(matches, child)
+		end
+	end
+	if #matches <= 1 then
+		return matches[1]
+	end
+
+	local key = weaponsFolder:GetFullName() .. "." .. lowered
+	if not warnedDuplicates[key] then
+		warnedDuplicates[key] = true
+		warn(string.format("[WeaponComponent] %d pastas de arma com o nome '%s' em %s (regra 19): apague a legada",
+			#matches, weaponName, weaponsFolder:GetFullName()))
+	end
+	for _, folder in matches do
+		if folder.Name == weaponName and folder:FindFirstChild(weaponName) then
+			return folder
+		end
+	end
+	for _, folder in matches do
+		if folder:FindFirstChildWhichIsA("Model") then
+			return folder
+		end
+	end
+	return matches[1]
+end
 
 --[[
 Inicializa o componente de arma na entidade
@@ -72,7 +111,7 @@ function WeaponComponent:EquipWeapon(weaponName : string) : boolean
 		end
 
 
-		local weaponFolder = weaponsFolder:FindFirstChild(weaponName)
+		local weaponFolder = findWeaponFolder(weaponsFolder, weaponName)
 		if not weaponFolder then
 			warn("[WeaponComponent] Arma não encontrada:", weaponName)
 			return false
@@ -138,7 +177,7 @@ function WeaponComponent:EquipWeapon(weaponName : string) : boolean
 		self.Hitbox = HitboxWrapper.new(self.Entity)
 	end
 	
-	print(string.format("[WeaponComponent] Arma '%s' equipada com sucesso na entidade %s!", weaponName, tostring(self.Entity.ID)))
+	Log.Debug(string.format("arma '%s' equipada na entidade %s", weaponName, tostring(self.Entity.ID)))
 
 	return true
 end
@@ -178,7 +217,14 @@ function WeaponComponent:_AttachAllPoints(weaponClone, attachPoints)
 	for key, attachName in pairs(attachPoints) do
 		local charAttach = self.Entity.Instance:FindFirstChild(attachName)
 		local handle = weaponClone:FindFirstChild(key == "primary" and "Handle" or ("Handle_" .. key))
-						or weaponClone:FindFirstChild("Handle")
+
+		-- Ponto secundário exige a sua peça (Handle_<key>). Antes caía no mesmo Handle do
+		-- primário: dois Motor6D na mesma peça, e a arma flutuava trocando de lado (F17)
+		if not handle and key ~= "primary" then
+			warn(string.format("[WeaponComponent] %s sem Handle_%s: o ponto '%s' fica sem arma",
+				weaponClone.Name, key, tostring(attachName)))
+			continue
+		end
 
 		if not charAttach or not handle then
 			warn("[WeaponComponent] Attach point ou handle não encontrado:", key, attachName)
@@ -212,7 +258,7 @@ function WeaponComponent:_GetWeaponData(): {}?
 	local weaponsFolder = RS.Assets.Weapons:FindFirstChild(chosenChar)
 	if not weaponsFolder then return nil end
 	
-	local weaponFolder = weaponsFolder:FindFirstChild(self.WeaponName)
+	local weaponFolder = findWeaponFolder(weaponsFolder, self.WeaponName)
 	if not weaponFolder then return nil end
 	
 	local dataModule = weaponFolder:FindFirstChild("WeaponData")
@@ -399,7 +445,7 @@ function WeaponComponent:OnAdded()
 	if weaponToEquip and type(weaponToEquip) == "string" and weaponToEquip ~= "" and weaponToEquip ~= "None" then
 		self:EquipWeapon(weaponToEquip)
 	else
-		warn(string.format("[WeaponComponent] Nenhuma arma equipada na entidade %s. (Weapon: %s)", tostring(self.Entity.ID), tostring(weaponToEquip)))
+		Log.Debug(string.format("nenhuma arma equipada na entidade %s (Weapon: %s)", tostring(self.Entity.ID), tostring(weaponToEquip)))
 	end
 end
 
@@ -439,5 +485,6 @@ local ExposeAPI = {
 
 return {
 	new = WeaponComponent.new,
-	ExposeAPI = ExposeAPI
+	ExposeAPI = ExposeAPI,
+	_findWeaponFolder = findWeaponFolder, -- interno, exposto para os testes (F18)
 }

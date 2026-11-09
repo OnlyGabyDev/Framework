@@ -90,7 +90,13 @@ end
 function AreaEffect:Stop()
     self.Active = false
     if self._conn then self._conn:Disconnect(); self._conn = nil end
-    table.clear(self.Inside)
+    -- Quem estava dentro sai: antes o Stop só limpava a lista, e o efeito aplicado no OnEnter
+    -- (ex.: slow) ficava preso para sempre (F44)
+    local inside = self.Inside
+    self.Inside = {}
+    for entity in pairs(inside) do
+        for _, cb in ipairs(self.CallbacksExit) do task.spawn(cb, entity, self) end
+    end
 end
 
 return AreaEffect

@@ -29,6 +29,7 @@ function CreateHitbox(instance: Instance?, raycastParams: RaycastParams?): Types
 
 	local activeTimer: number = 0
 	local lastClock: number = 0
+	local timerClock: number = 0 -- último desconto do activeTimer (F27)
 
 	local postSimulation: RBXScriptConnection
 	local segments: { [Instance]: Types.Segment } = {}
@@ -196,6 +197,11 @@ function CreateHitbox(instance: Instance?, raycastParams: RaycastParams?): Types
 			segment.Position = nil -- Reset its state
 			segment.Position = Solvers[segment.Instance.ClassName]:ToPosition(segment)
 			segment.Distance = 0
+			-- O sweep do Blockcast parte da posição atual: antes o 1º cast saía da posição da
+			-- ativação anterior e acertava o que estivesse no caminho entre as duas (F26)
+			if segment.CastData then
+				segment.CastData._LastCFrameBlockCast = nil
+			end
 		end
 
 		for _, callback in callbacksStart do
@@ -207,6 +213,7 @@ function CreateHitbox(instance: Instance?, raycastParams: RaycastParams?): Types
 		hitbox.Active = true
 
 		lastClock = os.clock()
+		timerClock = lastClock
 		activeTimer = timer or math.huge
 
 		return hitbox
@@ -255,6 +262,12 @@ function CreateHitbox(instance: Instance?, raycastParams: RaycastParams?): Types
 				local currentClock: number = os.clock()
 				local delta: number = currentClock - lastClock
 
+				-- O timer desconta o tempo real decorrido UMA vez. Antes descontava `delta` (desde
+				-- o último update) também nos frames pulados pela Resolution, e a hitbox durava
+				-- ~14% menos (F27)
+				activeTimer -= currentClock - timerClock
+				timerClock = currentClock
+
 				if delta >= (1 / hitbox.Resolution) then
 					lastClock = currentClock
 
@@ -266,8 +279,6 @@ function CreateHitbox(instance: Instance?, raycastParams: RaycastParams?): Types
 						task.defer(segment._update, segment)
 					end
 				end
-
-				activeTimer -= delta
 			end
 
 			if activeTimer <= 0 then

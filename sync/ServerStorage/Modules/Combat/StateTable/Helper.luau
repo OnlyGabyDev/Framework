@@ -105,6 +105,98 @@ function Helper.ResolveDeathPolicy(config: {[string]: any}?, key: string): boole
 	return value and true or false
 end
 
+--[[
+Morte do ponto de vista do motor. Dependência OPCIONAL de Health (regra 16): sem Health a
+entidade não morre, então nenhuma regra de morte vale para ela.
+]]
+function Helper.IsDead(entity): boolean
+	return entity:HasComponent(entity.ComponentKey.Health) and not entity.IsAlive()
+end
+
+--[[
+Meta (data.data) de quem bloqueia. Aceita os dois formatos que chegam aqui: a entrada do
+StatusComponent ({ data = módulo, runner }) e o próprio SkillRunner (runner.data já É o
+meta). Antes o filtro lia runner.data.data no SkillRunner, achava nil e era pulado (F11).
+]]
+function Helper.BlockerMeta(blocker)
+	if type(blocker) ~= "table" then return nil end
+	if blocker.skill ~= nil then
+		return blocker.data
+	end
+	return (blocker.data and blocker.data.data) or (blocker.skillData and blocker.skillData.data)
+end
+
+local ownerTokens = setmetatable({}, { __mode = "k" }) -- [entidade] = { [tag] = token }
+
+--[[
+Dono de inscrição (Listen/UnsubscribeByOwner) por entidade (F51). Devolve SEMPRE o mesmo token
+para a mesma entidade e tag, e tokens diferentes para entidades diferentes. Um Owner em string é
+global: limpar o combo de um atacante num alvo removia também o combo de outro atacante.
+]]
+function Helper.OwnerToken(entity, tag: string)
+	local byTag = ownerTokens[entity]
+	if not byTag then
+		byTag = {}
+		ownerTokens[entity] = byTag
+	end
+	local token = byTag[tag]
+	if not token then
+		token = table.freeze({ tag = tag })
+		byTag[tag] = token
+	end
+	return token
+end
+
+local warnedBlocks = {} -- [nome do bloqueio] = true: aviso uma vez por servidor
+
+--[[
+Resultado de um bloqueio SEM onTrigger, a partir do data.block declarado (D14). Chamado pelo
+SkillRunner:TriggerAction. Devolve o dano novo (bloqueio de dano), true (status barrado) ou nil
+(não bloqueia). Nada implícito: sem block declarado, não bloqueia.
+]]
+function Helper.ResolveBlock(meta, context)
+	local name = meta and meta.name or "?"
+	local block = meta and meta.block
+	local function warnOnce(message)
+		if warnedBlocks[name] then return end
+		warnedBlocks[name] = true
+		warn("[StateTable] Bloqueio '" .. tostring(name) .. "': " .. message)
+	end
+
+	if not block then
+		warnOnce("sem data.block e sem onTrigger; não bloqueia nada. Declare block = { mode = ... }")
+		return nil
+	end
+
+	local modes = Enum.BlockModes
+	local isStatus = context.incomingStatus ~= nil
+	local damage = context.damage or 0
+
+	if block.mode == modes.Full then
+		return if isStatus then true else 0
+	elseif block.mode == modes.Flat then
+		if type(block.value) ~= "number" or block.value < 0 then
+			warnOnce("mode Flat exige value >= 0")
+			return nil
+		end
+		if isStatus then return nil end
+		return math.max(0, damage - block.value)
+	elseif block.mode == modes.Percent then
+		if type(block.value) ~= "number" or block.value < 0 or block.value > 1 then
+			warnOnce("mode Percent exige value entre 0 e 1")
+			return nil
+		end
+		if isStatus then return nil end
+		return damage * (1 - block.value)
+	elseif block.mode == modes.Custom then
+		warnOnce("mode Custom exige onTrigger")
+		return nil
+	end
+
+	warnOnce("block.mode desconhecido: " .. tostring(block.mode))
+	return nil
+end
+
 local function registerModule(module, targetTable)
 	local success, data = pcall(require, module)
 	if not success then
@@ -194,7 +286,7 @@ end
 
 function Helper.CheckBlockFilter(runner, context)
 
-    local data = (runner.data and runner.data.data) or (runner.skillData and runner.skillData.data)
+    local data = Helper.BlockerMeta(runner)
 
     if not data then return true end
     local source = context.source
@@ -250,10 +342,26 @@ function Helper.BuildImmunityRules(stateTable)
 
 		for tagName, isTrue in pairs(tags) do
 			if isTrue and data.bypassBy then
-				rules[tagName] = {
-					name = name,
-					bypassableBy = data.bypassBy,
-				}
+				local existing = rules[tagName]
+				if not existing then
+					rules[tagName] = {
+						name = name,
+						bypassableBy = table.clone(data.bypassBy),
+					}
+				else
+					-- Dois status com a mesma tag de imunidade: a regra mesclada só deixa passar a
+					-- trait que AMBOS deixam (interseção, independe da ordem). Antes vencia a última
+					-- do pairs(), não determinístico (F74)
+					local merged = {}
+					for _, trait in existing.bypassableBy do
+						if table.find(data.bypassBy, trait) then table.insert(merged, trait) end
+					end
+					existing.bypassableBy = merged
+					local names = string.split(existing.name, "+")
+					table.insert(names, name)
+					table.sort(names)
+					existing.name = table.concat(names, "+")
+				end
 			end
 		end
 	end

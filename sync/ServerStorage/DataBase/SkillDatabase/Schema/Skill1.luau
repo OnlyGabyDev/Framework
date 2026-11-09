@@ -9,7 +9,7 @@ local Skill = {
 
 	callbacks = {
 		onStart = function(self)
-			print("S1 RODANDO")
+			require(game:GetService("ReplicatedStorage").Logger).Channel("Skill1").Debug("rodando")
 		end,
 
 		onStep = function(self, dt)

@@ -14,6 +14,9 @@ local Skill = {
             if not nextModeData then self:Stop(false); return end
 
             local statsTable = self.statusTable
+            -- A troca acontece no fim da transformação, não no 1º frame: com duration = 0 a janela
+            -- de cancelamento era de 1 frame, embora o NoControl durasse TransformTime (F81)
+            self.runtimeDuration = nextModeData.TransformTime or 0
             self.stateID = self.Entity.ApplyStatus(statsTable.States.NoControl, nextModeData.TransformTime, self.Runner)
             self.Entity.SetActionState(statsTable.ActionStates.Self.selfCast, self.Runner)
 
@@ -39,7 +42,8 @@ local Skill = {
             end
             self.Entity.RemoveActionState(self.Runner)
 
-            if not self.pendingMode or ctx.reason == self.statusTable.Enum.EndReasons.Cancel then return end
+            -- Só troca de modo se a transformação chegou ao fim (cancelamento, erro e desistência não trocam)
+            if not self.pendingMode or ctx.reason ~= self.statusTable.Enum.EndReasons.Duration then return end
             local weaponComp = self.Entity:GetComponent(self.Entity.ComponentKey.Weapon)
             weaponComp:SetMode(self.pendingMode)
 

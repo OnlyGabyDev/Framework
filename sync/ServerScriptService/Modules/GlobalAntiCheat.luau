@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Server = game:GetService("ServerScriptService")
 local DataManager = require(Server.EntityData.DataManager)
 local Settings = require(Server.Modules.Physics.Settings)
+local Log = require(ReplicatedStorage.Logger).Channel("AntiCheat")
 local RunService = game:GetService("RunService")
 
 local MIN_INPUT_INTERVAL = 0.015
@@ -13,8 +14,16 @@ local ControlStateChanged = RemoteEvents:WaitForChild("ControlStateChanged")
 
 -- Sempre o estado COMPLETO numa mensagem só (F22): antes cada setter mandava a sua, e o
 -- suspendNative=true do Possess era sobrescrito pela mensagem seguinte com false.
+-- Com Lock vai o ID ROTEADO (o que volta no Unlock): o cliente trata nil como "voltar ao próprio
+-- corpo" e um Lock durante a possessão levava a câmera de volta ao corpo nativo (F83). O corte
+-- do input é do servidor (GetEntityID = nil); o cliente só usa o ID para a câmera.
+local function controlStatePayload(tracked)
+	local routed = if tracked.Locked then tracked.PreLockID else tracked.ID
+	return tracked.Locked, routed, tracked.SuspendNative
+end
+
 local function notifyControlState(player: Player, tracked)
-	ControlStateChanged:FireClient(player, tracked.Locked, not tracked.Locked and tracked.ID or nil, tracked.SuspendNative)
+	ControlStateChanged:FireClient(player, controlStatePayload(tracked))
 end
 
 local AntiCheat = {}
@@ -26,7 +35,7 @@ function AntiCheat.Init()
 		connection = RunService.Heartbeat:Connect(function(dt)
 			AntiCheat._Update(dt)
 		end)
-		warn("[AntiCheat] Iniciado")
+		Log.Info("iniciado")
 	end
 end
 
@@ -159,7 +168,7 @@ local function correct(player: Player, tracked, move, now: number)
 	tracked.Corrections += 1
 	if now - move.LastWarnAt >= Settings.Movement_Warn_Interval then
 		move.LastWarnAt = now
-		warn(("[AntiCheat] Movimento recusado: %s voltou à última posição válida (%d correções)"):format(player.Name, tracked.Corrections))
+		Log.Info(("movimento recusado: %s voltou à última posição válida (%d correções)"):format(player.Name, tracked.Corrections))
 	end
 end
 
@@ -243,15 +252,22 @@ function AntiCheat.Register(Player)
 	local previous = TrackedPlayers[Player]
 	if previous then unbindMovement(previous) end
 
+	-- Um Lock (cutscene) sobrevive ao respawn: o corpo novo fica travado e é ele que volta no
+	-- Unlock. Antes o Register recriava tudo com Locked = false (F82)
+	local locked = previous ~= nil and previous.Locked == true
+
 	TrackedPlayers[Player] = {
-		ID = ID,
+		ID = if locked then nil else ID,
 		NativeID = ID,
-		Locked = false,
-		PreLockID = nil,
+		Locked = locked,
+		PreLockID = if locked then ID else nil,
 		SuspendNative = false, -- o cliente desliga o WASD nativo (está dirigindo outro corpo)
 		Move = nil, -- validação de movimento do corpo nativo (formato em bindMovement); liga no próximo Heartbeat
 		Corrections = 0, -- movimentos recusados desde o spawn (GetMovementCorrections)
 	}
+	if locked then
+		notifyControlState(Player, TrackedPlayers[Player])
+	end
 end
 
 function AntiCheat.Unregister(Player)
@@ -346,6 +362,14 @@ function AntiCheat.UnlockPlayerInput(Player)
 	tracked.PreLockID = nil
 	notifyControlState(Player, tracked)
 	return true
+end
+
+--[[ O que o servidor manda ao cliente no ControlStateChanged: isLocked, entityID, suspendNative.
+Interno, exposto para os testes (F83). ]]
+function AntiCheat._ControlStatePayload(Player)
+	local tracked = TrackedPlayers[Player]
+	if not tracked then return nil end
+	return controlStatePayload(tracked)
 end
 
 function AntiCheat.CheckInput(Player, LastInput)

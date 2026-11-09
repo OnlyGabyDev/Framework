@@ -28,7 +28,9 @@ local function findNearestHealthEntity(fromEntity: any, maxRange: number, ignore
 		if obj:IsA("Model") and obj:GetAttribute("EntityID") then
 			local core = DataManager.Get(obj)
 			if core and core ~= fromEntity and isAlive(core) and not ignoreSet[core] then
-				local root = core.GetRoot and core.GetRoot()
+				-- O stub também é função: o guarda olha o componente. Antes cada tick da IA chamava
+				-- o stub em toda entidade sem Character (centenas de warns por segundo)
+				local root = core:HasComponent(core.ComponentKey.Character) and core.GetRoot()
 				if root then
 					local dist = (root.Position - myPos).Magnitude
 					if dist < bestDist then
@@ -94,7 +96,7 @@ local HunterFinisher = {
 				VFXManager.PlayAll("GenericImpact", {Position = self.target.GetRoot().Position})
 				
 				if not isAlive(self.target) then
-					for _, part in ipairs(self.target.Entity:GetDescendants()) do
+					for _, part in ipairs(self.target.Instance:GetDescendants()) do -- EntityCore não tem .Entity (F60)
 						if part:IsA("BasePart") then
 							part.Color = Color3.fromRGB(40, 40, 200) -- Azul (Morto)
 						end
