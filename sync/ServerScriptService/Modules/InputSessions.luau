@@ -5,7 +5,7 @@ local sessions = {}
 function InputSessions.GetSession(player: Player)
 	local session = sessions[player]
 	if not session then
-		session = { resolvers = {}, lastPress = {}, lastMove = 0 }
+		session = { resolvers = {}, lastPress = {}, lastMove = 0, lastJump = 0 }
 		sessions[player] = session
 	end
 	return session

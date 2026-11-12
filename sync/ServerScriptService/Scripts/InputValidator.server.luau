@@ -5,6 +5,7 @@
 	  RequestIntent(intent, isDown) -> GestureResolver -> SkillHandler.HandleIntent
 	  RequestDir(Vector3)           -> SkillHandler.HandleMovementInput
 	  RequestLook(Vector3)          -> SkillHandler.HandleLookInput
+	  RequestJump()                 -> Humanoid.Jump do corpo dirigido (só fora do corpo nativo)
 
 	Nada aqui conhece skill, tecla ou dispositivo.
 ]]
@@ -25,6 +26,15 @@ local RequestIntent = Remotes.RequestIntent
 local RequestDir = Remotes.RequestDir
 local RequestLook = Remotes.RequestLook
 local SkillFired = Remotes.SkillFired
+
+-- O único remote de input que não existe no place: nasce aqui, na borda de rede. Antes era
+-- criado pela GrandIntegrationDemo, e o pulo durante a possessão dependia da demo estar no jogo
+local RequestJump = Remotes:FindFirstChild("RequestJump")
+if not RequestJump then
+	RequestJump = Instance.new("RemoteEvent")
+	RequestJump.Name = "RequestJump"
+	RequestJump.Parent = Remotes
+end
 
 local MAX_AXIS_MAGNITUDE = 1.5 -- direções chegam ~normalizadas; folga para float
 
@@ -150,6 +160,27 @@ RequestLook.OnServerEvent:Connect(function(player: Player, look: any)
 	end
 
 	SkillHandler.HandleLookInput(ID, look.Unit)
+end)
+
+--[[
+RequestJump: o pulo de um corpo que o player DIRIGE sem ser o nativo (possessão). No corpo nativo
+o Humanoid do próprio cliente pula; o CameraOverride só manda isto quando dirige outro corpo.
+Passa pelo mesmo rate limit dos eixos, que também recusa input durante um Lock.
+]]
+RequestJump.OnServerEvent:Connect(function(player: Player)
+	local session = InputSessions.GetSession(player)
+	local ID = AntiCheat.CheckInput(player, session.lastJump)
+	if not ID then
+		return
+	end
+	session.lastJump = os.clock()
+
+	local core = DataManager.Get(ID)
+	local root = core and core:HasComponent(core.ComponentKey.Character) and core.GetRoot()
+	local humanoid = root and root.Parent and root.Parent:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.Jump = true
+	end
 end)
 
 --=============================================================================
