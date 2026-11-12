@@ -46,9 +46,8 @@ local function SpawnVentilador(position: Vector3)
         10
     )
     
-    pushZone:OnStay(function(entity, area)
-        AreaBehaviors.DirectionalForce(entity, function() return fanCFrame().LookVector end, PUSH_SPEED, "FanPush", { MaxForce = 35000, Area = area })
-    end)
+    -- A força vale da entrada até a saída da zona (antes sobrava até 0,5 s depois de sair)
+    AreaBehaviors.BindDirectionalForce(pushZone, function() return fanCFrame().LookVector end, PUSH_SPEED, "FanPush", { MaxForce = 35000 })
     pushZone:Start()
 
     -- Cria a zona de Pull (Traseira do ventilador - LookVector negativo)
@@ -59,9 +58,7 @@ local function SpawnVentilador(position: Vector3)
         10
     )
     
-    pullZone:OnStay(function(entity, area)
-        AreaBehaviors.DirectionalForce(entity, function() return -fanCFrame().LookVector end, PULL_SPEED, "FanPull", { MaxForce = 35000, Area = area })
-    end)
+    AreaBehaviors.BindDirectionalForce(pullZone, function() return -fanCFrame().LookVector end, PULL_SPEED, "FanPull", { MaxForce = 35000 })
     pullZone:Start()
 
     -- Cleanup atrelado ao ciclo de vida da Part (se for deletada, limpa as zonas)

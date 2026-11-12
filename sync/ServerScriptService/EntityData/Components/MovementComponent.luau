@@ -300,6 +300,18 @@ function MovementComponent:RemoveForce(forceId)
 	end
 end
 
+--[[
+Remove a Force ativa com esta Key (a mesma que o AddForce renova). Quem aplica uma força por Key
+sem guardar o ID (zona que renova a cada poll) a encerra por aqui.
+@return havia uma Force com a Key BOOLEAN
+]]
+function MovementComponent:RemoveForceByKey(key: string): boolean
+	local forceId = self.ForcesByKey[key]
+	if not forceId then return false end
+	self:RemoveForce(forceId)
+	return true
+end
+
 function MovementComponent:ClearForces()
 	for forceId, _ in pairs(self.ActiveForces) do
 		self:RemoveForce(forceId)
@@ -346,6 +358,7 @@ local ExposeAPI = {
 	GetLookDirection = function(Component) return Component.LookDirection end,
 	AddForce = function(Component, ...) return Component:AddForce(...) end,
 	RemoveForce = function(Component, ...) return Component:RemoveForce(...) end,
+	RemoveForceByKey = function(Component, key) return Component:RemoveForceByKey(key) end,
 	ClearForces = function(Component) return Component:ClearForces() end,
 	GetForceSpeedBudget = function(Component) return Component:GetForceSpeedBudget() end,
 	SetFrozen = function(Component, f) Component.IsFrozen = f end,
