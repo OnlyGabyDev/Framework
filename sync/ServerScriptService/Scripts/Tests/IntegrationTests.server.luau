@@ -21,8 +21,8 @@ local Intents = require(ReplicatedStorage.Input.Intents)
 -- Componentes de uma entidade que casta pelo SkillHandler (mesmo conjunto da suíte de auditoria)
 local COMBAT = { "Character", "Health", "Status", "Movement", "Attributes", "Combat" }
 
--- Cada teste roda numa faixa própria, longe da origem: a GrandIntegrationDemo e o ventilador
--- nascem lá, e o teste de Tether falhava por interferência (F59). makeDummy recebe a posição
+-- Cada teste roda numa faixa própria, longe da origem: o ventilador da VentiladorDemo nasce lá
+-- (a GrandIntegrationDemo também nascia), e o teste de Tether falhava por interferência (F59). makeDummy recebe a posição
 -- relativa ao chão da faixa do teste atual.
 local GROUND = Vector3.new(1400, 100, 1400) -- topo da plataforma, no início da 1ª faixa
 local ZONE_SPACING = 60
@@ -829,7 +829,7 @@ run("F82 — Lock sobrevive ao respawn (Register)", function(t)
 	end
 	local AntiCheat = require(ServerScriptService.Modules.GlobalAntiCheat)
 	local native = AntiCheat.GetNativeEntityId(player)
-	-- O roteamento de antes (o player pode estar possuindo um corpo da GrandIntegrationDemo): o
+	-- O roteamento de antes (o player pode estar possuindo outro corpo): o
 	-- teste mexe direto no AntiCheat e precisa devolvê-lo, senão a pilha de possessão e o
 	-- roteamento ficam discordando para os testes seguintes
 	local routedBefore = AntiCheat.GetControlledEntityId(player)
@@ -1801,7 +1801,7 @@ run("D15/F56 — a barra de vida segue o corpo que o player dirige", function(t)
 	local function viewers(entity)
 		return entity:GetComponent(entity.ComponentKey.Health):_HudViewers()
 	end
-	-- O corpo que o player dirige antes do teste (o nativo, ou um da GrandIntegrationDemo)
+	-- O corpo que o player dirige antes do teste (o nativo, ou outro que ele esteja possuindo)
 	local before = DataManager.Get(AC.GetControlledEntityId(player))
 	t.assert(before and #viewers(before) == 1 and viewers(before)[1] == player, "Antes da possessão a barra deveria ser do corpo dirigido")
 	local body = makeDummy(CFrame.new(0, 5, 0), { "Character", "Health", "Movement", "Control" })
@@ -1856,6 +1856,9 @@ run("F57 — o ControlStateChanged leva o model do corpo roteado", function(t)
 	local core = DataManager.Get(routed)
 	t.assert(core and subject == core.Instance, "O payload não trouxe o model do corpo roteado")
 end)
+
+-- Cenários de integração (substituem a GrandIntegrationDemo): mesmas faixas e mesmo Summary
+require(script.Parent.Scenarios)({ run = run, makeDummy = makeDummy, cleanup = cleanup, makeRunner = makeRunner })
 
 task.wait(1)
 TestHarness.Summary()
