@@ -12,7 +12,7 @@ concluído, mande o placar de achados abertos** no formato `(0 crít, X alta, X 
 
 - **Git:** `main` e `audit/hardening-08-11` no GitHub, os dois em `2a7cac6`. O `main` avançou por
   fast-forward, sem sobrescrever nada. O `audit/suite-p0` (16/10) está todo dentro do `main`.
-- **Placar: (0 crít, 0 alta, 3 méd, 0 baixa)**, 3 abertos de 94 achados: F32, F55 e F62 (ver
+- **Placar: (0 crít, 0 alta, 3 méd, 0 baixa)**, 3 abertos de 96 achados: F32, F55 e F62 (ver
   `AUDITORIA.md`, já marcado com os lotes de 16/10 e 08/11). F71 já estava feito no Studio; F93 era
   falso positivo (comandos de chat comentados). O F94, registrado só aqui em 16/10,
   entrou na tabela como corrigido (`52d4aee`).
@@ -42,6 +42,17 @@ concluído, mande o placar de achados abertos** no formato `(0 crít, X alta, X 
 - **F32 remedido em 11/11:** a Soft padrão não move corpo com Humanoid (player 0,8 e NPC do servidor
   com Humanoid 0,8 de ~20; NPC sem Humanoid 18,7). A causa é o controlador do Humanoid, não o
   ownership. A correção é decisão de design do usuário, assim como o F55 e o F62.
+- **F95 e F96 (11/11).** O vento empurrava depois do dash, já fora da zona (F95, relatado pelo
+  usuário): corrigido com `AreaBehaviors.BindDirectionalForce`, que liga a força à entrada e à saída da
+  zona. A plataforma dos testes cobria só 34 faixas (F96): agora há um chão por faixa.
+- **`Tests/PhysicsScenarios.luau`:** 16 testes de física medidos frame a frame (vento, dash por cima
+  do vento, zonas somadas, caminhada contra o vento, Stun, zona que gira, entidade destruída, player
+  real). **97/97 no Play em 11/11, em três rodadas.** Teste de mutação: com o comportamento antigo da
+  zona, 8 dos 16 falham. Ao escrever teste de física, exija a pré-condição (o vento estava ativo?):
+  a primeira versão de 3 testes passava sem vento nenhum.
+- **Player e atraso de visão:** o servidor vê o corpo do player ~0,35 s atrás do que o cliente sente
+  (buffer de interpolação). No cliente, o vento chega 0,02 s e o dash 0,05 s depois da força (medido
+  com `GetServerTimeNow` dos dois lados). Teste de player medido no servidor precisa descontar isso.
 
 ## Estado em 16/10/2026 (fim do 2º chat: Fase 1 pela metade)
 

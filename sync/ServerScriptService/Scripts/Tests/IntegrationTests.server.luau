@@ -24,13 +24,13 @@ local COMBAT = { "Character", "Health", "Status", "Movement", "Attributes", "Com
 -- Cada teste roda numa faixa própria, longe da origem: o ventilador da VentiladorDemo nasce lá
 -- (a GrandIntegrationDemo também nascia), e o teste de Tether falhava por interferência (F59). makeDummy recebe a posição
 -- relativa ao chão da faixa do teste atual.
-local GROUND = Vector3.new(1400, 100, 1400) -- topo da plataforma, no início da 1ª faixa
+local GROUND = Vector3.new(1400, 100, 1400) -- topo do chão, no início da 1ª faixa
 local ZONE_SPACING = 60
-local platform = Instance.new("Part")
+-- Um chão por faixa, criado no run. Antes era uma Part só de 2048 studs (o máximo de uma Part):
+-- cobria 34 faixas, e do 35º teste em diante os dummies nasciam sem chão e caíam no vazio
+-- (medido em 11/11 com 97 testes; os de física passavam com os corpos em queda)
+local platform = Instance.new("Folder")
 platform.Name = "__IntegrationTestsPlatform"
-platform.Anchored = true
-platform.Size = Vector3.new(2048, 2, 120)
-platform.CFrame = CFrame.new(GROUND + Vector3.new(1024 - ZONE_SPACING / 2, -1, 0))
 platform.Parent = workspace
 
 local zoneOrigin = CFrame.new(GROUND)
@@ -39,6 +39,12 @@ local zoneCount = 0
 local function run(name: string, fn: (t: any) -> ())
 	zoneOrigin = CFrame.new(GROUND + Vector3.new(zoneCount * ZONE_SPACING, 0, 0))
 	zoneCount += 1
+	local floor = Instance.new("Part")
+	floor.Name = "Lane" .. zoneCount
+	floor.Anchored = true
+	floor.Size = Vector3.new(ZONE_SPACING, 2, 120)
+	floor.CFrame = zoneOrigin * CFrame.new(0, -1, 0)
+	floor.Parent = platform
 	TestHarness.Run(name, fn)
 end
 
@@ -1857,8 +1863,13 @@ run("F57 — o ControlStateChanged leva o model do corpo roteado", function(t)
 	t.assert(core and subject == core.Instance, "O payload não trouxe o model do corpo roteado")
 end)
 
--- Cenários de integração (substituem a GrandIntegrationDemo): mesmas faixas e mesmo Summary
-require(script.Parent.Scenarios)({ run = run, makeDummy = makeDummy, cleanup = cleanup, makeRunner = makeRunner })
+-- Cenários de integração (substituem a GrandIntegrationDemo) e de física medida: mesmas faixas e mesmo Summary
+local scenarioEnv = {
+	run = run, makeDummy = makeDummy, cleanup = cleanup, makeRunner = makeRunner, COMBAT = COMBAT,
+	origin = function() return zoneOrigin end, -- chão da faixa do teste atual
+}
+require(script.Parent.Scenarios)(scenarioEnv)
+require(script.Parent.PhysicsScenarios)(scenarioEnv)
 
 task.wait(1)
 TestHarness.Summary()
