@@ -386,7 +386,70 @@ return function(env)
 		cleanup(e)
 	end)
 
-	run("Física 16 — player real: vento empurra, sai da zona sem resto, dash sem empurrão depois", function(t)
+	-- Corpo com Humanoid gerado pelo Roblox (R15 padrão), na faixa atual: não depende de modelo do place
+	local function humanoidNpc(cframe: CFrame)
+		local model = Players:CreateHumanoidModelFromDescription(Instance.new("HumanoidDescription"), Enum.HumanoidRigType.R15)
+		model.Name = "__PhysicsHumanoidNpc"
+		model:PivotTo(origin() * cframe)
+		model.Parent = workspace
+		local entity = DataManager.Create(model, { "Character", "Health", "Movement" })
+		entity.SetMovement()
+		return entity
+	end
+
+	-- Soft SEM MaxForce: o orçamento padrão do corpo (o que F32 corrige para Humanoid)
+	local function defaultSoft(entity: any, duration: number)
+		return entity.AddForce({ Type = "TestSoftDefault", Duration = duration, Speed = WIND,
+			Direction = WIND_DIR, RequiresControl = false })
+	end
+
+	run("Física 16 — Soft padrão move corpo com Humanoid (F32)", function(t)
+		local e = humanoidNpc(CFrame.new(0, 4, 20))
+		t.wait(1)
+		local rec = record(e)
+		defaultSoft(e, 1)
+		t.wait(1)
+		rec.stop()
+		local vz = rec.avgVz(0.4, 0.9)
+		t.log(string.format("NPC com Humanoid: vz médio %.1f (esperado %d; antes do F32: ~-1,5)", vz or 0, -WIND))
+		t.assert(vz and math.abs(vz + WIND) < 4, string.format("A Soft padrão deu %.1f no corpo com Humanoid", vz or 0))
+		cleanup(e)
+	end)
+
+	run("Física 17 — Humanoid andando contra a Soft padrão: caminhada + vento", function(t)
+		local e = humanoidNpc(CFrame.new(0, 4, 20))
+		t.wait(1)
+		e.SetDirection(-WIND_DIR)
+		t.wait(0.4)
+		local walk = movement(e):GetSpeed()
+		local rec = record(e)
+		defaultSoft(e, 1)
+		t.wait(1)
+		rec.stop()
+		e.SetDirection(Vector3.zero)
+		local vz = rec.avgVz(0.4, 0.9)
+		local expected = walk - WIND
+		t.log(string.format("vz médio %.1f (esperado %.1f com caminhada %.1f)", vz or 0, expected, walk))
+		t.assert(vz and math.abs(vz - expected) < 4, string.format("Contra o vento deu %.1f, esperado %.1f", vz or 0, expected))
+		cleanup(e)
+	end)
+
+	run("Física 18 — corpo sem Humanoid mantém a Soft padrão antiga (não ficou forte demais)", function(t)
+		local e = makeDummy(CFrame.new(0, 2, 20), COMBAT)
+		e.SetMovement()
+		t.wait(0.3)
+		local wrapper = movement(e).MovementWrapper
+		t.assert(wrapper.SoftForceAcceleration == nil, "O wrapper sem Humanoid ganhou a aceleração do Humanoid")
+		local rec = record(e)
+		defaultSoft(e, 0.8)
+		t.wait(0.8)
+		rec.stop()
+		local vz = rec.avgVz(0.4, 0.7)
+		t.assert(vz and math.abs(vz + WIND) < 4, string.format("A Soft padrão sem Humanoid deu %.1f", vz or 0))
+		cleanup(e)
+	end)
+
+	run("Física 19 — player real: vento empurra, sai da zona sem resto, dash sem empurrão depois", function(t)
 		local player = Players:GetPlayers()[1]
 		local character = player and player.Character
 		local body = character and character:GetAttribute("EntityID") and DataManager.Get(character)
@@ -428,5 +491,27 @@ return function(env)
 		t.assert(push and push < -WIND * 0.6, string.format("O vento não empurrou o player (vz %.1f)", push or 0))
 		t.assert(not final.extra, "A força do vento ficou no player fora da zona")
 		t.assert(math.abs(dz) < 0.5, string.format("O player derivou %.2f studs no eixo do vento depois do dash", dz))
+	end)
+
+	run("Física 20 — player real: Soft padrão (sem MaxForce) move o player (F32)", function(t)
+		local player = Players:GetPlayers()[1]
+		local character = player and player.Character
+		local body = character and character:GetAttribute("EntityID") and DataManager.Get(character)
+		if not body then
+			t.log("sem player com entidade neste Play: teste pulado")
+			return
+		end
+		local VIEW_LAG = 0.4 -- o servidor vê o corpo do player ~0,35 s atrás (ver Física 19)
+		local home = body.GetRoot().CFrame
+		character:PivotTo(origin() * CFrame.new(0, 4, 30))
+		t.wait(0.6)
+		local rec = record(body)
+		defaultSoft(body, 1.2)
+		t.wait(1.2 + VIEW_LAG + 0.2)
+		rec.stop()
+		character:PivotTo(home)
+		local vz = rec.avgVz(VIEW_LAG + 0.3, 1.2 + VIEW_LAG - 0.1)
+		t.log(string.format("player: vz médio visto %.1f (esperado %d; antes do F32: ~-1,6)", vz or 0, -WIND))
+		t.assert(vz and math.abs(vz + WIND) < 5, string.format("A Soft padrão deu %.1f no player", vz or 0))
 	end)
 end

@@ -56,7 +56,10 @@ local function softDefaultFor(comp, entity)
 		return Settings.Soft_Force_Strength
 	end
 	local root = entity.GetRoot()
-	return root and Settings.Soft_Force_Acceleration * root.AssemblyMass or Settings.Soft_Force_Strength
+	-- O wrapper declara a aceleração que vence o próprio controlador (o de Humanoid declara mais,
+	-- F32); o controller não precisa saber se há Humanoid
+	local acceleration = comp.MovementWrapper.SoftForceAcceleration or Settings.Soft_Force_Acceleration
+	return root and acceleration * root.AssemblyMass or Settings.Soft_Force_Strength
 end
 
 function MovementController.ProcessEntity(comp, dt)

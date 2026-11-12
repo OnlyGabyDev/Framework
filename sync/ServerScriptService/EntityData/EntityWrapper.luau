@@ -2,6 +2,7 @@
 
 local ServerScriptService = game:GetService("ServerScriptService")
 local ForceRig = require(ServerScriptService.Modules.Physics.ForceRig)
+local Settings = require(ServerScriptService.Modules.Physics.Settings)
 local Log = require(game:GetService("ReplicatedStorage").Logger).Channel("EntityWrapper")
 
 local EntityWrapper = {}
@@ -136,6 +137,10 @@ function HumanoidMovement.new(characterWrapper)
 	-- (SetFrozen(false), script do jogo) as forças passam a valer. Antes a entidade criada
 	-- ancorada ficava imóvel para sempre, em silêncio (F50)
 	self._rig = root and ForceRig.new(root) or nil
+	-- O controlador do Humanoid segura a velocidade na da caminhada: a Soft padrão de um corpo
+	-- sem Humanoid (Soft_Force_Acceleration) não o move (F32). O MovementController lê este
+	-- campo sem saber se há Humanoid
+	self.SoftForceAcceleration = Settings.Humanoid_Soft_Force_Acceleration
 
 	return self
 end
@@ -235,8 +240,6 @@ end
 ]]
 local NPCMovement = {}
 NPCMovement.__index = NPCMovement
-
-local Settings = require(ServerScriptService.Modules.Physics.Settings)
 
 -- Força de caminhada do NPC sem Humanoid (D7, F31): aceleração × massa, ou o número fixo com
 -- MassScaling = false. Antes era sempre 2000: o chefe 5×7×4 não saía do lugar

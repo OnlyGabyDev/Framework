@@ -12,7 +12,7 @@ concluído, mande o placar de achados abertos** no formato `(0 crít, X alta, X 
 
 - **Git:** `main` e `audit/hardening-08-11` no GitHub, os dois em `2a7cac6`. O `main` avançou por
   fast-forward, sem sobrescrever nada. O `audit/suite-p0` (16/10) está todo dentro do `main`.
-- **Placar: (0 crít, 0 alta, 3 méd, 0 baixa)**, 3 abertos de 96 achados: F32, F55 e F62 (ver
+- **Placar: (0 crít, 0 alta, 2 méd, 0 baixa)**, 2 abertos de 96 achados: F55 e F62 (F32 corrigido) (ver
   `AUDITORIA.md`, já marcado com os lotes de 16/10 e 08/11). F71 já estava feito no Studio; F93 era
   falso positivo (comandos de chat comentados). O F94, registrado só aqui em 16/10,
   entrou na tabela como corrigido (`52d4aee`).
@@ -41,7 +41,8 @@ concluído, mande o placar de achados abertos** no formato `(0 crít, X alta, X 
   O `RequestJump`, que a demo criava, nasce agora no `InputValidator` (`d85543f`).
 - **F32 remedido em 11/11:** a Soft padrão não move corpo com Humanoid (player 0,8 e NPC do servidor
   com Humanoid 0,8 de ~20; NPC sem Humanoid 18,7). A causa é o controlador do Humanoid, não o
-  ownership. A correção é decisão de design do usuário, assim como o F55 e o F62.
+  ownership. **Corrigido em 11/11** com a aprovação do usuário: `Humanoid_Soft_Force_Acceleration`
+  (2500) declarada pelo wrapper de Humanoid. 101/101 no Play.
 - **F95 e F96 (11/11).** O vento empurrava depois do dash, já fora da zona (F95, relatado pelo
   usuário): corrigido com `AreaBehaviors.BindDirectionalForce`, que liga a força à entrada e à saída da
   zona. A plataforma dos testes cobria só 34 faixas (F96): agora há um chão por faixa.

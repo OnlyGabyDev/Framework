@@ -27,6 +27,13 @@ return {
 	-- MaxForce declarado na Force continua absoluto; Hard continua Hard_Force_Strength.
 	Force_Mass_Scaling = true,
 	Soft_Force_Acceleration = 250, -- studs/s²
+	-- Corpo com Humanoid (player e NPC do D8): o controlador do Humanoid segura a velocidade na da
+	-- caminhada, e 250 não o vence (F32: 0,8 de ~20 studs). Varredura de 11/11 num corpo de massa
+	-- 13,6: até 500 o vento não move; de 1000 em diante chega à velocidade pedida e andar contra o
+	-- vento soma certo (30 - 16 = 14). 2500 dá folga de 5× e o menor tremor (desvio 0,1 studs/s);
+	-- é ~34000 nesse corpo, perto do MaxForce 35000 que o ventilador já usava. O alvo continua
+	-- sendo caminhada + Soft (D6): a força alta não tira o controle de quem anda no vento.
+	Humanoid_Soft_Force_Acceleration = 2500, -- studs/s²
 	NPC_Walk_Acceleration = 200,   -- studs/s²
 	NPC_Walk_Force = 2000,         -- força fixa de caminhada quando MassScaling = false
 
