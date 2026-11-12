@@ -205,8 +205,7 @@ task.delay(5, function()
 	local playerChar = player.Character
 
 	warn("[GrandDemo] Possessão Dupla! Você é o bloco vermelho. Seu corpo virou IA.")
-	hunter.SetEnabled(false) -- Desliga a IA do Hunter pra ele parar de lutar com você
-	hunter.Possess({ Player = player })
+	hunter.Possess({ Player = player }) -- pausa a IA do Hunter (PauseAI padrão); o Release a devolve (F1.17)
 	-- O corpo original do player ganha a mente da IA e ignora o Hunter
 	if playerCore then
 		playerCore:AddComponent(playerCore.ComponentKey.AI, {}, true)
@@ -239,7 +238,6 @@ task.delay(5, function()
 	
 	warn("[GrandDemo] Devolvendo tudo ao normal.")
 	hunter.Release()
-	hunter.SetEnabled(true) -- Liga a IA do Hunter de volta
 	if playerCore then
 		playerCore:RemoveComponent(playerCore.ComponentKey.AI)
 	end

@@ -12,16 +12,17 @@ concluído, mande o placar de achados abertos** no formato `(0 crít, X alta, X 
 
 - **Git:** `main` e `audit/hardening-08-11` no GitHub, os dois em `2a7cac6`. O `main` avançou por
   fast-forward, sem sobrescrever nada. O `audit/suite-p0` (16/10) está todo dentro do `main`.
-- **Placar: (0 crít, 0 alta, 3 méd, 2 baixa)**, 5 abertos de 94 achados: F32, F55, F62, F71 e F93
-  (ver `AUDITORIA.md`, já marcado com os lotes de 16/10 e 08/11). O F94, registrado só aqui em 16/10,
+- **Placar: (0 crít, 0 alta, 3 méd, 0 baixa)**, 3 abertos de 94 achados: F32, F55 e F62 (ver
+  `AUDITORIA.md`, já marcado com os lotes de 16/10 e 08/11). F71 já estava feito no Studio; F93 era
+  falso positivo (comandos de chat comentados). O F94, registrado só aqui em 16/10,
   entrou na tabela como corrigido (`52d4aee`).
 - **Lote de 08/11** (`6ed1a7f` a `9c0adab`): cerca de 50 achados e as decisões D1 a D17. Destaques: a
   `CooldownPolicy` (D13), o bloqueio declarado em `data.block` (D14), o loadout em camadas (D5/F16), a
   hitbox por skill (D10/F79), a fórmula de dano (D11/F43) e a força por massa (D7/D8, F31/F33). Último
   resultado registrado: `IntegrationTests` 66/66 no Play e `StaticChecks` 4/4 no Edit (08/11). Não
   foram rodados de novo em 11/11.
-- **Fase 1:** só falta o **F1.17**: tirar o `hunter.SetEnabled` da `GrandIntegrationDemo` (linhas 208
-  e 242). O resto está feito: F1.11 = F25 e F1.12 conferidos no código em 11/11; F1.13 e F1.14 (D4)
+- **Fase 1: fechada.** O F1.17 saiu em 11/11 (a demo não chama mais `hunter.SetEnabled`: o `Possess`
+  já pausa a IA e o `Release` devolve). O resto: F1.11 = F25 e F1.12 conferidos no código em 11/11; F1.13 e F1.14 (D4)
   pelo lote de 08/11 (o código bate, sem teste novo); F1.15 = F81, F1.16 = F18 + D1, F1.19 = F19.
 - **Fase 2:** não começou como fase, mas o lote de 08/11 entregou o F2.1 (cooldown), o F2.2 (loadout),
   o F2.4 (hitbox por dono) e o F2.7 (dano e escudos). Ainda faltam, por exemplo, o F2.12

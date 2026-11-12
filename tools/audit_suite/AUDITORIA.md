@@ -4,7 +4,7 @@
 
 Oct 15, 2026 · @Gabi
 
-> **Estado em 11/11/2026:** 5 abertos de 94 achados, placar **(0 crít, 0 alta, 3 méd, 2 baixa)**: F32, F55, F62 (médias), F71 e F93 (baixas). O resto foi corrigido no lote P0 (16/10), na Fase 1 do hardening (16/10) e no lote de 08/11. O texto abaixo é o retrato de 15/10.
+> **Estado em 11/11/2026:** 3 abertos de 94 achados, placar **(0 crít, 0 alta, 3 méd, 0 baixa)**: F32, F55 e F62. O F71 já estava corrigido no Studio e o F93 era falso positivo (código comentado). O resto foi corrigido no lote P0 (16/10), na Fase 1 do hardening (16/10) e no lote de 08/11. O texto abaixo é o retrato de 15/10.
 
 ## Resumo executivo
 
@@ -200,7 +200,7 @@ Para corrigir: guardar os IDs dos grabs no runner e soltá-los com `self:Own(...
 | F68 | Baixa | `Combat/Types.luau:37-56` | `Context` declarado diferente do que `BuildContext` gera; `Subscription.Role` diz Target/Source, mas o Enum usa IN/OUT | Leitura | Um tipo dono (regra 17) **Corrigido em 08/11** (`6eb9b2b`): teste em `IntegrationTests` (66/66 em 08/11); antes/depois não medido |
 | F69 | Baixa | `ServerStorage/!DOC/DOC.luau` | DOC desatualizado (CombatData, TryHit, CharData) e duplicado em `CharData/!Doc` | Leitura | Atualizar e manter 1 cópia **Corrigido em 08/11**: a cópia duplicada saiu em `6ed1a7f` e o DOC foi atualizado em `9c0adab` |
 | F70 | Baixa | `.agents/`, `sprints.md` | Commitados, embora as regras peçam `.gitignore` | git | Adicionar `.gitignore` **Corrigido em 08/11** (`6ed1a7f`): `.gitignore` com `.agents/`, `sprints.md` e `sourcemap.json` |
-| F71 | Baixa | `PlayerGui.CooldownGUI.Attacks` | Botões Skill1-3 sem o atributo `Intent` (warn a cada spawn) | Console | Preencher o atributo |
+| F71 | Baixa | `PlayerGui.CooldownGUI.Attacks` | Botões Skill1-3 sem o atributo `Intent` (warn a cada spawn) | Console | Preencher o atributo **Corrigido** (conferido no Studio em 11/11): Dash, M1, Skill1-3 e Ultimate têm `Intent` (Dash, Primary, Ability1-3, Ultimate) |
 | F72 | Baixa | `AnimationComponent.luau:376-395` | `WaitForMarker` com timeout sempre espera o tempo inteiro | Leitura | Retornar no disparo **Corrigido em 08/11** (lote de 08/11, `6ed1a7f`): teste em `IntegrationTests` ou `StaticChecks` (66/66 e 4/4 em 08/11); antes/depois não medido |
 | F73 | Baixa | `Animation/AnimationController.luau` | Duplica a lógica de tracks do AnimationComponent (regra 1) | Leitura | Remover **Corrigido em 08/11** (lote de 08/11, `6ed1a7f`): teste em `IntegrationTests` ou `StaticChecks` (66/66 e 4/4 em 08/11); antes/depois não medido |
 | F74 | Baixa | `Helper.luau:196-214` | Duas imunidades com a mesma tag: vence a última do `pairs()` (não determinístico) | Leitura | Mesclar regras **Corrigido em 08/11** (lote de 08/11, `6ed1a7f`): teste em `IntegrationTests` ou `StaticChecks` (66/66 e 4/4 em 08/11); antes/depois não medido |
@@ -231,7 +231,7 @@ Decisão do usuário (16/10): não matar o Humanoid quando o HP do framework zer
 | F90 | Baixa | `SkillRunner.luau:196` | `OUT.onStart` era emitido depois do fim quando a skill se encerrava dentro do próprio `onStart` | Leitura | **Corrigido em 16/10**: não anuncia início depois do fim |
 | F91 | Baixa | `StatusComponent.luau:226` | O laço de status `exclusive` removia entradas durante o `pairs` do mesmo grupo (callbacks de fim podem inserir chaves) | Leitura | **Corrigido em 16/10**: snapshot dos nomes |
 | F92 | Média | `CameraOverride.luau:232-238` | No Lock (e ao dirigir outro corpo) o cliente troca o `moveFunction` por uma função vazia, mas `Humanoid:Move` persiste até a próxima chamada: quem estava andando quando o Lock chegou seguia na última direção até o Unlock, no meio da cutscene. Com o validador do F05 (caminhada zerada no Lock) isso virava correção num player legítimo | Teste de 16/10: player andando, Lock por 1 s: seguiu andando, 2 correções | **Corrigido em 16/10**: o cliente para o corpo (`Move` zero e `Jump = false`) ao suspender o controle nativo. Medido: 0,7 stud no segundo de Lock, 0 correções |
-| F93 | Baixa | `Main.server.luau:75-108` | Os comandos de chat `;bleed` e `;moveblock` usam API que não existe mais (`ED.CombatData`, `cd:Count`, `cd:Remove`) e chamam `ApplyStatus` com a entidade no lugar da duração: dão erro se alguém digitar | Leitura (16/10) | Remover, ou migrar para a API atual se ainda forem úteis |
+| F93 | Baixa | `Main.server.luau:75-108` | Os comandos de chat `;bleed` e `;moveblock` usam API que não existe mais (`ED.CombatData`, `cd:Count`, `cd:Remove`) e chamam `ApplyStatus` com a entidade no lugar da duração: dão erro se alguém digitar | Leitura (16/10) | Remover, ou migrar para a API atual se ainda forem úteis **Falso positivo** (11/11): os comandos estão dentro do bloco `--[[ ... ]]` das linhas 71-232, comentado desde `ecfb02a` (30/12/2025), e nunca rodam. Não apagado: o mesmo bloco guarda as funções de ragdoll marcadas "NÃO APAGAR" |
 | F94 | Média | `SkillRunner.luau` | `onRecast`, `onRelease`, `onHit` e `onTrigger` não passavam pelo `protect` do runner: um erro no `onRecast`/`onRelease` subia até o `InputValidator`, e o do `onHit` era pego pelo `HitboxWrapper` | Leitura (16/10, registrado no handoff) | **Corrigido em 08/11** (`52d4aee`, teste em `21dd582`): erro isolado, warn e a skill segue |
 
 ## Brechas de abstração e assunções escondidas
