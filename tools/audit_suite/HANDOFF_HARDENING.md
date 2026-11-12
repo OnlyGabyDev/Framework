@@ -33,6 +33,15 @@ concluído, mande o placar de achados abertos** no formato `(0 crít, X alta, X 
   Studio: edite em `C:\Users\Gaby\sync\sync`, confira o hash no Studio e copie para o repo antes de
   commitar. O `sourcemap.json` defasa: para saber o que existe no Studio, leia o Studio pelo MCP.
 - O `sourcemap.json` saiu do índice em 11/11 (já estava no `.gitignore` desde 08/11).
+- **A `GrandIntegrationDemo` foi removida em 11/11** (pedido do usuário). Os cenários dela viraram
+  testes com asserção em `Tests/Scenarios.luau`, chamado pelo `IntegrationTests` antes do Summary:
+  IA persegue pelo pipeline do input, dash + finisher (combo, grab, dano), IA possui IA e possessão
+  dupla com o player (pulado sem player). **81/81 no Play em 11/11.** O player não é mais possuído no
+  meio do Play, então as notas abaixo sobre "teste com player depois de t > 38 s" não valem mais.
+  O `RequestJump`, que a demo criava, nasce agora no `InputValidator` (`d85543f`).
+- **F32 remedido em 11/11:** a Soft padrão não move corpo com Humanoid (player 0,8 e NPC do servidor
+  com Humanoid 0,8 de ~20; NPC sem Humanoid 18,7). A causa é o controlador do Humanoid, não o
+  ownership. A correção é decisão de design do usuário, assim como o F55 e o F62.
 
 ## Estado em 16/10/2026 (fim do 2º chat: Fase 1 pela metade)
 
