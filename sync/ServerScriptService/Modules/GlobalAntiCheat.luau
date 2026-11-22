@@ -73,8 +73,9 @@ Liga a validação à raiz do corpo nativo. Dono do formato de tracked.Move:
 	LastValid: Vector3,             -- última posição aceita
 	Credit: number,                 -- crédito horizontal (studs); negativo = dívida
 	CreditUp: number,               -- crédito de subida (studs)
-	PeakH: number, PeakHUntil: number, -- velocidade horizontal permitida, segurada pela janela de latência
-	PeakV: number, PeakVUntil: number, -- idem, subida
+	PeakH: number, PeakHQueue: { {value: number, untilTime: number} }, -- velocidade horizontal permitida:
+	                                -- o máximo da janela de latência (fila em windowMax)
+	PeakV: number, PeakVQueue: { {value: number, untilTime: number} }, -- idem, subida
 	TrustUntil: number,             -- os.clock(): fim da confiança depois de movimento do servidor
 	SelfWrites: number, SelfWriteAt: number, -- correções ainda não vistas pelo sinal
 	Owned: boolean,                 -- o corpo era do player no frame anterior
@@ -102,8 +103,8 @@ local function bindMovement(player: Player, tracked, root: BasePart, humanoid: H
 		LastValid = root.Position,
 		Credit = 0,
 		CreditUp = 0,
-		PeakH = 0, PeakHUntil = 0,
-		PeakV = 0, PeakVUntil = 0,
+		PeakH = 0, PeakHQueue = {},
+		PeakV = 0, PeakVQueue = {},
 		TrustUntil = os.clock() + Settings.Movement_Trust_Seconds + latencyPad(player), -- spawn: o servidor acabou de posicionar o corpo
 		SelfWrites = 0, SelfWriteAt = 0,
 		Owned = false,
@@ -136,13 +137,25 @@ local function rebase(move)
 	move.CreditUp = 0
 end
 
--- Velocidade permitida com memória curta: uma maior (um Dash que acabou de terminar no servidor)
--- segue valendo pela janela de latência, porque o cliente ainda está aplicando a Force.
-local function holdPeak(peak: number, peakUntil: number, value: number, now: number, window: number): (number, number)
-	if value >= peak or now >= peakUntil then
-		return value, now + window
+--[[
+Velocidade permitida com memória curta: o MAIOR valor dos últimos `window` s. Uma Force que acabou
+no servidor segue valendo pela janela de latência, porque o servidor ainda vê o cliente andando com
+ela. Fila monotônica: cada entrada vale até untilTime; a de trás que o valor novo domina sai (expira
+antes e vale menos), então a da frente é sempre o máximo.
+Antes guardava só o maior valor e, quando ele expirava, voltava ao valor de AGORA: uma Force menor
+que rodou à sombra da maior perdia a própria janela. O Dash no meio da Ultimate (80 sob os 90 do
+voo) terminava junto com a janela do voo, o servidor ainda via o Dash (0,35 s atrasado) e corrigia:
+teleporte de 16 studs com a câmera junto (F109).
+]]
+local function windowMax(queue, value: number, now: number, window: number): number
+	while #queue > 0 and queue[#queue].value <= value do
+		table.remove(queue)
 	end
-	return peak, peakUntil
+	table.insert(queue, { value = value, untilTime = now + window })
+	while queue[1].untilTime <= now do
+		table.remove(queue, 1)
+	end
+	return queue[1].value
 end
 
 local function jumpSpeed(humanoid: Humanoid): number
@@ -220,8 +233,8 @@ local function validateMovement(player: Player, tracked, dt: number, now: number
 	local groundH, groundV = groundSpeed(move)
 	local slack = Settings.Movement_Speed_Slack
 	local window = Settings.Movement_Latency_Window + pad
-	move.PeakH, move.PeakHUntil = holdPeak(move.PeakH, move.PeakHUntil, walk + forceH + groundH + slack, now, window)
-	move.PeakV, move.PeakVUntil = holdPeak(move.PeakV, move.PeakVUntil, jump + forceV + groundV + slack, now, window)
+	move.PeakH = windowMax(move.PeakHQueue, walk + forceH + groundH + slack, now, window)
+	move.PeakV = windowMax(move.PeakVQueue, jump + forceV + groundV + slack, now, window)
 
 	local burst = Settings.Movement_Burst_Seconds
 	local credit = math.min(move.Credit + move.PeakH * dt, move.PeakH * burst)
@@ -404,5 +417,8 @@ function AntiCheat._Update(dt)
 end
 
 AntiCheat.Init()
+
+-- Interno, exposto para o teste do F109 (janela de máximo da velocidade permitida)
+AntiCheat._WindowMax = windowMax
 
 return AntiCheat

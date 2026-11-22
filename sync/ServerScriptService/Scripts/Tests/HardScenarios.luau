@@ -1023,4 +1023,27 @@ return function(env)
 		cleanup(attacker)
 		cleanup(target)
 	end)
+
+	run("F109 — AntiCheat: a Force menor que rodou à sombra da maior mantém a própria janela de latência", function(t)
+		-- Dash no meio da Ultimate (22/11): voo de 90 (+2 de folga) até 0,8 s, Dash de 80, depois só a
+		-- folga (NoControl: sem caminhada). O bug aparecia quando o Dash acabava ANTES de a janela do voo
+		-- expirar (0,8 + 0,35): a janela antiga voltava ao valor de agora (2) e o Dash, que o servidor
+		-- ainda via 0,35 s atrasado, virava correção. No jogo isso depende do frame (2 em 3 medidos); aqui
+		-- o Dash acaba em 1,12 s, o caso ruim, e tem de seguir permitido até 1,12 + 0,35 = 1,47 s
+		local AntiCheat = require(ServerScriptService.Modules.GlobalAntiCheat)
+		local WINDOW = 0.35
+		local queue, allowedAt = {}, {}
+		local dt = 1 / 60
+		for frame = 0, 120 do
+			local now = frame * dt
+			local value = if now < 0.8 then 92 elseif now < 1.12 then 82 else 2
+			allowedAt[frame] = AntiCheat._WindowMax(queue, value, now, WINDOW)
+		end
+		local function at(seconds) return allowedAt[math.floor(seconds / dt + 0.5)] end
+		t.log(string.format("permitido em 1,0 s: %d; 1,3 s: %d; 1,45 s: %d; 1,6 s: %d", at(1.0), at(1.3), at(1.45), at(1.6)))
+		t.assert(at(1.0) == 92, "Durante o Dash, a janela do voo devia seguir valendo")
+		t.assert(at(1.3) == 82 and at(1.45) == 82,
+			"O Dash perdeu a própria janela quando a do voo expirou (antes: voltava a 2 em 1,15 s e o AntiCheat corrigia)")
+		t.assert(at(1.6) == 2, "A janela não expirou depois de 0,35 s do fim do Dash")
+	end)
 end
