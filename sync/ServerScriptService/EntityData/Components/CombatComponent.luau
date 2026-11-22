@@ -483,6 +483,9 @@ function CombatComponent:EquipSkill(slotIndex, skillKey, layerName : string?)
 			--Aplica nome caso não tenha
 			if not result.data then result.data = {} end
 			if not result.data.name then result.data.name = skillKey end
+			-- Kit dono (a pasta no SkillDatabase): é de onde a skill tira as animações em qualquer
+			-- corpo, inclusive roubada (F55). A skill pode declarar o próprio data.kit
+			if result.data.kit == nil then result.data.kit = SkillData.KitOf(skillKey) end
 			
 			--Salva no cache
 			self.SkillCache[skillKey] = result

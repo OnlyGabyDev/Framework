@@ -340,6 +340,13 @@ Slots[slot] = false esvazia; RemoveLoadoutLayer(camada). O modo da arma usa a ca
 
 HITBOX DA ARMA: cada skill usa a sua: self:StartHitbox(duração) / self:StopHitbox(); o acerto vai só para ela.
 
+SKILL PORTÁVEL (F55): data.kit = kit dono da skill (o CombatComponent carimba a pasta do SkillDatabase,
+ex. "Schema"; skill feita em código pode declarar). self.charLib lê o conjunto de animações do kit dono
+e, na falta, do kit de quem casta (AnimationLib.ForSkill): o M1 da Schema roubado toca as animações da
+Schema em qualquer corpo. data.requires = { ComponentKey.Animation, ... } (ServerScriptService.EntityData.
+ComponentsExport): sem esses componentes o runner é recusado antes de qualquer callback (aviso uma vez,
+cooldown devolvido pelo motivo refused), em vez de errar no meio do onStart.
+
 INSCRIÇÕES (Listen): Owner por entidade com StateTable.OwnerToken(entidade, "tag"), nunca string.
 
 FORÇAS: Soft e caminhada do NPC proporcionais à massa (Physics/Settings: Force_Mass_Scaling); MassScaling = false

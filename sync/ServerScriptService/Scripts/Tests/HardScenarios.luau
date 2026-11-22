@@ -351,4 +351,51 @@ return function(env)
 		t.assert(#errors == 0, "A ação adiada no alvo destruído deu erro: " .. tostring(errors[1]))
 		cleanup(alive)
 	end)
+
+	--=========================================================================
+	--  F55 — SKILL PORTÁVEL
+	--=========================================================================
+
+	run("F55 — skill de kit lê as animações do kit dono em qualquer corpo; skill solta, as de quem casta", function(t)
+		local M1 = require(ServerStorage.DataBase.SkillDatabase.Schema.M1)
+		local schemaBody = still(CFrame.new(-6, 5, 0), COMBAT) -- o loadout da Schema equipa o M1 pela chave
+		t.assert(M1.data.kit == "Schema", "O EquipSkill não carimbou o kit do M1: " .. tostring(M1.data.kit))
+
+		local thief = animated(CFrame.new(0, 5, 0), { "Character", "Health", "Status", "Combat", "Animation" },
+			{ Combat = { ChosenChar = "__HardThief" } })
+		local schemaLib = AnimationLib.character.Schema
+		local stolen = SkillRunner.new(SkillFactory.GetSkill(M1), thief, M1.data.name, Types.Skill)
+		t.assert(stolen.charLib ~= nil and stolen.charLib.M1 == schemaLib.M1,
+			"No corpo de outro kit o M1 não achou as animações da Schema")
+		t.assert(stolen.charLib.M1.M1Start == schemaLib.M1.M1Start, "ID de animação diferente do kit dono")
+
+		local schemaAnimated = animated(CFrame.new(6, 5, 0), { "Character", "Health", "Status", "Combat", "Animation" })
+		local loose = makeRunner(schemaAnimated, "__HardLoose", { duration = 1 }, {})
+		t.assert(loose.charLib.S1 == schemaLib.S1, "A skill solta não usou a biblioteca de quem casta")
+		local looseOnThief = makeRunner(thief, "__HardLoose2", { duration = 1 }, {})
+		t.assert(looseOnThief.charLib.M1 == nil, "Skill solta num kit sem animações achou um conjunto")
+		t.assert(not pcall(function() stolen.charLib.M1 = {} end), "A biblioteca da skill aceitou escrita")
+
+		cleanup(schemaBody)
+		cleanup(thief)
+		cleanup(schemaAnimated)
+	end)
+
+	run("F55 — M1 num corpo sem Animation e sem Weapon é recusado: sem erro, sem cooldown, sem status preso", function(t)
+		local body = still(CFrame.new(0, 5, 0), COMBAT) -- loadout da Schema: o M1 no Primary
+		local M1 = require(ServerStorage.DataBase.SkillDatabase.Schema.M1)
+		t.assert(body.GetSkillFromSlot(Intents.Id.Primary) == M1, "Pré-condição: o M1 não está no Primary")
+
+		local ok
+		local errors = engineErrorsDuring(function()
+			ok = press(body, Intents.Id.Primary)
+		end)
+		t.assert(ok == false, "O cast foi aceito sem os componentes que o M1 declara")
+		t.assert(#errors == 0, "O M1 deu erro em vez de ser recusado: " .. tostring(errors[1]))
+		t.assert(not body.HasCooldown(M1.data.name), "O cooldown ficou cobrado")
+		t.assert(#body.GetActiveSkills(M1.data.name) == 0, "Sobrou runner ativo")
+		t.assert(body.GetStatus("NoControl") == nil, "O NoControl do M1 ficou preso no corpo")
+		t.assert(body.GetActiveTags()[E.Tags.canMove] ~= false, "O corpo ficou sem andar")
+		cleanup(body)
+	end)
 end

@@ -1,5 +1,6 @@
 local ServerStorage = game:GetService("ServerStorage")
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
+local ComponentKey = require(game:GetService("ServerScriptService").EntityData.ComponentsExport)
 
 local Skill = {
 
@@ -11,6 +12,9 @@ local Skill = {
 		castTime = 0,
 		tags = {[StateTable.Enum.Tags.block] = true},
 		traits = { StateTable.Enum.Traits.Melee },
+		-- Sem animação (os marcadores dela encerram o golpe) ou sem arma (a hitbox) o M1 não existe:
+		-- numa entidade sem eles o motor recusa o cast, em vez de errar no onStart (F55)
+		requires = { ComponentKey.Animation, ComponentKey.Weapon },
 	},
 
 	callbacks = {
@@ -27,7 +31,7 @@ local Skill = {
 			self.M1S2 = self.charLib.M1.M1S2
 			
 			self.track = self.Entity.PlayAnimation(self.M1Start)
-			self.track.Looped = false
+			if self.track then self.track.Looped = false end -- nil sem Animator no rig
 			
 			self:StartHitbox(self.data.duration) -- a hitbox deste M1, não a da arma inteira (F79)
 
@@ -61,7 +65,7 @@ local Skill = {
 				self.Entity.SetActionState(statsTable.ActionStates.Out.cast, self.Runner)
 				
 				self.track = self.Entity.PlayAnimation(self.M1S2)
-				self.track.Looped = false
+				if self.track then self.track.Looped = false end
 				
 				self:StopHitbox() -- zera hitTargets do 1º golpe: o 2º pode acertar o mesmo alvo
 				self:StartHitbox(self.data.duration)

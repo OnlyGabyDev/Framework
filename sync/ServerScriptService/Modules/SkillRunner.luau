@@ -87,7 +87,10 @@ function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input) --Instanc
 	if self.Entity then
 		
 		if Entity:HasComponent(Entity.ComponentKey.Animation) then
-			self.charLib = self.lib.character[self.Entity.GetChosenChar()] 	--Biblioteca de animações do char escolhido
+			-- Animações do kit DONO da skill e, na falta, do kit de quem casta (F55): antes era só o
+			-- de quem casta, e o M1 da Schema roubado por outro personagem dava erro no onStart
+			local casterKit = Entity:HasComponent(Entity.ComponentKey.Combat) and Entity.GetChosenChar() or nil
+			self.charLib = self.lib.ForSkill(self.skill.data.kit, casterKit)
 			self.skill.charLib = self.charLib                               --Opção A
 		end
 
@@ -168,11 +171,34 @@ function SkillRunner:_fire(breakpoint, context, ...)
 	return nil
 end
 
+-- Primeiro componente de data.requires que a entidade não tem (nil = todos presentes)
+local function missingRequirement(runner)
+	local requires = runner.skill.data.requires
+	if not requires then return nil end
+	local entity = runner.Entity
+	for _, componentName in requires do
+		if not entity or not entity:HasComponent(componentName) then
+			return componentName
+		end
+	end
+	return nil
+end
+
 --[[
 Registra e inicia o runner.
 @return false se o onStart falhou ou o motor recusou o início (o runner já foi encerrado e limpo) BOOLEAN
 ]]
 function SkillRunner:start(): boolean
+	-- Dependências declaradas da skill (F55): data.requires = { ComponentKey.X, ... }. Sem elas a
+	-- skill não começa, em vez de dar erro no meio do onStart (o M1 da Schema numa entidade sem
+	-- Animation)
+	local missing = missingRequirement(self)
+	if missing then
+		return self:_RefuseStart("Requires:" .. tostring(self.skillName) .. ":" .. missing,
+			tostring(self.skillName) .. " declara requires = { " .. missing .. " }, e a entidade "
+				.. tostring(self.Entity and self.Entity.ID) .. " não tem o componente")
+	end
+
 	-- Largura da cadeia assíncrona (F62): runners vivos ao mesmo tempo sob a mesma raiz da Lineage.
 	-- Uma árvore em que cada runner cria dois chegava a 1023 vivos sem limite nenhum
 	local root = self.Lineage and self.Lineage.Root
@@ -226,7 +252,7 @@ function SkillRunner:start(): boolean
 end
 
 --[[
-O motor não deixa o runner começar (Enum.ChainLimits). Nenhum callback roda e
+O motor não deixa o runner começar (data.requires ausente, Enum.ChainLimits). Nenhum callback roda e
 nada é registrado; o cooldown cobrado na ativação volta pelo refund do motivo refused (padrão:
 inteiro), e o onFinish tira o status do registro do StatusComponent. Um aviso por `warnKey` (as
 repetições saem em Debug).
