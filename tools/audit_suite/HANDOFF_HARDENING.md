@@ -10,13 +10,25 @@ concluído, mande o placar de achados abertos** no formato `(0 crít, X alta, X 
 
 ## Estado em 22/11/2026 (leia primeiro; as seções de 11/11 e 16/10 ficam pelo histórico)
 
-- **Placar: (0 crít, 0 alta, 0 méd, 0 baixa)**, 0 abertos de 102. F55 e F62 corrigidos; F97 a F102 achados pelos
-  testes duros e corrigidos no mesmo dia (ver `AUDITORIA.md`). Branch `audit/hardening-08-11`, sem push.
+- **Placar: (0 crít, 0 alta, 0 méd, 0 baixa)**, 0 abertos de 108. F55 e F62 corrigidos; F97 a F102 achados pelos
+  testes duros e corrigidos no mesmo dia; F103 a F108 na 3ª rodada (ver `AUDITORIA.md`). Branch
+  `audit/hardening-08-11`, sem push.
+- **3ª rodada (22/11):** F103 agarrão rígido (`AttachTo`, a Ultimate usa), F104 zona com posição prevista do corpo
+  de cliente (`Physics/NetworkView`), F105 time (`Affiliation`, `Relation`/`CanAffect`, `data.affects`), F106
+  Combat sem personagem (`ChosenChar = false`, `Enum.CombatDefaults`), F107 cura (`HealCap`, `Heal(n, opts)`,
+  `OUT.OnHeal`), F108 `Damage(alvo, n, opts)`. **128/128 no Play e `StaticChecks` 4/4.** Singleton/contexto de
+  mundo fica de fora por decisão do usuário (uma partida por servidor). `.agents/rules` atualizado (fora do git).
+- **Medir o que o player VÊ (sonda de cliente):** teste de servidor não enxerga atraso de rede (líder e seguidor
+  ficam igualmente atrasados). Foi assim que o F103 e o F104 apareceram: um Script na VM do servidor faz as fases
+  e publica a fase em atributo do ReplicatedStorage; um LocalScript no `PlayerGui` (criado pelo `execute_luau`
+  Client) mede por `RenderStepped` e grava o resultado num atributo local, lido pelo `execute_luau` Client. Cuidado
+  com a geometria: na 1ª tentativa o vento empurrava o player para fora da zona antes do dash e a sonda media zero.
 - **HP acima do máximo é escolha de design (usuário, 22/11):** deixa espaço para sobrevida. Não grampeie HP nem stat
   no motor; limite só como política declarada, com o ok do usuário. Um corte de HP no teto foi feito e desfeito
   na 2ª rodada de 22/11. **Pendente de decisão:** o `Heal` ainda corta em `GetMaxHP()` e, com o HP acima do teto,
-  REDUZ o HP (devolve cura negativa). Proposta: `HealCap` declarado no padrão do `DeathDefaults` (padrão MaxHP,
-  override por entidade e por chamada), com a cura nunca reduzindo HP. O usuário cita "30 regras"; o repo só tem
+  REDUZ o HP (devolve cura negativa). ~~Proposta~~ Feito na 3ª rodada (F107): `HealCap` declarado, a cura nunca
+  reduz HP. O `SetHP` e o `Revive` ainda cortam no MaxHP (não mexidos: confirmar com o usuário se devem seguir o
+  `HealCap`). O usuário cita "30 regras"; o repo só tem
   20 (`.agents/rules`). Pergunte onde está a lista completa.
 - **O sync voltou para o `sync/` do repo.** Em 22/11 o Script Sync do Studio estava ligado a
   `c:\Users\Gaby\Desktop\Framework\sync` (o `sourcemap.json` do repo foi regravado ao abrir o Studio);
@@ -40,7 +52,7 @@ concluído, mande o placar de achados abertos** no formato `(0 crít, X alta, X 
 - **F102:** a arma é achada pelo kit (o pedido, o do personagem ou o único que a tem); `EquipWeapon(nome, kit?)`.
   O M1 da Schema roubado por um R6 de outro kit roda inteiro.
 - **F98:** `RemoveAmount` desregistra antes de encerrar.
-- **`Tests/HardScenarios.luau`** (25 testes): cadeias (6), portabilidade (2), spam de input, morte e destruição no
+- **`Tests/HardScenarios.luau`** (26 testes; 17 na 1ª rodada e 21 na 2ª: os números 21 e 25 escritos antes estavam errados): cadeias (6), portabilidade (2), spam de input, morte e destruição no
   meio da skill, troca aleatória de status (400 operações), status que se renova, fórmula de dano por amostragem
   (300 casos, diferença máxima 6e-11), crédito de DOT, possessão IA em sequência e TriggerSet mudando no `Emit`.
   **122/122 no Play (duas rodadas) e `StaticChecks` 4/4 em 22/11.** Teste de mutação da 2ª rodada: com os 4

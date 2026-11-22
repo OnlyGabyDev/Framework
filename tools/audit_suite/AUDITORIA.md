@@ -4,7 +4,7 @@
 
 Oct 15, 2026 · @Gabi
 
-> **Estado em 22/11/2026:** 0 abertos de 102 achados, placar **(0 crít, 0 alta, 0 méd, 0 baixa)**. F55 e F62 corrigidos em 22/11; F97 a F102 foram achados pelos testes duros de 22/11 (`Tests/HardScenarios`) e corrigidos no mesmo dia. Um corte de HP no teto, cogitado na mesma rodada, foi desfeito: HP acima do máximo é escolha de design (espaço para sobrevida). F95 e F96 foram achados e corrigidos em 11/11. O F71 já estava corrigido no Studio e o F93 era falso positivo (código comentado). O resto foi corrigido no lote P0 (16/10), na Fase 1 do hardening (16/10) e no lote de 08/11. O texto abaixo é o retrato de 15/10.
+> **Estado em 22/11/2026:** 0 abertos de 108 achados, placar **(0 crít, 0 alta, 0 méd, 0 baixa)**. F55 e F62 corrigidos em 22/11; F97 a F102 foram achados pelos testes duros e corrigidos no mesmo dia; F103 e F104 (agarrão atrasado e vento depois do dash, vistos pelo usuário no cliente) e as lacunas F105 a F108 (time, Combat sem personagem, cura, opções do hit) entraram na 3ª rodada. HP acima do máximo é escolha de design (espaço para sobrevida). F95 e F96 foram achados e corrigidos em 11/11. O F71 já estava corrigido no Studio e o F93 era falso positivo (código comentado). O resto foi corrigido no lote P0 (16/10), na Fase 1 do hardening (16/10) e no lote de 08/11. O texto abaixo é o retrato de 15/10.
 
 ## Resumo executivo
 
