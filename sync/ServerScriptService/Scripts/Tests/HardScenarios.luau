@@ -787,4 +787,33 @@ return function(env)
 		t.assert(e.GetStat(E.Stats.Weapon) == "Martelo", "Stat de texto foi tratado como número")
 		cleanup(e)
 	end)
+
+	run("F101 — dano indireto (DOT) emite OUT.OnDamage no dono, com a trait DOT; hit direto, uma vez só", function(t)
+		local caster = still(CFrame.new(-4, 5, 0), COMBAT)
+		local victim = still(CFrame.new(4, 5, 0), LIGHT, { Health = { MaxHP = 1000 } })
+		local src = makeRunner(caster, "__HardOwner", { duration = 10 }, {})
+		src:start()
+		local dot, direct, noDot, wrongTarget, wrongOwner, sourceIsVictim = 0, 0, 0, 0, 0, 0
+		caster:Listen({ Role = E.Roles.OUT, Breakpoint = E.Breakpoints.OnDamage, Owner = src, Action = function(ctx)
+			if table.find(ctx.traits, E.Traits.DOT) then dot += 1 else direct += 1 end
+			if ctx.targetEntity ~= victim then wrongTarget += 1 end
+			if ctx.ownerEntity ~= caster then wrongOwner += 1 end
+			if table.find(ctx.traits, E.Traits.DOT) and ctx.sourceEntity == victim then sourceIsVictim += 1 end
+		end })
+		caster:Listen({ Role = E.Roles.OUT, Breakpoint = E.Breakpoints.OnDamage, Owner = src,
+			Query = { None = { E.Traits.DOT } }, Action = function() noDot += 1 end })
+
+		src:Damage(victim, 5)
+		t.assert(direct == 1, "Hit direto emitiu OUT.OnDamage " .. direct .. " vez(es) (esperado 1)")
+		src:ApplyStatus(StateTable.Status.Bleed, { Target = victim, Duration = 1 })
+		t.wait(1.2)
+		t.log(string.format("ticks de DOT com OUT.OnDamage %d; hit direto %d; filtro None={DOT} %d", dot, direct, noDot))
+		t.assert(dot >= 2, "O DOT não emitiu OUT.OnDamage no dono (" .. dot .. " ticks)")
+		t.assert(noDot == 1, "O filtro None = { DOT } recebeu " .. noDot .. " evento(s) (esperado só o hit direto)")
+		t.assert(wrongTarget == 0 and wrongOwner == 0, string.format("targetEntity errado %d, ownerEntity errado %d", wrongTarget, wrongOwner))
+		t.assert(sourceIsVictim == dot, "sourceEntity do DOT mudou de significado (devia seguir sendo o portador)")
+		src:endSkill(false)
+		cleanup(caster)
+		cleanup(victim)
+	end)
 end

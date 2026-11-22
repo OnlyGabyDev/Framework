@@ -349,7 +349,12 @@ cooldown devolvido pelo motivo refused), em vez de errar no meio do onStart.
 
 CRÉDITO DE MORTE (StateTable.EffectOwner): o OUT.OnDeath vai para o DONO do que matou. Um status (DOT,
 reflexo) roda no portador, mas o dono é quem o aplicou (sobe runner.Source até a skill). A morte por
-Bleed credita quem aplicou o Bleed, não a vítima. O OUT.OnDamage de dano indireto (D3) ainda não existe.
+Bleed credita quem aplicou o Bleed, não a vítima.
+
+OUT.OnDamage (D3, F101): emitido pelo HealthComponent no dono do dano (context.ownerEntity) em TODO dano,
+direto (skill) e indireto (DOT, reflexo, área de status), com as traits do efeito no contexto. Quem não
+quer DOT filtra: Listen({ Role = OUT, Breakpoint = OnDamage, Query = { None = { Traits.DOT } } }).
+context.sourceEntity segue sendo onde o runner de origem roda (num DOT, a própria vítima).
 
 EVENTOS DO HEALTH (F99): Events = { onDamage, onHeal, onDeath, onRevive } no config são do lado de quem
 apanha; onDamage é o IN.PostDamage.

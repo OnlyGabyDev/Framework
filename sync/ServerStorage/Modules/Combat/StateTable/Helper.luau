@@ -43,7 +43,8 @@ local MAX_OWNER_HOPS = 8 -- status aplicado por status aplicado por...: ciclo de
 Entidade DONA de um efeito: quem causou, não onde ele roda. Um status (DOT, reflexo, aura) roda no
 PORTADOR (runner.Entity), mas foi aplicado por alguém (runner.Source). Sobe o Source até um runner
 de skill (ou sem Source). Antes o Die creditava a morte por DOT à própria vítima (OUT.OnDeath no
-portador). Dono único desta regra; a parte de dano indireto do D3 (OUT.OnDamage) segue em aberto.
+portador). Dono único desta regra: o BuildContext grava o dono em context.ownerEntity, e o OUT.OnDamage
+(D3, F101) e o OUT.OnDeath vão para ele.
 @param source - runner, proxy de skill ou nil
 @return EntityCore? (nil sem runner, ou se o dono já saiu do jogo)
 ]]
@@ -548,7 +549,8 @@ function Helper.BuildContext(source, amount, parentContext)
 		damage = amount or 0,
 		direction = nil,
 		source = source,
-		sourceEntity = nil,
+		sourceEntity = nil,  -- onde o runner que causou roda (num DOT, a própria vítima)
+		ownerEntity = Helper.EffectOwner(source), -- quem causou: dono do efeito (D3, F101)
 		traits = {},
 		effects = {},
 		cancelled = false,

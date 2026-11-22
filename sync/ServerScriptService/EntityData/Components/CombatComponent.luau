@@ -590,8 +590,8 @@ Aplica dano a uma entidade alvo, acionando o pipeline OUT do atacante antes e de
 	inteiro roda no próximo frame, F62)
 ]]
 function CombatComponent:ApplyDamage(amount: number, source: any, targetEntity: any)
-	-- O hit inteiro (OUT.onHit, TakeDamage e OUT.OnDamage) é um elo só da cadeia: reserva o nível
-	-- do TakeDamage de dentro, para não adiar só o dano e perder o OUT.OnDamage (F62)
+	-- O hit inteiro (OUT.onHit e o TakeDamage, que emite o OUT.OnDamage) é um elo só da cadeia:
+	-- reserva o nível do TakeDamage de dentro, para o OUT.onHit não rodar agora com o dano adiado (F62)
 	local ran, success, actualDamage = StateTable.RunInChainReserving(2,
 		"[CombatComponent] ApplyDamage", self.Entity and self.Entity.ID,
 		self._ApplyDamageInner, self, amount, source, targetEntity)
@@ -623,14 +623,10 @@ function CombatComponent:_ApplyDamageInner(amount: number, source: any, targetEn
 	-- 1. Emite OUT antes do hit conectar
 	self.Entity:Emit(StateEnum.Roles.OUT, StateEnum.Breakpoints.onHit, context)
 
-	-- 2. Aplica o dano no alvo passando o CONTEXT (traits/effects/damage alterados pelos listeners OUT precisam chegar no alvo)
-	local success, actualDamage, outContext = targetEntity.TakeDamage(context)
-
-	-- 3. Emite OUT após o hit conectar
-	if success and outContext then
-		outContext.actualDamage = actualDamage
-		self.Entity:Emit(StateEnum.Roles.OUT, StateEnum.Breakpoints.OnDamage, outContext)
-	end
+	-- 2. Aplica o dano no alvo passando o CONTEXT (traits/effects/damage alterados pelos listeners OUT
+	-- precisam chegar no alvo). O OUT.OnDamage, depois do hit, é emitido pelo HealthComponent no dono
+	-- do dano: um ponto só para dano direto e indireto (D3, F101)
+	local success, actualDamage = targetEntity.TakeDamage(context)
 
 	return success, actualDamage
 end

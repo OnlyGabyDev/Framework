@@ -198,9 +198,19 @@ function HealthComponent:_TakeDamageInner(amountOrContext, source)
 	end
 
 	context.actualDamage = actualDamage
+	context.targetEntity = context.targetEntity or self.Entity
 
 	-- Hook reativo do lado do ALVO (novo): dispara DEPOIS do HP já ter mudado
 	self.Entity:Emit(StateEnum.Roles.IN, StateEnum.Breakpoints.PostDamage, context)
+
+	-- OUT.OnDamage no DONO do dano (D3, F101), para todo dano: direto (skill) e indireto (DOT,
+	-- reflexo, área de status), com as traits do efeito no contexto (quem não quer DOT filtra com
+	-- Query = { None = { DOT } }). Antes só o ApplyDamage emitia, e o dano de status não tinha OUT
+	-- ownerEntity vem do BuildContext; contexto montado à mão (sem ele) resolve aqui
+	local owner = context.ownerEntity or StateTable.EffectOwner(context.source)
+	if owner then
+		owner:Emit(StateEnum.Roles.OUT, StateEnum.Breakpoints.OnDamage, context)
+	end
 
 	return true, actualDamage, context
 end

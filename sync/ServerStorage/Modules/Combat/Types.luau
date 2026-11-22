@@ -57,7 +57,8 @@ export type RunnerContext = {
 export type HitContext = {
 	damage: number,                  -- mutável: mitigação, proteções e listeners alteram
 	source: any?,                    -- o SkillRunner (ou status) que causou
-	sourceEntity: any?,
+	sourceEntity: any?,              -- onde o runner de origem roda (num DOT/reflexo, o portador)
+	ownerEntity: any?,               -- DONO do efeito (StateTable.EffectOwner): recebe o OUT.OnDamage/OnDeath
 	targetEntity: any?,
 	type: string?,                   -- tipo do runner de origem (StateTable.Enum.Types)
 	secondaryType: string?,
