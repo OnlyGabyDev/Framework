@@ -10,8 +10,14 @@ concluído, mande o placar de achados abertos** no formato `(0 crít, X alta, X 
 
 ## Estado em 22/11/2026 (leia primeiro; as seções de 11/11 e 16/10 ficam pelo histórico)
 
-- **Placar: (0 crít, 0 alta, 0 méd, 0 baixa)**, 0 abertos de 98. F55 e F62 corrigidos; F97 e F98 achados pelos
+- **Placar: (0 crít, 0 alta, 0 méd, 0 baixa)**, 0 abertos de 102. F55 e F62 corrigidos; F97 a F102 achados pelos
   testes duros e corrigidos no mesmo dia (ver `AUDITORIA.md`). Branch `audit/hardening-08-11`, sem push.
+- **HP acima do máximo é escolha de design (usuário, 22/11):** deixa espaço para sobrevida. Não grampeie HP nem stat
+  no motor; limite só como política declarada, com o ok do usuário. Um corte de HP no teto foi feito e desfeito
+  na 2ª rodada de 22/11. **Pendente de decisão:** o `Heal` ainda corta em `GetMaxHP()` e, com o HP acima do teto,
+  REDUZ o HP (devolve cura negativa). Proposta: `HealCap` declarado no padrão do `DeathDefaults` (padrão MaxHP,
+  override por entidade e por chamada), com a cura nunca reduzindo HP. O usuário cita "30 regras"; o repo só tem
+  20 (`.agents/rules`). Pergunte onde está a lista completa.
 - **O sync voltou para o `sync/` do repo.** Em 22/11 o Script Sync do Studio estava ligado a
   `c:\Users\Gaby\Desktop\Framework\sync` (o `sourcemap.json` do repo foi regravado ao abrir o Studio);
   `C:\Users\Gaby\sync\sync` NÃO estava vivo. Antes de editar, confira por hash qual pasta o Studio lê.
@@ -26,17 +32,25 @@ concluído, mande o placar de achados abertos** no formato `(0 crít, X alta, X 
 - **F55 (skill portável):** `data.kit` (carimbado pelo `EquipSkill`), `AnimationLib.ForSkill`, `data.requires`
   (recusa com `EndReasons.Refused`, refund padrão 1). A arma continua presa ao nome do personagem
   (`Assets.Weapons.<Char>`): roubar o M1 para outro kit ainda não funciona, só falha limpo.
-- **F97:** `StateTable.EffectOwner` (dono do efeito pelo `runner.Source`). Só o `OUT.OnDeath` usa; o `OUT.OnDamage`
-  de dano indireto (D3) e o `sourceEntity` do contexto de DOT (que é a própria vítima) seguem como estão (F2.6/F2.7).
+- **F97 e F101 (D3):** `StateTable.EffectOwner` (dono do efeito pelo `runner.Source`) preenche `context.ownerEntity`
+  no `BuildContext`. O `OUT.OnDeath` e o `OUT.OnDamage` vão para o dono, em todo dano (direto e indireto); o
+  `OUT.OnDamage` saiu do `ApplyDamage` e mora no `HealthComponent`. `sourceEntity` continua sendo onde o runner roda.
+- **F99:** `Events.onDamage` do config do Health = `IN.PostDamage` (antes, `IN.OnDamage`, nunca emitido).
+- **F100:** `Enum.StatLimits` vale com e sem modificador (Defense sem piso; o resto, mínimo 0).
+- **F102:** a arma é achada pelo kit (o pedido, o do personagem ou o único que a tem); `EquipWeapon(nome, kit?)`.
+  O M1 da Schema roubado por um R6 de outro kit roda inteiro.
 - **F98:** `RemoveAmount` desregistra antes de encerrar.
-- **`Tests/HardScenarios.luau`** (21 testes): cadeias (6), portabilidade (2), spam de input, morte e destruição no
+- **`Tests/HardScenarios.luau`** (25 testes): cadeias (6), portabilidade (2), spam de input, morte e destruição no
   meio da skill, troca aleatória de status (400 operações), status que se renova, fórmula de dano por amostragem
   (300 casos, diferença máxima 6e-11), crédito de DOT, possessão IA em sequência e TriggerSet mudando no `Emit`.
-  **118/118 no Play e `StaticChecks` 4/4 em 22/11.** A Física 19 (player real) falhou uma vez com uma sonda pesada
+  **122/122 no Play (duas rodadas) e `StaticChecks` 4/4 em 22/11.** Teste de mutação da 2ª rodada: com os 4
+  componentes do commit anterior, falham exatamente os 4 testes novos (F99 a F102). A Física 19 (player real) falhou uma vez com uma sonda pesada
   rodando junto e passou nas rodadas seguintes: é sensível a carga.
-- **Notas para o próximo:** o `GetStat` só trava em ≥ 0 quando há modificador (base negativa passa, modificador
-  negativo é cortado: Defense −50 por debuff não amplifica); `HealthComponent.TakeDamage` não limita o HP ao
-  `GetMaxHP` (com Attributes, HP inicial do config acima do MaxHP do stat fica acima).
+- **Ainda aberto, fora do placar (lacunas de desenho, não bugs):** a Fase 2 inteira do documento de hardening
+  (F2.5 `Damage` com opções por hit, F2.8 `Heal` com fonte, F2.9 API de status, F2.10 hierarquia/facção/alvo,
+  F2.12 `ReplicatedState`, F2.15, F2.17) e as brechas do `AUDITORIA.md` ("Brechas de abstração"): intents fixas,
+  Combat preso ao `CharacterDatabase`, sem time/facção, sem componente de recurso, sem canal de estado para a HUD,
+  singletons globais. Os números de `Enum.ChainLimits` esperam confirmação do usuário.
 
 ## Estado em 11/11/2026
 

@@ -4,7 +4,7 @@
 
 Oct 15, 2026 · @Gabi
 
-> **Estado em 22/11/2026:** 0 abertos de 98 achados, placar **(0 crít, 0 alta, 0 méd, 0 baixa)**. F55 e F62 corrigidos em 22/11; F97 (crédito de morte por DOT) e F98 (`RemoveAmount` com instância órfã) foram achados pelos testes duros de 22/11 (`Tests/HardScenarios`) e corrigidos no mesmo dia. F95 e F96 foram achados e corrigidos em 11/11. O F71 já estava corrigido no Studio e o F93 era falso positivo (código comentado). O resto foi corrigido no lote P0 (16/10), na Fase 1 do hardening (16/10) e no lote de 08/11. O texto abaixo é o retrato de 15/10.
+> **Estado em 22/11/2026:** 0 abertos de 102 achados, placar **(0 crít, 0 alta, 0 méd, 0 baixa)**. F55 e F62 corrigidos em 22/11; F97 a F102 foram achados pelos testes duros de 22/11 (`Tests/HardScenarios`) e corrigidos no mesmo dia. Um corte de HP no teto, cogitado na mesma rodada, foi desfeito: HP acima do máximo é escolha de design (espaço para sobrevida). F95 e F96 foram achados e corrigidos em 11/11. O F71 já estava corrigido no Studio e o F93 era falso positivo (código comentado). O resto foi corrigido no lote P0 (16/10), na Fase 1 do hardening (16/10) e no lote de 08/11. O texto abaixo é o retrato de 15/10.
 
 ## Resumo executivo
 
