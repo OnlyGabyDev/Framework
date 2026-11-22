@@ -400,8 +400,158 @@ return function(env)
 	end)
 
 	--=========================================================================
+	--  INPUT, MORTE E DESTRUIÇÃO
+	--=========================================================================
+
+	run("Duro — 60 toques no mesmo frame: 1 cast sem cargas; exatamente 3 com 3 cargas e 3 instâncias", function(t)
+		local dummy = still(CFrame.new(0, 5, 0), COMBAT)
+		local plain, charged = 0, 0
+		equip(dummy, Intents.Id.Ability2, "__HardSpam", { cooldown = 5, duration = 0.2 }, {
+			onStart = function() plain += 1 end })
+		equip(dummy, Intents.Id.Ability3, "__HardSpamCharges", { cooldown = 5, duration = 0.2, maxInstances = 3,
+			cooldownPolicy = { charges = 3 } }, { onStart = function() charged += 1 end })
+		local accepted, acceptedCharged = 0, 0
+		for _ = 1, 60 do
+			if press(dummy, Intents.Id.Ability2) then accepted += 1 end
+			if press(dummy, Intents.Id.Ability3) then acceptedCharged += 1 end
+		end
+		t.assert(plain == 1 and accepted == 1, string.format("Sem cargas: %d casts, %d aceitos", plain, accepted))
+		t.assert(charged == 3 and acceptedCharged == 3, string.format("Com 3 cargas: %d casts, %d aceitos", charged, acceptedCharged))
+		t.assert(dummy.GetCooldownCharges("__HardSpamCharges") == 0, "Sobrou carga depois de 3 casts")
+		t.assert(#dummy.GetActiveSkills("__HardSpamCharges") == 3, "Instâncias vivas: " .. #dummy.GetActiveSkills("__HardSpamCharges"))
+		t.wait(0.4)
+		t.assert(#dummy.GetActiveSkills("__HardSpam") == 0 and #dummy.GetActiveSkills("__HardSpamCharges") == 0,
+			"Runners ficaram ativos depois da duração")
+		cleanup(dummy)
+	end)
+
+	run("Duro — morte no meio da skill: cancela com motivo, para o onStep, recusa cast; o Revive devolve", function(t)
+		local dummy = still(CFrame.new(0, 5, 0), COMBAT)
+		local steps, reason = 0, nil
+		equip(dummy, Intents.Id.Ability2, "__HardDeath", { cooldown = 0, duration = 5 }, {
+			onStep = function() steps += 1 end,
+			onEnd = function(_, ctx) reason = ctx.reason end,
+		})
+		t.assert(press(dummy, Intents.Id.Ability2) == true, "O cast não começou")
+		t.wait(0.15)
+		local runner = dummy.GetActiveSkills("__HardDeath")[1]
+		t.assert(runner ~= nil and steps > 0, "Pré-condição: a skill não estava rodando quando a entidade morreu")
+
+		dummy.TakeDamage(10000)
+		t.assert(not dummy.IsAlive(), "A entidade não morreu")
+		local stepsAtDeath = steps
+		t.wait(0.2)
+		t.assert(runner:IsEnded() and reason == E.EndReasons.Cancel, "A morte não cancelou a skill (motivo " .. tostring(reason) .. ")")
+		t.assert(steps == stepsAtDeath, string.format("O onStep seguiu depois da morte (%d -> %d)", stepsAtDeath, steps))
+		t.assert(#dummy.GetActiveSkills("__HardDeath") == 0, "A skill ficou em ActiveSkills")
+		t.assert(press(dummy, Intents.Id.Ability2) == false, "Morto castou")
+
+		t.assert(dummy.Revive(100) == true and dummy.IsAlive(), "O Revive não devolveu a vida")
+		t.assert(press(dummy, Intents.Id.Ability2) == true, "Depois do Revive o cast seguiu recusado")
+		dummy.StopAllActiveSkills(true)
+		cleanup(dummy)
+	end)
+
+	run("Duro — entidade destruída dentro do próprio onStep: sem erro, skill e status encerrados", function(t)
+		local dummy = still(CFrame.new(0, 5, 0), COMBAT)
+		local Long = { data = { name = "__HardLong", category = E.Categories.Buff }, callbacks = {} }
+		dummy.ApplyStatus(Long, { Duration = 30 })
+		local statusRunner = dummy.GetStatus("__HardLong")[1].runner
+		local steps, destroyed = 0, false
+		equip(dummy, Intents.Id.Ability2, "__HardSelfDestroy", { cooldown = 0, duration = 5 }, {
+			onStep = function()
+				steps += 1
+				if steps == 3 and not destroyed then
+					destroyed = true
+					cleanup(dummy)
+				end
+			end,
+		})
+		local runner
+		local errors = engineErrorsDuring(function()
+			press(dummy, Intents.Id.Ability2)
+			runner = dummy.GetActiveSkills("__HardSelfDestroy")[1]
+			t.wait(0.3)
+		end)
+		t.assert(destroyed, "Pré-condição: a entidade não foi destruída no onStep")
+		t.assert(#errors == 0, "Destruir no onStep deu erro: " .. tostring(errors[1]))
+		t.assert(runner and runner:IsEnded(), "A skill seguiu viva depois da entidade sair")
+		t.assert(statusRunner:IsEnded(), "O status seguiu vivo depois da entidade sair")
+		t.assert(steps == 3, "O onStep rodou " .. steps .. " vezes (a entidade saiu no 3º)")
+	end)
+
+	--=========================================================================
 	--  STATUS
 	--=========================================================================
+
+	run("Duro — 400 aplicações e remoções aleatórias de status: invariantes no meio e nada vivo no fim", function(t)
+		local dummy = still(CFrame.new(0, 5, 0))
+		local rng = Random.new(62)
+		local Unique = { data = { name = "__HUnique", category = E.Categories.Buff, tags = { [E.Tags.canMove] = false } }, callbacks = {} }
+		local Stack = { data = { name = "__HStack", category = E.Categories.Buff, maxStacks = 4,
+			traits = { E.Traits.Stackable } }, callbacks = {} }
+		local OnSelf = { data = { name = "__HOnSelf", category = E.Categories.Buff, maxStacks = 4, stackOnSelf = true,
+			traits = { E.Traits.Stackable } }, callbacks = {} }
+		local ExA = { data = { name = "__HExA", category = E.Categories.Debuff, exclusive = true }, callbacks = {} }
+		local ExB = { data = { name = "__HExB", category = E.Categories.Debuff, exclusive = true }, callbacks = {} }
+		local all = { Unique, Stack, OnSelf, ExA, ExB }
+		local runners, ids, violations = {}, {}, {}
+
+		local function remember()
+			for _, s in all do
+				for _, entry in dummy.GetStatus(s.data.name) or {} do
+					if entry.runner then runners[entry.runner] = true end
+				end
+			end
+		end
+		local function check(step)
+			local stacks = #(dummy.GetStatus("__HStack") or {})
+			if stacks > 4 then table.insert(violations, step .. ": " .. stacks .. " instâncias (máx 4)") end
+			local onSelf = dummy.GetStatusCounter("__HOnSelf")
+			if onSelf > 4 then table.insert(violations, step .. ": stackOnSelf em " .. onSelf .. " (máx 4)") end
+			if dummy.GetStatus("__HExA") and dummy.GetStatus("__HExB") then
+				table.insert(violations, step .. ": dois exclusivos da mesma categoria juntos")
+			end
+		end
+
+		local errors = engineErrorsDuring(function()
+			for step = 1, 400 do
+				local op = rng:NextInteger(1, 8)
+				if op <= 4 then
+					local s = all[rng:NextInteger(1, #all)]
+					local id = dummy.ApplyStatus(s, { Duration = rng:NextNumber(0.02, 0.3) })
+					if id then table.insert(ids, id) end
+				elseif op == 5 then
+					dummy.RemoveStatus(all[rng:NextInteger(1, #all)].data.name)
+				elseif op == 6 and #ids > 0 then
+					dummy.RemoveStatusByID(ids[rng:NextInteger(1, #ids)])
+				elseif op == 7 then
+					dummy.RemoveAmount(rng:NextInteger(0, 1) == 0 and "__HStack" or "__HOnSelf", rng:NextInteger(1, 3))
+				else
+					remember()
+				end
+				remember()
+				check(step)
+				if step % 25 == 0 then task.wait() end -- deixa parte expirar no meio
+			end
+		end)
+		t.wait(0.5) -- tudo expira
+
+		local alive = 0
+		for runner in runners do if not runner:IsEnded() then alive += 1 end end
+		local status = dummy:GetComponent(dummy.ComponentKey.Status)
+		local leftover = 0
+		for _, group in status.Effects do for _ in group do leftover += 1 end end
+		local count = 0
+		for _ in runners do count += 1 end
+		t.log(string.format("%d runners de status vistos, %d IDs", count, #ids))
+		t.assert(#violations == 0, "Invariante quebrada: " .. tostring(violations[1]))
+		t.assert(#errors == 0, "Erro do motor: " .. tostring(errors[1]))
+		t.assert(alive == 0, alive .. " runner(s) de status seguiram vivos depois de expirar tudo")
+		t.assert(leftover == 0, leftover .. " entrada(s) sobraram no registro de status")
+		t.assert(dummy.GetActiveTags()[E.Tags.canMove] ~= false, "A tag canMove ficou presa em false")
+		cleanup(dummy)
+	end)
 
 	run("Duro — status que se renova no onEnd, tirado por RemoveAmount, não deixa instância órfã", function(t)
 		local dummy = still(CFrame.new(0, 5, 0))
@@ -434,6 +584,50 @@ return function(env)
 	--  DANO E EVENTOS
 	--=========================================================================
 
+	run("Duro — fórmula de dano: 300 casos aleatórios batem com a referência (Defense, Armor, DamageMult, TrueDamage)", function(t)
+		local attacker = still(CFrame.new(-4, 5, 0), COMBAT)
+		-- HP de 1e6: 300 hits cabem, e o ulp do double em 1e6 (~1e-10) fica longe da tolerância
+		local target = still(CFrame.new(4, 5, 0), { "Character", "Health", "Attributes" },
+			{ Health = { MaxHP = 1e6 }, Attributes = { BaseStats = { MaxHP = 1e6 } } })
+		local normal = makeRunner(attacker, "__HardHit", { duration = 30 }, {})
+		local pierce = makeRunner(attacker, "__HardPierce", { duration = 30, traits = { E.Traits.TrueDamage } }, {})
+		normal:start()
+		pierce:start()
+		local rng = Random.new(43)
+		local worst, worstCase = 0, ""
+		for i = 1, 300 do
+			local base = rng:NextNumber(0, 200)
+			local mult = rng:NextNumber(0, 3)
+			local defense = rng:NextNumber(-80, 300)
+			local armor = rng:NextNumber(0, 60)
+			local trueDamage = rng:NextInteger(0, 3) == 0
+			attacker.SetStat(E.Stats.DamageMult, mult)
+			target.SetStat(E.Stats.Defense, defense)
+			target.SetStat(E.Stats.Armor, armor)
+
+			local expected = base * mult
+			if not trueDamage then
+				expected *= defense >= 0 and 100 / (100 + defense) or (2 - 100 / (100 - defense))
+				expected = math.max(0, expected - armor)
+			end
+			local hp = target.GetHP()
+			local _, dealt = (trueDamage and pierce or normal):Damage(target, base)
+			local actual = hp - target.GetHP()
+			local err = math.abs(actual - expected)
+			if err > worst then
+				worst = err
+				worstCase = string.format("#%d base %.2f mult %.2f def %.1f armor %.1f true %s: %.4f vs %.4f (retorno %s)",
+					i, base, mult, defense, armor, tostring(trueDamage), actual, expected, tostring(dealt))
+			end
+		end
+		t.log("maior diferença: " .. string.format("%.2e", worst) .. (worst > 0 and (" em " .. worstCase) or ""))
+		t.assert(worst < 1e-6, "O dano saiu da fórmula declarada: " .. worstCase)
+		normal:endSkill(false)
+		pierce:endSkill(false)
+		cleanup(attacker)
+		cleanup(target)
+	end)
+
 	run("Duro — DOT que mata credita quem aplicou: OUT.OnDeath no aplicador, não no portador", function(t)
 		local caster = still(CFrame.new(-4, 5, 0), COMBAT)
 		local victim = still(CFrame.new(4, 5, 0))
@@ -459,5 +653,97 @@ return function(env)
 		src:endSkill(false)
 		cleanup(caster)
 		cleanup(victim)
+	end)
+
+	run("Duro — possessão IA em sequência (3 mentes), Release e posse sem AIComponent: volta exatamente ao nativo", function(t)
+		local body = still(CFrame.new(-4, 5, 0), { "Character", "Health", "Movement", "Control", "AI" })
+		local ticks = { native = 0, a = 0, b = 0, c = 0 }
+		local native = function() ticks.native += 1 end
+		body.SetBrain(native)
+		for _, name in { "a", "b", "c" } do
+			t.assert(body.Possess({ AI = true, Brain = function() ticks[name] += 1 end }), "Possess " .. name .. " recusado")
+		end
+		ticks.native, ticks.a, ticks.b, ticks.c = 0, 0, 0, 0
+		t.wait(0.3)
+		t.assert(ticks.c > 0 and ticks.native + ticks.a + ticks.b == 0,
+			string.format("Na posse só a última mente dirige (nativa %d, a %d, b %d, c %d)", ticks.native, ticks.a, ticks.b, ticks.c))
+		t.assert(body.Release(), "Release recusado")
+		t.assert(not body.Release(), "2º Release achou posse para soltar")
+		t.assert(body.GetBrain() == native and body.IsAIEnabled(), "O Release não devolveu a mente nativa (devolveu uma intermediária?)")
+		ticks.native, ticks.c = 0, 0
+		t.wait(0.3)
+		t.assert(ticks.native > 0 and ticks.c == 0, "Depois do Release a mente nativa não voltou a rodar sozinha")
+
+		-- Corpo sem AIComponent: a posse cria um e o Release o tira (Regra 5: entidade simples fica simples)
+		local bare = still(CFrame.new(4, 5, 0), { "Character", "Health", "Movement", "Control" })
+		local bareTicks = 0
+		t.assert(bare.Possess({ AI = true, Brain = function() bareTicks += 1 end }), "Possess num corpo sem AI recusado")
+		t.wait(0.2)
+		t.assert(bareTicks > 0, "A mente não rodou no corpo sem AIComponent")
+		t.assert(bare.Release() and not bare:HasComponent(bare.ComponentKey.AI), "O AIComponent da posse ficou no corpo")
+
+		-- Corpo destruído no meio da posse: sem erro
+		local doomedTicks = 0
+		t.assert(bare.Possess({ AI = true, Brain = function() doomedTicks += 1 end }), "2ª posse recusada")
+		local errors = engineErrorsDuring(function()
+			cleanup(bare)
+			t.wait(0.2)
+		end)
+		local after = doomedTicks
+		t.wait(0.2)
+		t.assert(#errors == 0, "Destruir o corpo possuído deu erro: " .. tostring(errors[1]))
+		t.assert(doomedTicks == after, "A mente seguiu rodando num corpo destruído")
+		cleanup(body)
+	end)
+
+	run("Duro — TriggerSet mudando durante o Emit: remoção, inscrição nova, prioridade, Limit, TTD e erro isolado", function(t)
+		local e = still(CFrame.new(0, 5, 0))
+		local BP = "__HardEmit"
+		local order = {}
+		local function listen(name, priority, extra)
+			local sub = { Role = E.Roles.IN, Breakpoint = BP, Priority = priority, Action = function()
+				table.insert(order, name)
+				if extra then extra() end
+			end }
+			return e:Listen(sub), sub
+		end
+		local unsubscribeB
+		local addedLate = false
+		listen("A", 10, function()
+			if unsubscribeB then unsubscribeB(); unsubscribeB = nil end
+			if not addedLate then
+				addedLate = true
+				listen("Late", 100)
+			end
+		end)
+		unsubscribeB = listen("B", 5)
+		listen("C", 5)
+		e:Listen({ Role = E.Roles.IN, Breakpoint = BP, Priority = 7, Action = function() error("falha de propósito") end })
+		e:Listen({ Role = E.Roles.IN, Breakpoint = BP, Priority = 1, Limit = { Max = 2, OnExhaust = "Remove" },
+			Action = function() table.insert(order, "Twice") end })
+		e:Listen({ Role = E.Roles.IN, Breakpoint = BP, Priority = 1, Limit = { Max = 1, OnExhaust = "Disable" },
+			Action = function() table.insert(order, "Once") end })
+		e:Listen({ Role = E.Roles.IN, Breakpoint = BP, Priority = 0, TTD = 0.15, Action = function() table.insert(order, "TTD") end })
+
+		local errorsSeen
+		local errors = engineErrorsDuring(function()
+			e:Emit(E.Roles.IN, BP, {})
+		end)
+		errorsSeen = #errors
+		local first = table.concat(order, ",")
+		table.clear(order)
+		e:Emit(E.Roles.IN, BP, {})
+		local second = table.concat(order, ",")
+		table.clear(order)
+		t.wait(0.2)
+		e:Emit(E.Roles.IN, BP, {})
+		local third = table.concat(order, ",")
+		t.log("1º: " .. first .. " | 2º: " .. second .. " | 3º: " .. third)
+		-- 1º: B saiu no meio (não roda), o Late entrou no meio (só no próximo); o erro não para a fila
+		t.assert(first == "A,C,Twice,Once,TTD", "1º Emit: " .. first)
+		t.assert(errorsSeen == 1, "O erro do listener não apareceu (ou apareceu " .. errorsSeen .. " vezes)")
+		t.assert(second == "Late,A,C,Twice,TTD", "2º Emit: " .. second)
+		t.assert(third == "Late,A,C", "3º Emit (Twice esgotado, Once desligado, TTD vencido): " .. third)
+		cleanup(e)
 	end)
 end
