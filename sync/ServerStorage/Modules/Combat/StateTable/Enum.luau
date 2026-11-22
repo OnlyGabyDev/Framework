@@ -210,6 +210,15 @@ enum.StatDefaults = table.freeze({
     Armor = 0,
 })
 
+-- Limites dos stats numéricos (F100), aplicados pelo AttributesComponent:GetStat ao valor final,
+-- tenha ele modificador ou não. Stat sem declaração usa StatLimitDefault (não fica negativo).
+-- Antes o piso 0 só valia quando havia modificador: Defense −50 na base amplificava o dano, a
+-- mesma −50 vinda de um debuff era cortada para 0. Declare aqui o stat que pode ficar negativo.
+enum.StatLimitDefault = table.freeze({ min = 0, max = math.huge })
+enum.StatLimits = table.freeze({
+    Defense = table.freeze({ min = -math.huge, max = math.huge }), --negativa amplifica (D1)
+})
+
 --==== FÓRMULA DE DANO (D11, F43) ====--
 -- Proteções do ALVO aplicadas em ordem, cada uma ligada a um stat (o jogo troca, reordena ou
 -- acrescenta). mode: Multiplicative = dano × 100 / (100 + stat) (stat negativo amplifica:

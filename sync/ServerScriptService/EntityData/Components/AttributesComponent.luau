@@ -29,6 +29,13 @@ end
 --  PIPELINE ATRIBUTOS
 --=============================================================================
 
+-- Limite declarado do stat (Enum.StatLimits, F100). Só para número: há stat que é texto (Weapon)
+local function limited(AttributeName, value)
+    if type(value) ~= "number" then return value end
+    local limit = Enum.StatLimits[AttributeName] or Enum.StatLimitDefault
+    return math.clamp(value, limit.min, limit.max)
+end
+
 function AttributeComponents:GetStat(AttributeName, default)
 
     if not self._dirty[AttributeName] and self._cache[AttributeName] ~= nil then
@@ -44,6 +51,7 @@ function AttributeComponents:GetStat(AttributeName, default)
 
     --Se não for um status complexo, o próprio base já é o resultado final
     if not mods then
+        base = limited(AttributeName, base)
         if hasBase then
             self._cache[AttributeName] = base
             self._dirty[AttributeName] = nil
@@ -80,8 +88,8 @@ function AttributeComponents:GetStat(AttributeName, default)
     end
 
 
-    -- Fórmula: ((Base + Flat) * (1 + %Add)) * %Mult)
-    local result = math.max(0, ((finalBase + flatSum) * (1 + AddPercentSum)) * MultPercentTotal) -- Impede que atributos fiquem negativos
+    -- Fórmula: ((Base + Flat) * (1 + %Add)) * %Mult), dentro do limite declarado do stat
+    local result = limited(AttributeName, ((finalBase + flatSum) * (1 + AddPercentSum)) * MultPercentTotal)
 
     if hasBase then
         self._cache[AttributeName] = result

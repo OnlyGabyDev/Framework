@@ -354,6 +354,9 @@ Bleed credita quem aplicou o Bleed, não a vítima. O OUT.OnDamage de dano indir
 EVENTOS DO HEALTH (F99): Events = { onDamage, onHeal, onDeath, onRevive } no config são do lado de quem
 apanha; onDamage é o IN.PostDamage.
 
+LIMITES DE STAT (F100): Enum.StatLimits (padrão Enum.StatLimitDefault: mínimo 0) vale para o valor final
+do GetStat, com ou sem modificador. Defense pode ficar negativa (amplifica, D1).
+
 INSCRIÇÕES (Listen): Owner por entidade com StateTable.OwnerToken(entidade, "tag"), nunca string.
 
 FORÇAS: Soft e caminhada do NPC proporcionais à massa (Physics/Settings: Force_Mass_Scaling); MassScaling = false
