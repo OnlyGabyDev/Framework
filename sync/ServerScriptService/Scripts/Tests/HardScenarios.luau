@@ -816,4 +816,44 @@ return function(env)
 		cleanup(caster)
 		cleanup(victim)
 	end)
+
+	run("F102 — M1 da Schema roubado por um corpo de outro kit: equipa o Martelo e o golpe roda inteiro", function(t)
+		local M1 = require(ServerStorage.DataBase.SkillDatabase.Schema.M1)
+		local rig = workspace.Rig:Clone()
+		rig:PivotTo(env.origin() * CFrame.new(0, 5, 0))
+		rig.Parent = workspace
+		local thief = DataManager.Create(rig, { "Character", "Health", "Status", "Attributes", "Combat", "Weapon", "Animation" },
+			{ Combat = { ChosenChar = "__HardThief" }, Weapon = { WeaponName = "Martelo" } })
+		t.assert(thief.HasWeapon(), "O corpo de outro kit não equipou o Martelo (arma presa ao nome do personagem)")
+		local data = thief.GetWeaponData()
+		t.assert(data and data.BaseName == "Martelo" and thief.GetCurrentMode() == data.DefaultMode,
+			"A arma de outro kit ficou sem WeaponData ou sem modo")
+
+		thief.EquipSkill(Intents.Id.Primary, M1)
+		local ok, runner
+		local errors = engineErrorsDuring(function()
+			ok = press(thief, Intents.Id.Primary)
+			runner = thief.GetActiveSkills(M1.data.name)[1]
+		end)
+		t.assert(ok == true and runner ~= nil, "O M1 roubado não foi castado no corpo de outro kit")
+		t.assert(#errors == 0, "O M1 roubado deu erro: " .. tostring(errors[1]))
+		t.assert(runner.charLib.M1 == AnimationLib.character.Schema.M1, "O M1 roubado não usou as animações da Schema")
+		t.assert(thief.GetStatus("NoControl") ~= nil, "O onStart do M1 não chegou ao fim (NoControl não aplicado)")
+		thief.StopAllActiveSkills(true)
+		t.assert(thief.GetStatus("NoControl") == nil, "A limpeza do M1 não tirou o NoControl")
+
+		-- Nome em dois kits é ambíguo: sem kit explícito não escolhe; com kit, equipa
+		local fakeKit = Instance.new("Folder")
+		fakeKit.Name = "__HardKit"
+		local fakeWeapon = Instance.new("Folder")
+		fakeWeapon.Name = "Martelo"
+		fakeWeapon.Parent = fakeKit
+		fakeKit.Parent = game:GetService("ReplicatedStorage").Assets.Weapons
+		local ambiguous = thief.EquipWeapon("Martelo")
+		local explicit = thief.EquipWeapon("Martelo", "Schema")
+		fakeKit:Destroy()
+		t.assert(ambiguous == false and thief.HasWeapon(), "Com o nome em dois kits, o EquipWeapon escolheu sozinho (ou soltou a arma)")
+		t.assert(explicit == true, "Com o kit explícito o EquipWeapon falhou")
+		cleanup(thief)
+	end)
 end

@@ -52,6 +52,37 @@ local function findWeaponFolder(weaponsFolder: Instance, weaponName: string): In
 end
 
 --[[
+Pasta da arma (F102): primeiro no kit preferido (o pedido no EquipWeapon, ou o personagem de quem
+equipa) e, se ele não tiver a arma, no ÚNICO kit que tiver uma com esse nome. Antes a arma só era
+achada em Assets.Weapons.<personagem>: um corpo de outro kit não equipava o Martelo da Schema, e o M1
+roubado nunca rodava. Nome em mais de um kit é ambíguo: não escolhe, avisa e pede o kit.
+@param weaponName - nome da arma STRING
+@param preferredKit - kit onde procurar primeiro STRING?
+@param strict - true = só no preferredKit (kit pedido explicitamente) BOOLEAN?
+@return pasta da arma, ou nil e o motivo
+]]
+local function resolveWeaponFolder(weaponName: string, preferredKit: string?, strict: boolean?): (Instance?, string?)
+	local root = RS.Assets.Weapons
+	if preferredKit then
+		local kitFolder = root:FindFirstChild(preferredKit)
+		local found = kitFolder and findWeaponFolder(kitFolder, weaponName)
+		if found then return found end
+		if strict then return nil, "a arma não está no kit " .. preferredKit end
+	end
+	local folders, kits = {}, {}
+	for _, kitFolder in root:GetChildren() do
+		local found = findWeaponFolder(kitFolder, weaponName)
+		if found then
+			table.insert(folders, found)
+			table.insert(kits, kitFolder.Name)
+		end
+	end
+	if #folders == 1 then return folders[1] end
+	if #folders == 0 then return nil, "nenhum kit tem essa arma" end
+	return nil, "a arma existe em " .. #folders .. " kits (" .. table.concat(kits, ", ") .. "): passe o kit no EquipWeapon"
+end
+
+--[[
 Inicializa o componente de arma na entidade
 @param entity - Entidade dona do componente Entity, enviar EntityData
 @param config - Configurações iniciais do componente TABLE { WeaponName: string }
@@ -89,46 +120,38 @@ end
 --[[
 Equipar uma arma ao personagem
 @param weaponName - nome da arma a ser equipada STRING
+@param kit - kit dono da arma (pasta em Assets.Weapons), se o nome existir em mais de um STRING?
 @return sucesso BOOLEAN
 ]]
-function WeaponComponent:EquipWeapon(weaponName : string) : boolean
+function WeaponComponent:EquipWeapon(weaponName : string, kit : string?) : boolean
 
 	local char = self.Entity.Instance
 
-	local weaponModel
+	local weaponModel, weaponFolder
 
-	--Se tiver componente de combate:
-	if self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then
-
-
-		local chosenChar = self.Entity.GetChosenChar()
-
-		-- Busca arma na pasta de assets
-		local weaponsFolder = RS.Assets.Weapons:FindFirstChild(chosenChar)
-		if not weaponsFolder then
-			warn("[WeaponComponent] Pasta de armas não encontrada:", chosenChar)
-			return false
-		end
-
-
-		local weaponFolder = findWeaponFolder(weaponsFolder, weaponName)
-		if not weaponFolder then
-			warn("[WeaponComponent] Arma não encontrada:", weaponName)
-			return false
-		end
-
-		weaponModel = weaponFolder:FindFirstChild(weaponName)
-
-
-	--Se não tiver, aceite modelo informado por config
-	elseif self.WeaponModel then
+	-- Modelo informado por config (entidade sem personagem); senão, a pasta da arma pelo kit (F102).
+	-- O personagem (Combat, dependência opcional: regra 16) só diz em que kit procurar primeiro
+	local hasCombat = self.Entity:HasComponent(self.Entity.ComponentKey.Combat)
+	if self.WeaponModel and not hasCombat and not kit then
 		weaponModel = self.WeaponModel
 	else
-		return false 
+		local ownKit = hasCombat and self.Entity.GetChosenChar() or nil
+		local why
+		weaponFolder, why = resolveWeaponFolder(weaponName, kit or ownKit, kit ~= nil)
+		if not weaponFolder then
+			warn("[WeaponComponent] Arma não encontrada:", weaponName, "-", why)
+			return false
+		end
+		weaponModel = weaponFolder:FindFirstChild(weaponName)
+		if not weaponModel then
+			warn("[WeaponComponent] Pasta da arma sem o model:", weaponFolder:GetFullName())
+			return false
+		end
 	end
 
 		-- Remove arma antiga
 		self:UnequipWeapon()
+		self.WeaponFolder = weaponFolder -- de onde o _GetWeaponData lê o WeaponData
 
 	-- Clona arma
 	local weaponClone = weaponModel:Clone()
@@ -250,15 +273,9 @@ end
 function WeaponComponent:_GetWeaponData(): {}?
 	if self.WeaponData then return self.WeaponData end
 	
-	if not self.WeaponName then return nil end
-	
-	local chosenChar = self.Entity.GetChosenChar and self.Entity.GetChosenChar()
-	if not chosenChar then return nil end
-	
-	local weaponsFolder = RS.Assets.Weapons:FindFirstChild(chosenChar)
-	if not weaponsFolder then return nil end
-	
-	local weaponFolder = findWeaponFolder(weaponsFolder, self.WeaponName)
+	-- A pasta que o EquipWeapon resolveu (F102): antes a busca era refeita aqui pelo personagem, e a
+	-- arma de outro kit ficava sem WeaponData (sem modos)
+	local weaponFolder = self.WeaponFolder
 	if not weaponFolder then return nil end
 	
 	local dataModule = weaponFolder:FindFirstChild("WeaponData")
@@ -316,6 +333,7 @@ function WeaponComponent:UnequipWeapon()
 	end
 
 	self.WeaponName = nil
+	self.WeaponFolder = nil
 	self.HitOrigin = nil
 	self.Hitbox = nil
 	self.CurrentMode = nil
