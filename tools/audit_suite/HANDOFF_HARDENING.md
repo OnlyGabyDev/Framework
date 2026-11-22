@@ -10,7 +10,7 @@ concluído, mande o placar de achados abertos** no formato `(0 crít, X alta, X 
 
 ## Estado em 22/11/2026 (leia primeiro; as seções de 11/11 e 16/10 ficam pelo histórico)
 
-- **Placar: (0 crít, 0 alta, 0 méd, 0 baixa)**, 0 abertos de 108. F55 e F62 corrigidos; F97 a F102 achados pelos
+- **Placar: (0 crít, 0 alta, 0 méd, 0 baixa)**, 0 abertos de 109. F55 e F62 corrigidos; F97 a F102 achados pelos
   testes duros e corrigidos no mesmo dia; F103 a F108 na 3ª rodada (ver `AUDITORIA.md`). Branch
   `audit/hardening-08-11`, sem push.
 - **3ª rodada (22/11):** F103 agarrão rígido (`AttachTo`, a Ultimate usa), F104 zona com posição prevista do corpo
@@ -18,6 +18,11 @@ concluído, mande o placar de achados abertos** no formato `(0 crít, X alta, X 
   Combat sem personagem (`ChosenChar = false`, `Enum.CombatDefaults`), F107 cura (`HealCap`, `Heal(n, opts)`,
   `OUT.OnHeal`), F108 `Damage(alvo, n, opts)`. **128/128 no Play e `StaticChecks` 4/4.** Singleton/contexto de
   mundo fica de fora por decisão do usuário (uma partida por servidor). `.agents/rules` atualizado (fora do git).
+- **F109 e alvos de teste (fim de 22/11):** o teleporte com câmera no Dash durante a Ultimate era correção do
+  AntiCheat (janela de latência guardava só o maior valor); `windowMax` corrige. `Tests/TestTargets.server.luau`
+  transforma no Play os dummies de `Workspace.Dummies`, os rigs `Rig`/`AshleyRig`/`SchemaRig`/`VanhousenRig` e
+  qualquer Model com a tag `FW_TestTarget` em entidades (HRP solto, revive em 3 s). **129/129 no Play,
+  `StaticChecks` 4/4.** Lição: um teste que passa com o código antigo não protege nada; confira por mutação.
 - **Medir o que o player VÊ (sonda de cliente):** teste de servidor não enxerga atraso de rede (líder e seguidor
   ficam igualmente atrasados). Foi assim que o F103 e o F104 apareceram: um Script na VM do servidor faz as fases
   e publica a fase em atributo do ReplicatedStorage; um LocalScript no `PlayerGui` (criado pelo `execute_luau`
