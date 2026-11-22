@@ -8,7 +8,37 @@ está feita, e algumas premissas estão erradas (ver "Reconciliação").
 Reporte ao usuário em português, de forma direta: ele quer críticas, não elogios. **Depois de cada item
 concluído, mande o placar de achados abertos** no formato `(0 crít, X alta, X méd, X baixa)`.
 
-## Estado em 11/11/2026 (leia primeiro; as seções de 16/10 abaixo ficam pelo histórico)
+## Estado em 22/11/2026 (leia primeiro; as seções de 11/11 e 16/10 ficam pelo histórico)
+
+- **Placar: (0 crít, 0 alta, 0 méd, 0 baixa)**, 0 abertos de 98. F55 e F62 corrigidos; F97 e F98 achados pelos
+  testes duros e corrigidos no mesmo dia (ver `AUDITORIA.md`). Branch `audit/hardening-08-11`, sem push.
+- **O sync voltou para o `sync/` do repo.** Em 22/11 o Script Sync do Studio estava ligado a
+  `c:\Users\Gaby\Desktop\Framework\sync` (o `sourcemap.json` do repo foi regravado ao abrir o Studio);
+  `C:\Users\Gaby\sync\sync` NÃO estava vivo. Antes de editar, confira por hash qual pasta o Studio lê.
+- **Arquivo novo não fica ligado ao sync.** O `Tests/HardScenarios.luau` foi criado pelo sync uma vez, mas as
+  edições seguintes no disco não chegaram (ele não entrou no `sourcemap.json`). Foi preciso gravar o `Source`
+  pelo `execute_luau` no modo Edit e conferir o hash. Ao criar arquivo novo, confira o hash depois de cada edição.
+- **F62 (cadeias):** `Enum.ChainLimits` = { `deferAtMaxDepth` true, `maxDeferrals` 20, `deferredPerFrame` 256,
+  `maxLiveRunnersPerRoot` 256 } e `Enum.ChainOutcomes`. Acima de `MAX_RECURSION` a ação vai para uma fila
+  (próximo Heartbeat, pilha nova). O `ApplyDamage` reserva 2 níveis (`RunInChainReserving`). Na cadeia assíncrona o
+  limite é a largura (runners vivos por raiz), não a profundidade. Os quatro números são escolha minha e cabem
+  confirmação do usuário: o de largura (256) pode ser baixo para uma aura de partida inteira em MOBA grande.
+- **F55 (skill portável):** `data.kit` (carimbado pelo `EquipSkill`), `AnimationLib.ForSkill`, `data.requires`
+  (recusa com `EndReasons.Refused`, refund padrão 1). A arma continua presa ao nome do personagem
+  (`Assets.Weapons.<Char>`): roubar o M1 para outro kit ainda não funciona, só falha limpo.
+- **F97:** `StateTable.EffectOwner` (dono do efeito pelo `runner.Source`). Só o `OUT.OnDeath` usa; o `OUT.OnDamage`
+  de dano indireto (D3) e o `sourceEntity` do contexto de DOT (que é a própria vítima) seguem como estão (F2.6/F2.7).
+- **F98:** `RemoveAmount` desregistra antes de encerrar.
+- **`Tests/HardScenarios.luau`** (21 testes): cadeias (6), portabilidade (2), spam de input, morte e destruição no
+  meio da skill, troca aleatória de status (400 operações), status que se renova, fórmula de dano por amostragem
+  (300 casos, diferença máxima 6e-11), crédito de DOT, possessão IA em sequência e TriggerSet mudando no `Emit`.
+  **118/118 no Play e `StaticChecks` 4/4 em 22/11.** A Física 19 (player real) falhou uma vez com uma sonda pesada
+  rodando junto e passou nas rodadas seguintes: é sensível a carga.
+- **Notas para o próximo:** o `GetStat` só trava em ≥ 0 quando há modificador (base negativa passa, modificador
+  negativo é cortado: Defense −50 por debuff não amplifica); `HealthComponent.TakeDamage` não limita o HP ao
+  `GetMaxHP` (com Attributes, HP inicial do config acima do MaxHP do stat fica acima).
+
+## Estado em 11/11/2026
 
 - **Git:** `main` e `audit/hardening-08-11` no GitHub, os dois em `2a7cac6`. O `main` avançou por
   fast-forward, sem sobrescrever nada. O `audit/suite-p0` (16/10) está todo dentro do `main`.
@@ -145,7 +175,7 @@ seen = {}
 for fid, sev in re.findall(r"^\| (F\d{2,3}) \| ([^|]+) \|", text, re.M):
     seen.setdefault(fid, sev.strip())
 fixed = {"F01","F02","F03","F04","F06","F07","F08","F09","F13","F14","F20","F21","F22","F23","F24","F39","F54","F58"}  # P0, sem marca na tabela
-fixed |= set(re.findall(r"^\| (F\d{2,3}) \|[^\n]*\*\*Corrigido em", text, re.M))
+fixed |= set(re.findall(r"^\| (F\d{2,3}) \|[^\n]*\*\*(?:Corrigido em|Falso positivo)", text, re.M))
 c = Counter(s for f, s in seen.items() if f not in fixed)
 print(f"({c['Crítica']} crít, {c['Alta']} alta, {c['Média']} méd, {c['Baixa']} baixa)")
 ```

@@ -4,7 +4,7 @@
 
 Oct 15, 2026 · @Gabi
 
-> **Estado em 11/11/2026:** 2 abertos de 96 achados, placar **(0 crít, 0 alta, 2 méd, 0 baixa)**: F55 e F62 (F32 corrigido em 11/11). F95 (vento depois do dash) e F96 (plataforma dos testes) foram achados e corrigidos em 11/11. O F71 já estava corrigido no Studio e o F93 era falso positivo (código comentado). O resto foi corrigido no lote P0 (16/10), na Fase 1 do hardening (16/10) e no lote de 08/11. O texto abaixo é o retrato de 15/10.
+> **Estado em 22/11/2026:** 0 abertos de 98 achados, placar **(0 crít, 0 alta, 0 méd, 0 baixa)**. F55 e F62 corrigidos em 22/11; F97 (crédito de morte por DOT) e F98 (`RemoveAmount` com instância órfã) foram achados pelos testes duros de 22/11 (`Tests/HardScenarios`) e corrigidos no mesmo dia. F95 e F96 foram achados e corrigidos em 11/11. O F71 já estava corrigido no Studio e o F93 era falso positivo (código comentado). O resto foi corrigido no lote P0 (16/10), na Fase 1 do hardening (16/10) e no lote de 08/11. O texto abaixo é o retrato de 15/10.
 
 ## Resumo executivo
 
@@ -200,7 +200,7 @@ Para corrigir: guardar os IDs dos grabs no runner e soltá-los com `self:Own(...
 | F68 | Baixa | `Combat/Types.luau:37-56` | `Context` declarado diferente do que `BuildContext` gera; `Subscription.Role` diz Target/Source, mas o Enum usa IN/OUT | Leitura | Um tipo dono (regra 17) **Corrigido em 08/11** (`6eb9b2b`): teste em `IntegrationTests` (66/66 em 08/11); antes/depois não medido |
 | F69 | Baixa | `ServerStorage/!DOC/DOC.luau` | DOC desatualizado (CombatData, TryHit, CharData) e duplicado em `CharData/!Doc` | Leitura | Atualizar e manter 1 cópia **Corrigido em 08/11**: a cópia duplicada saiu em `6ed1a7f` e o DOC foi atualizado em `9c0adab` |
 | F70 | Baixa | `.agents/`, `sprints.md` | Commitados, embora as regras peçam `.gitignore` | git | Adicionar `.gitignore` **Corrigido em 08/11** (`6ed1a7f`): `.gitignore` com `.agents/`, `sprints.md` e `sourcemap.json` |
-| F71 | Baixa | `PlayerGui.CooldownGUI.Attacks` | Botões Skill1-3 sem o atributo `Intent` (warn a cada spawn) | Console | Preencher o atributo **Corrigido** (conferido no Studio em 11/11): Dash, M1, Skill1-3 e Ultimate têm `Intent` (Dash, Primary, Ability1-3, Ultimate) |
+| F71 | Baixa | `PlayerGui.CooldownGUI.Attacks` | Botões Skill1-3 sem o atributo `Intent` (warn a cada spawn) | Console | Preencher o atributo **Corrigido em 11/11** (conferido no Studio): Dash, M1, Skill1-3 e Ultimate têm `Intent` (Dash, Primary, Ability1-3, Ultimate) |
 | F72 | Baixa | `AnimationComponent.luau:376-395` | `WaitForMarker` com timeout sempre espera o tempo inteiro | Leitura | Retornar no disparo **Corrigido em 08/11** (lote de 08/11, `6ed1a7f`): teste em `IntegrationTests` ou `StaticChecks` (66/66 e 4/4 em 08/11); antes/depois não medido |
 | F73 | Baixa | `Animation/AnimationController.luau` | Duplica a lógica de tracks do AnimationComponent (regra 1) | Leitura | Remover **Corrigido em 08/11** (lote de 08/11, `6ed1a7f`): teste em `IntegrationTests` ou `StaticChecks` (66/66 e 4/4 em 08/11); antes/depois não medido |
 | F74 | Baixa | `Helper.luau:196-214` | Duas imunidades com a mesma tag: vence a última do `pairs()` (não determinístico) | Leitura | Mesclar regras **Corrigido em 08/11** (lote de 08/11, `6ed1a7f`): teste em `IntegrationTests` ou `StaticChecks` (66/66 e 4/4 em 08/11); antes/depois não medido |
