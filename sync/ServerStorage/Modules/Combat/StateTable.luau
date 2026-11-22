@@ -80,6 +80,18 @@ function StateTable.EffectOwner(source)
 	return Helper.EffectOwner(source)
 end
 
+function StateTable.Relation(a, b)
+	return Helper.Relation(a, b)
+end
+
+function StateTable.CanAffect(source, targetEntity, affects)
+	return Helper.CanAffect(source, targetEntity, affects)
+end
+
+function StateTable.AffectsFilter(source, affects)
+	return Helper.AffectsFilter(source, affects)
+end
+
 function StateTable.TryEnterChain()
 	return Helper.TryEnterChain()
 end

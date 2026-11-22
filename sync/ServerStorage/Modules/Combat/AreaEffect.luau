@@ -33,6 +33,7 @@ function AreaEffect.new(cframeProvider, shape, size, pollRate)
     self._ownParams = OverlapParams.new()
     self._ownParams.FilterType = Enum.RaycastFilterType.Include
 
+    self.Filter = nil -- (entity) -> boolean: quem a zona considera (SetFilter); nil = todos
     self.Inside = {} -- [EntityCore] = true, pra distinguir OnEnter de OnStay
     self.CallbacksEnter = {}
     self.CallbacksStay = {}
@@ -47,6 +48,15 @@ end
 function AreaEffect:OnEnter(cb) table.insert(self.CallbacksEnter, cb); return self end
 function AreaEffect:OnStay(cb)  table.insert(self.CallbacksStay, cb);  return self end
 function AreaEffect:OnExit(cb)  table.insert(self.CallbacksExit, cb);  return self end
+
+--[[
+Só as entidades em que filter(entity) é true entram na zona (F105). Para zona de skill, use
+StateTable.AffectsFilter(runner): a zona respeita o data.affects da skill (aliado de fora).
+]]
+function AreaEffect:SetFilter(filter: ((any) -> boolean)?)
+    self.Filter = filter
+    return self
+end
 
 -- Peças na forma da zona (crescida por `margin` studs), com o filtro dado
 function AreaEffect:_PartsIn(cframe: CFrame, margin: number, params: OverlapParams)
@@ -83,6 +93,11 @@ function AreaEffect:_Query(): {any} -- devolve lista de EntityCore atualmente de
         end
     end
 
+    if self.Filter then
+        for entity in found do
+            if not self.Filter(entity) then found[entity] = nil end
+        end
+    end
     return found
 end
 

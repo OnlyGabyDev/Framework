@@ -61,6 +61,61 @@ function Helper.EffectOwner(source)
 	return owner
 end
 
+-- Time da entidade (AffiliationComponent, dependência opcional: sem ele, neutra)
+local function teamOf(entity)
+	if entity and entity:HasComponent(entity.ComponentKey.Affiliation) then
+		return entity.GetTeam()
+	end
+	return nil
+end
+
+--[[
+Relação entre duas entidades (F105): Self, Ally (mesmo time), Enemy (times diferentes) ou Neutral
+(um dos dois sem time). Dono único da regra de time do motor.
+@return Enum.Relations
+]]
+function Helper.Relation(a, b): string
+	if a == b then return Enum.Relations.Self end
+	local teamA, teamB = teamOf(a), teamOf(b)
+	if teamA == nil or teamB == nil then return Enum.Relations.Neutral end
+	return if teamA == teamB then Enum.Relations.Ally else Enum.Relations.Enemy
+end
+
+--[[
+A ação de `source` afeta `targetEntity`? Pergunta de quem RESOLVE alvo (hitbox da arma, zona com
+filtro): a skill declara em data.affects = { Ally = true, ... } por cima de Enum.AffectsDefaults.
+Antes toda hitbox acertava aliado e cada kit filtrava por um campo próprio (entity.Team).
+@param source - runner/proxy de skill (vale o dono do efeito e o data.affects dele), entidade, ou
+	nil (ambiente: afeta todos)
+@param targetEntity - EntityCore
+@param affects - sobrescreve o data.affects { [Enum.Relations]: boolean }?
+]]
+function Helper.CanAffect(source, targetEntity, affects): boolean
+	if not targetEntity then return false end
+	local runner = Helper.ResolveRunner(source)
+	local sourceEntity, data = nil, nil
+	if type(runner) == "table" and runner.skill ~= nil then -- SkillRunner: o dono do efeito age
+		sourceEntity = Helper.EffectOwner(runner)
+		data = runner.skill.data
+	elseif type(runner) == "table" and type(runner.HasComponent) == "function" then -- entidade
+		sourceEntity = runner
+	end
+	-- Sem dono identificável (ambiente, callback cru): afeta todos
+	if sourceEntity == nil then return true end
+	local relation = Helper.Relation(sourceEntity, targetEntity)
+	local declared = affects or (data and data.affects)
+	local allowed = declared and declared[relation]
+	if allowed == nil then allowed = Enum.AffectsDefaults[relation] end
+	return allowed == true
+end
+
+--[[ Predicado pronto para quem filtra uma lista de entidades (AreaEffect:SetFilter) ]]
+function Helper.AffectsFilter(source, affects)
+	return function(entity)
+		return Helper.CanAffect(source, entity, affects)
+	end
+end
+
 --[[
 Disjuntor de recursão SÍNCRONA. Cadeias dano->status->dano (ex: parry devolvendo
 dano na hora) não tinham nenhum limite real — MAX_RECURSION existia no Enum mas

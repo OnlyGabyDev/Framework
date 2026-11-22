@@ -14,6 +14,7 @@ HitboxWrapper.__index = HitboxWrapper
 
 local ShapecastModule = require(script.Parent.ShapecastHitbox)
 local Log = require(game:GetService("ReplicatedStorage").Logger).Channel("HitboxWrapper")
+local StateTable = require(script.Parent.Parent.StateTable)
 
 -- Pool global
 local hitboxPool = {}
@@ -268,6 +269,11 @@ function HitboxWrapper:_handleHit(result: RaycastResult, segment, config: Hitbox
 	--Busca o Entity do alvo atingido
 	local targetEntity = self.DataManager.GetEntityFromInstance(result.Instance)
 	if not targetEntity then return end
+
+	-- Quem a skill dona afeta (data.affects sobre Enum.AffectsDefaults, F105): aliado não é acertado
+	-- por padrão. Antes da marcação do anti multi-hit, para o aliado não gastar o acerto. Sessão sem
+	-- dona (compartilhada, o comportamento antigo): acerta todos
+	if owner ~= nil and not StateTable.CanAffect(owner, targetEntity) then return end
 
 	-- Anti multi-hit
 	--Vale notar que, caso a skill seja feita pra ter multi hit é necessário desligar a hitbox a cada hit e reativar depois do cooldown/ticks entre hits!

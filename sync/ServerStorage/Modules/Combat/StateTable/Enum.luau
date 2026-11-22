@@ -246,6 +246,24 @@ enum.DeathDefaults = table.freeze({
     RefuseCastOnDeath = true, -- CombatComponent: morto não inicia cast novo (F75)
 })
 
+--==== ALVOS E AFILIAÇÃO (F105) ====--
+-- Relação entre quem age e quem é atingido. Sem AffiliationComponent dos dois lados = Neutral.
+enum.Relations = table.freeze({
+    Self = "Self",          --a própria entidade
+    Ally = "Ally",          --mesmo time
+    Enemy = "Enemy",        --times diferentes
+    Neutral = "Neutral",    --um dos dois sem time (dummy, ambiente)
+})
+-- Quem uma skill afeta por padrão, quando a acerta pela hitbox/zona (o mesmo de antes do F105:
+-- todo mundo menos ela mesma). A skill sobrescreve em data.affects = { Ally = true, ... }.
+-- Damage/ApplyStatus chamados direto pela skill NÃO passam por aqui: a skill decidiu o alvo.
+enum.AffectsDefaults = table.freeze({
+    Self = false,
+    Ally = false,
+    Enemy = true,
+    Neutral = true,
+})
+
 -- Profundidade SÍNCRONA máxima de uma cadeia dano<->status na mesma pilha. Acima dela a ação NÃO
 -- roda nesta pilha: vai para a fila de ChainLimits (ou é recusada, com deferAtMaxDepth = false).
 -- Ver StateTable.RunInChain.

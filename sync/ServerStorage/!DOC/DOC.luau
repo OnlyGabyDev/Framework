@@ -371,6 +371,10 @@ CORPO DE CLIENTE (F104): o servidor vê o corpo do player ~0,35 s atrasado (Phys
 Client_View_Lag). Decisão de posição do servidor sobre corpo de cliente usa NetworkView.PredictedShift(root);
 o AreaEffect já faz isso (a zona solta o vento quando o player sai de verdade).
 
+ALVO E TIME (F105): componente Affiliation { Team = ... }. StateTable.Relation(a, b) = Self/Ally/Enemy/Neutral;
+a hitbox da arma só entrega à skill os alvos que data.affects permite (padrão Enum.AffectsDefaults: inimigo e
+neutro). Zona de skill: area:SetFilter(StateTable.AffectsFilter(runner)). Damage/ApplyStatus direto não filtram.
+
 INSCRIÇÕES (Listen): Owner por entidade com StateTable.OwnerToken(entidade, "tag"), nunca string.
 
 FORÇAS: Soft e caminhada do NPC proporcionais à massa (Physics/Settings: Force_Mass_Scaling); MassScaling = false

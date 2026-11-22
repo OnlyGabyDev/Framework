@@ -22,6 +22,8 @@ local SkillRunner = require(ServerScriptService.Modules.SkillRunner)
 local SkillFactory = require(ServerScriptService.Modules.SkillFactory)
 local StateTable = require(ServerStorage.Modules.Combat.StateTable)
 local AnimationLib = require(ServerStorage.Modules.Animation.AnimationLib)
+local AreaEffect = require(ServerStorage.Modules.Combat.AreaEffect)
+local HitboxWrapper = require(ServerStorage.Modules.Combat.Hitbox.HitboxWrapper)
 local Intents = require(ReplicatedStorage.Input.Intents)
 
 local E = StateTable.Enum
@@ -892,5 +894,49 @@ return function(env)
 		t.assert(follower.GetAttachment() == nil, "Com o líder fora do jogo, o preso seguiu marcado como preso")
 		t.assert(not root.Massless, "Com o líder fora do jogo, o preso ficou sem massa")
 		cleanup(follower)
+	end)
+
+	run("F105 — alvo por time: a hitbox da skill pula aliado e ela mesma; data.affects muda; zona com filtro", function(t)
+		local TEAMED = { "Character", "Health", "Status", "Affiliation" }
+		local attacker = still(CFrame.new(0, 5, 6), { "Character", "Health", "Status", "Movement", "Attributes", "Combat", "Affiliation" },
+			{ Affiliation = { Team = "Red" }, Combat = { ChosenChar = false } })
+		local ally = still(CFrame.new(-5, 5, -6), TEAMED, { Affiliation = { Team = "Red" } })
+		local enemy = still(CFrame.new(5, 5, -6), TEAMED, { Affiliation = { Team = "Blue" } })
+		local neutral = still(CFrame.new(0, 5, -6))
+		local R = E.Relations
+		t.assert(StateTable.Relation(attacker, ally) == R.Ally and StateTable.Relation(attacker, enemy) == R.Enemy
+			and StateTable.Relation(attacker, neutral) == R.Neutral and StateTable.Relation(attacker, attacker) == R.Self,
+			"Relações erradas")
+
+		-- O caminho real de entrega do acerto da arma (_handleHit) com a skill como dona
+		local hits = {}
+		local runner = makeRunner(attacker, "__HardTeamHit", { duration = 5 }, {
+			onHit = function(_, hitResult) table.insert(hits, hitResult.target) end })
+		runner:start()
+		local wrapper = { DataManager = DataManager }
+		local session = { hitTargets = {} }
+		local function hit(target)
+			local r = target.GetRoot()
+			HitboxWrapper._class._handleHit(wrapper, { Instance = r, Position = r.Position, Normal = Vector3.yAxis, Distance = 1 },
+				nil, { name = "__HardBlade" }, session, runner)
+		end
+		for _, target in { ally, enemy, neutral, attacker } do hit(target) end
+		t.assert(#hits == 2 and table.find(hits, enemy) and table.find(hits, neutral),
+			"A hitbox entregou " .. #hits .. " acerto(s); esperado só o inimigo e o neutro")
+		runner.skill.data.affects = { Ally = true } -- cura em área, buff de aliado
+		hit(ally)
+		t.assert(table.find(hits, ally) ~= nil, "Com affects.Ally a hitbox não acertou o aliado (ou o filtro gastou o acerto)")
+
+		-- Zona com o filtro do atacante (padrão: inimigo e neutro)
+		local zone = AreaEffect.new(function() return env.origin() * CFrame.new(0, 5, -6) end, "Box", Vector3.new(16, 10, 6), 20)
+		zone:SetFilter(StateTable.AffectsFilter(attacker))
+		local entered = {}
+		zone:OnEnter(function(entity) entered[entity] = true end)
+		zone:Start()
+		t.wait(0.25)
+		zone:Stop()
+		t.assert(entered[enemy] and entered[neutral] and not entered[ally], "A zona com filtro não respeitou o time")
+		runner:endSkill(false)
+		for _, e in { attacker, ally, enemy, neutral } do cleanup(e) end
 	end)
 end
