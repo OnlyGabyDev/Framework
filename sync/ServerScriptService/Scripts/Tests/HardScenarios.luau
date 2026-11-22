@@ -962,4 +962,38 @@ return function(env)
 		cleanup(bare)
 		cleanup(default)
 	end)
+
+	run("F107 — cura: nunca reduz o HP acima do teto; teto por entidade e por cura; OUT.OnHeal no dono", function(t)
+		local healer = still(CFrame.new(-6, 5, 0), COMBAT)
+		local src = makeRunner(healer, "__HardHealer", { duration = 5 }, {})
+		src:start()
+		local e = still(CFrame.new(0, 5, 0), { "Character", "Health", "Attributes" }, { Attributes = { BaseStats = { MaxHP = 100 } } })
+		-- HP acima do teto (o buff de MaxHP acabou): é design, e a cura não pode cortá-lo
+		e.AddModifier(E.Stats.MaxHP, "__HardBuff", E.ModifierType.Flat, 100)
+		e.SetHP(200)
+		e.RemoveModifier(E.Stats.MaxHP, "__HardBuff")
+		t.assert(e.GetHP() == 200 and e.GetMaxHP() == 100, "Pré-condição: HP 200 com teto 100")
+		local healed = e.Heal(10)
+		t.assert(healed == 0 and e.GetHP() == 200, string.format("A cura mexeu no HP acima do teto: curou %s, HP %s",
+			tostring(healed), tostring(e.GetHP())))
+		e.SetHP(50)
+		t.assert(e.Heal(80) == 50 and e.GetHP() == 100, "O teto padrão (MaxHP) não valeu")
+		t.assert(e.Heal(100, { Cap = 1.5 }) == 50 and e.GetHP() == 150, "O teto da cura (Cap 1,5) não deu sobrevida")
+
+		local outHeal, outAmount = 0, nil
+		healer:Listen({ Role = E.Roles.OUT, Breakpoint = E.Breakpoints.OnHeal, Owner = src, Action = function(ctx)
+			outHeal += 1
+			outAmount = ctx.actualHeal
+		end })
+		e.SetHP(50)
+		e.Heal(20, { Source = src })
+		t.assert(outHeal == 1 and outAmount == 20, string.format("OUT.OnHeal no dono: %d evento(s), cura %s", outHeal, tostring(outAmount)))
+
+		local overheal = still(CFrame.new(6, 5, 0), LIGHT, { Health = { HealCap = 2 } })
+		t.assert(overheal.Heal(150) == 100 and overheal.GetHP() == 200, "HealCap 2 por entidade não deu sobrevida até 200")
+		src:endSkill(false)
+		cleanup(healer)
+		cleanup(e)
+		cleanup(overheal)
+	end)
 end

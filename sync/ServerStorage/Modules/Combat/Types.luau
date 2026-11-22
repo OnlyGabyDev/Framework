@@ -73,8 +73,16 @@ export type HitContext = {
 	incomingStatus: any?,            -- só no escudo de status (_TriggerShield)
 	blocked: boolean?,               -- o bloqueio zerou um hit que tinha dano (D6)
 	actualDamage: number?,           -- depois do HP mudar (PostDamage)
+	actualHeal: number?,             -- só no OnHeal (IN e OUT): quanto o HP subiu de fato
 	cancelled: boolean,              -- listener de PreDamage pode cancelar
 	reason: string?,                 -- motivo do cancelamento
+}
+
+-- Opções de uma cura: entity.Heal(n, opts) (F107)
+export type HealOptions = {
+	Source: any?,                    -- runner de quem curou: recebe o OUT.OnHeal (context.ownerEntity)
+	Traits: {string}?,
+	Cap: number?,                    -- teto desta cura em × MaxHP (padrão: HealCap da entidade)
 }
 
 -- Nome antigo, mantido para quem já anotava com ele

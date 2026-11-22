@@ -41,6 +41,8 @@ function HealthComponent.new(entity, config)
 	self.MaxHP = config.MaxHP or StateEnum.StatDefaults.MaxHP
 	self.HP = config.StartHP or self.MaxHP
 	self.Subscription = config.Events or false
+	-- Teto da cura em × MaxHP (F107): padrão em Enum.HealthDefaults; math.huge = sem teto
+	self.HealCap = config.HealCap or StateEnum.HealthDefaults.HealCap
 	self.IsDead = false
 	self._lastDamageTime = 0
 	
@@ -222,20 +224,37 @@ end
 --[[
 Cura a entidade por uma quantidade específica
 @param amount - Quantidade de HP a ser curada NUMBER
+@param opts - Types.HealOptions? (F107): Source (runner de quem curou: OUT.OnHeal nele), Traits, Cap
+	(teto em × MaxHP só desta cura)
 @return quantidade total de HP curada NUMBER
 ]]
-function HealthComponent:Heal(amount : number) : number
+function HealthComponent:Heal(amount : number, opts : any?) : number
 	if self.IsDead or amount <= 0 then return 0 end
 
-	local context = StateTable.BuildContext(nil, amount)
+	local context = StateTable.BuildContext(opts and opts.Source, amount)
+	for _, trait in (opts and opts.Traits) or {} do
+		if not table.find(context.traits, trait) then table.insert(context.traits, trait) end
+	end
+	context.targetEntity = self.Entity
 	self.Entity:Emit(StateEnum.Roles.IN, StateEnum.Breakpoints.OnHeal, context)
 	context.damage = math.max(0, context.damage)
 
+	-- Teto da cura: HealCap × MaxHP, e NUNCA abaixo do HP atual (F107). HP acima do máximo é escolha
+	-- de design (sobrevida); antes, com o HP acima do teto, a cura o cortava e devolvia valor negativo
+	local cap = (opts and opts.Cap) or self.HealCap
+	local ceiling = math.max(self.HP, cap * self:GetMaxHP())
 	local oldHP = self.HP
-	self.HP = math.min(self:GetMaxHP(), self.HP + context.damage)
+	self.HP = math.min(ceiling, self.HP + context.damage)
 	self:_SyncClient()
 
-	return self.HP - oldHP
+	local healed = self.HP - oldHP
+	context.actualHeal = healed
+	-- OUT.OnHeal no dono da cura (lifesteal, cura de aliado), simétrico ao OUT.OnDamage (D3)
+	local owner = context.ownerEntity
+	if owner then
+		owner:Emit(StateEnum.Roles.OUT, StateEnum.Breakpoints.OnHeal, context)
+	end
+	return healed
 end
 
 --[[

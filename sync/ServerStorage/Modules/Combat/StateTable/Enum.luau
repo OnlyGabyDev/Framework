@@ -246,6 +246,15 @@ enum.DeathDefaults = table.freeze({
     RefuseCastOnDeath = true, -- CombatComponent: morto não inicia cast novo (F75)
 })
 
+--==== CURA (F107) ====--
+-- HP acima do MaxHP é escolha de design (sobrevida): o motor não corta o HP. O Heal só não leva o
+-- HP além de HealCap × MaxHP, e NUNCA reduz (antes, com o HP acima do teto, a cura o cortava).
+-- Override por entidade (config do Health: HealCap) e por cura (Heal(n, { Cap = ... })).
+-- math.huge = sem teto (toda cura vira sobrevida).
+enum.HealthDefaults = table.freeze({
+    HealCap = 1,
+})
+
 --==== ALVOS E AFILIAÇÃO (F105) ====--
 -- Relação entre quem age e quem é atingido. Sem AffiliationComponent dos dois lados = Neutral.
 enum.Relations = table.freeze({

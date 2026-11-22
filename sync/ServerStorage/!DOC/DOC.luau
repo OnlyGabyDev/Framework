@@ -378,6 +378,10 @@ neutro). Zona de skill: area:SetFilter(StateTable.AffectsFilter(runner)). Damage
 SEM PERSONAGEM (F106): Combat = { ChosenChar = false } cria a entidade sem personagem (sem loadout do banco e sem
 aviso); o padrão do jogo é Enum.CombatDefaults.ChosenChar.
 
+CURA (F107): Heal(n, { Source = runner, Traits = {...}, Cap = n }). Teto = Cap (ou HealCap da entidade, ou
+Enum.HealthDefaults.HealCap) × MaxHP; a cura nunca reduz o HP (HP acima do máximo é design: sobrevida). Com
+Source, o dono recebe OUT.OnHeal (ctx.actualHeal).
+
 INSCRIÇÕES (Listen): Owner por entidade com StateTable.OwnerToken(entidade, "tag"), nunca string.
 
 FORÇAS: Soft e caminhada do NPC proporcionais à massa (Physics/Settings: Force_Mass_Scaling); MassScaling = false
