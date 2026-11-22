@@ -996,4 +996,31 @@ return function(env)
 		cleanup(e)
 		cleanup(overheal)
 	end)
+
+	run("F108 — opções por hit: trait só deste hit, ponto do impacto e Prescaled", function(t)
+		local attacker = still(CFrame.new(-4, 5, 0), COMBAT)
+		attacker.SetStat(E.Stats.DamageMult, 2)
+		local target = still(CFrame.new(4, 5, 0), { "Character", "Health", "Attributes" },
+			{ Health = { MaxHP = 1e6 }, Attributes = { BaseStats = { MaxHP = 1e6, Defense = 100 } } })
+		local src = makeRunner(attacker, "__HardOpts", { duration = 5 }, {})
+		src:start()
+		local seen
+		target:Listen({ Role = E.Roles.IN, Breakpoint = E.Breakpoints.PostDamage, Action = function(ctx) seen = ctx end })
+		local function dealt(opts)
+			local hp = target.GetHP()
+			src:Damage(target, 10, opts)
+			return hp - target.GetHP()
+		end
+		t.assert(math.abs(dealt(nil) - 10) < 1e-6, "Hit normal: 10 × 2 (DamageMult) × 0,5 (Defense 100) devia dar 10")
+		local point = Vector3.new(1, 2, 3)
+		t.assert(math.abs(dealt({ Traits = { E.Traits.TrueDamage }, Hit = { position = point, normal = Vector3.yAxis } }) - 20) < 1e-6,
+			"TrueDamage só deste hit devia furar a Defense (20)")
+		t.assert(seen.hit and seen.hit.position == point, "O ponto do impacto não chegou no contexto")
+		t.assert(math.abs(dealt(nil) - 10) < 1e-6 and not table.find(seen.traits, E.Traits.TrueDamage),
+			"A trait do hit anterior vazou para a skill")
+		t.assert(math.abs(dealt({ Prescaled = true }) - 5) < 1e-6, "Prescaled devia pular o DamageMult (5)")
+		src:endSkill(false)
+		cleanup(attacker)
+		cleanup(target)
+	end)
 end

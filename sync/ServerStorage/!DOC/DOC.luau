@@ -382,6 +382,10 @@ CURA (F107): Heal(n, { Source = runner, Traits = {...}, Cap = n }). Teto = Cap (
 Enum.HealthDefaults.HealCap) × MaxHP; a cura nunca reduz o HP (HP acima do máximo é design: sobrevida). Com
 Source, o dono recebe OUT.OnHeal (ctx.actualHeal).
 
+OPÇÕES DO HIT (F108): self:Damage(alvo, n, { Traits = {...}, Effects = {...}, Hit = hitResult, Prescaled = true })
+(Types.DamageOptions). Traits/efeitos valem só para esse hit; Hit vira context.hit (ponto do impacto);
+Prescaled pula o DamageMult.
+
 INSCRIÇÕES (Listen): Owner por entidade com StateTable.OwnerToken(entidade, "tag"), nunca string.
 
 FORÇAS: Soft e caminhada do NPC proporcionais à massa (Physics/Settings: Force_Mass_Scaling); MassScaling = false

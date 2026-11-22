@@ -128,7 +128,7 @@ function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input) --Instanc
 	self._ownedCleanups = {}
 	self.skill.Own = function(_, cleanupFn) return self:Own(cleanupFn) end
 	self.skill.Listen = function(_, sub) return self:Listen(sub) end
-	self.skill.Damage = function(_, targetEntity, amount) return self:Damage(targetEntity, amount) end
+	self.skill.Damage = function(_, targetEntity, amount, opts) return self:Damage(targetEntity, amount, opts) end
 	self.skill.ApplyStatus = function(_, statusData, opts) return self:ApplyStatus(statusData, opts) end
 
 	--=====HISTÓRICO DE INTERAÇÕES SEQUENCIAIS=====--
@@ -423,13 +423,14 @@ end
 Aplica dano com ESTE runner como source. Existe pra acabar com a inconsistência de
 skills passando `self` (o proxy) em vez de `self.Runner` — o que fazia ShieldsFromType
 e outras checagens de trait nunca casarem (source.type não existia no proxy).
+@param opts - Types.DamageOptions? (traits e efeitos deste hit, ponto do impacto, Prescaled)
 ]]
-function SkillRunner:Damage(targetEntity, amount)
+function SkillRunner:Damage(targetEntity, amount, opts)
 	if not self.Entity or not self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then
 		warn("[SkillRunner] Damage chamado sem CombatComponent na entidade de origem:", self.skillName)
 		return false, 0
 	end
-	return self.Entity.ApplyDamage(amount, self, targetEntity)
+	return self.Entity.ApplyDamage(amount, self, targetEntity, opts)
 end
 
 --[[

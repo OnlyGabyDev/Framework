@@ -74,8 +74,21 @@ export type HitContext = {
 	blocked: boolean?,               -- o bloqueio zerou um hit que tinha dano (D6)
 	actualDamage: number?,           -- depois do HP mudar (PostDamage)
 	actualHeal: number?,             -- só no OnHeal (IN e OUT): quanto o HP subiu de fato
+	hit: {                           -- ponto do impacto, quando o hit veio de hitbox (opts.Hit, F108)
+		instance: Instance?,
+		position: Vector3?,
+		normal: Vector3?,
+	}?,
 	cancelled: boolean,              -- listener de PreDamage pode cancelar
 	reason: string?,                 -- motivo do cancelamento
+}
+
+-- Opções de um hit: runner:Damage(alvo, n, opts) / ApplyDamage(n, source, alvo, opts) (F108)
+export type DamageOptions = {
+	Traits: {string}?,               -- traits só deste hit (somadas às da skill, sem repetir)
+	Effects: {any}?,                 -- efeitos on-hit só deste hit (mesmo formato de data.effects)
+	Hit: any?,                       -- o hitResult da hitbox (position, normal, instance) -> context.hit
+	Prescaled: boolean?,             -- o dano já vem escalado: não aplica o DamageMult do atacante
 }
 
 -- Opções de uma cura: entity.Heal(n, opts) (F107)

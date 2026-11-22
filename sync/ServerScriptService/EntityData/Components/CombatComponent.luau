@@ -592,22 +592,24 @@ Aplica dano a uma entidade alvo, acionando o pipeline OUT do atacante antes e de
 @param amount - Quantidade de dano base NUMBER
 @param source - Fonte do dano (ex: SkillRunner) ANY
 @param targetEntity - Entidade alvo (EntityCore)
+@param opts - Types.DamageOptions? (F108): Traits/Effects deste hit, Hit (o hitResult: ponto do impacto),
+	Prescaled (o dano já vem escalado: repasse, reflexo; pula o DamageMult)
 @return sucesso BOOLEAN, actualDamage NUMBER | false, StateTable.Enum.ChainOutcomes (Deferred: o hit
 	inteiro roda no próximo frame, F62)
 ]]
-function CombatComponent:ApplyDamage(amount: number, source: any, targetEntity: any)
+function CombatComponent:ApplyDamage(amount: number, source: any, targetEntity: any, opts: any?)
 	-- O hit inteiro (OUT.onHit e o TakeDamage, que emite o OUT.OnDamage) é um elo só da cadeia:
 	-- reserva o nível do TakeDamage de dentro, para o OUT.onHit não rodar agora com o dano adiado (F62)
 	local ran, success, actualDamage = StateTable.RunInChainReserving(2,
 		"[CombatComponent] ApplyDamage", self.Entity and self.Entity.ID,
-		self._ApplyDamageInner, self, amount, source, targetEntity)
+		self._ApplyDamageInner, self, amount, source, targetEntity, opts)
 	if not ran then
 		return false, success
 	end
 	return success, actualDamage
 end
 
-function CombatComponent:_ApplyDamageInner(amount: number, source: any, targetEntity: any)
+function CombatComponent:_ApplyDamageInner(amount: number, source: any, targetEntity: any, opts: any?)
 	-- Um hit adiado (F62) roda no frame seguinte: o atacante pode ter saído do jogo
 	if not self.Entity then return false, 0 end
 
@@ -621,8 +623,25 @@ function CombatComponent:_ApplyDamageInner(amount: number, source: any, targetEn
 	local context = StateTable.BuildContext(source, amount)
 	context.targetEntity = targetEntity
 
-	-- DamageMult do atacante (D11, F43): multiplica o dano antes das proteções do alvo
-	if self.Entity:HasComponent(self.Entity.ComponentKey.Attributes) then
+	-- Opções DESTE hit (F108): antes o Damage só aceitava o número, e trait por hit (bala perfurante,
+	-- crítico), efeito extra e ponto do impacto exigiam montar o contexto à mão
+	if opts then
+		for _, trait in opts.Traits or {} do
+			if not table.find(context.traits, trait) then table.insert(context.traits, trait) end
+		end
+		for _, effect in opts.Effects or {} do
+			table.insert(context.effects, effect)
+		end
+		local hit = opts.Hit
+		if hit then
+			context.hit = { instance = hit.instance, position = hit.position, normal = hit.normal }
+		end
+	end
+
+	-- DamageMult do atacante (D11, F43): multiplica o dano antes das proteções do alvo. Prescaled: o
+	-- dano já veio escalado (repasse membro → corpo, reflexo) e não escala de novo
+	local prescaled = opts ~= nil and opts.Prescaled == true
+	if not prescaled and self.Entity:HasComponent(self.Entity.ComponentKey.Attributes) then
 		context.damage *= self.Entity.GetStat(StateEnum.Stats.DamageMult, StateEnum.StatDefaults.DamageMult)
 	end
 
