@@ -746,4 +746,26 @@ return function(env)
 		t.assert(third == "Late,A,C", "3º Emit (Twice esgotado, Once desligado, TTD vencido): " .. third)
 		cleanup(e)
 	end)
+
+	--=========================================================================
+	--  EVENTOS, STATS, DANO INDIRETO E ARMA (2ª rodada de 22/11)
+	--=========================================================================
+
+	run("F99 — Events.onDamage do config do Health dispara quando a entidade apanha", function(t)
+		local seen = { lower = 0, upper = 0, damage = nil }
+		local a = still(CFrame.new(-4, 5, 0), LIGHT, { Health = { Events = {
+			onDamage = function(ctx) seen.lower += 1; seen.damage = ctx.actualDamage end } } })
+		local b = still(CFrame.new(4, 5, 0), LIGHT, { Health = { Events = {
+			OnDamage = function() seen.upper += 1 end } } })
+		a.TakeDamage(5)
+		b.TakeDamage(5)
+		t.assert(seen.lower == 1 and seen.damage == 5, string.format("Events.onDamage rodou %d vez(es) (dano %s)",
+			seen.lower, tostring(seen.damage)))
+		t.assert(seen.upper == 1, "Events.OnDamage (maiúscula) rodou " .. seen.upper .. " vez(es)")
+		local Core = require(ServerScriptService.EntityData.EntityCore)
+		t.assert(Core.Events.onDamage == E.Breakpoints.PostDamage,
+			"EntityCore.Events.onDamage aponta para " .. tostring(Core.Events.onDamage) .. ", que não é emitido no canal IN")
+		cleanup(a)
+		cleanup(b)
+	end)
 end

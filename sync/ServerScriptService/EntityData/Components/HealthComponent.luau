@@ -16,6 +16,18 @@ local UpdateHPBar = RS.RemoteEvents:WaitForChild("UpdateHealthBar")
 local HealthComponent = {}
 HealthComponent.__index = HealthComponent
 
+--[[
+Eventos do config (Events = { onDamage = fn, ... }) e de EntityCore.Events: são do lado de quem
+APANHA (canal IN). onDamage é o PostDamage (F99): antes virava IN.OnDamage, que o motor nunca emite
+(o OnDamage é do dono do dano, canal OUT), e o callback nunca rodava. Dono único deste mapa.
+]]
+local EVENT_KEY = table.freeze({
+	onDamage = StateEnum.Breakpoints.PostDamage,
+	onHeal = StateEnum.Breakpoints.OnHeal,
+	onDeath = StateEnum.Breakpoints.OnDeath,
+	onRevive = StateEnum.Breakpoints.OnRevive,
+})
+
 
 --[[
 Cria uma nova instância do HealthComponent
@@ -359,9 +371,11 @@ Registra os callbacks recebidos pro pub/sub de eventos reativos
 function HealthComponent:OnAdded()
 	if self.Subscription then
 		for key, callback in pairs(self.Subscription) do
+			-- onDamage e OnDamage valem o mesmo (EVENT_KEY); outra chave vale como breakpoint cru
+			local eventName = string.lower(string.sub(key, 1, 1)) .. string.sub(key, 2)
 			self.Entity:Listen({
 				Role = StateEnum.Roles.IN,
-				Breakpoint = StateEnum.Breakpoints[key] or key,
+				Breakpoint = EVENT_KEY[eventName] or StateEnum.Breakpoints[key] or key,
 				Priority = 0,
 				Action = callback
 			})
@@ -402,10 +416,5 @@ local ExposeAPI = {
 return {
 	new = HealthComponent.new,
 	ExposeAPI = ExposeAPI,
-	EventKey = {
-		onDamage = StateEnum.Breakpoints.OnDamage,
-		onHeal = StateEnum.Breakpoints.OnHeal,
-		onDeath = StateEnum.Breakpoints.OnDeath,
-		onRevive = StateEnum.Breakpoints.OnRevive,
-	}
+	EventKey = EVENT_KEY,
 }

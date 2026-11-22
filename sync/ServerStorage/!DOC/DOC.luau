@@ -351,6 +351,9 @@ CRÉDITO DE MORTE (StateTable.EffectOwner): o OUT.OnDeath vai para o DONO do que
 reflexo) roda no portador, mas o dono é quem o aplicou (sobe runner.Source até a skill). A morte por
 Bleed credita quem aplicou o Bleed, não a vítima. O OUT.OnDamage de dano indireto (D3) ainda não existe.
 
+EVENTOS DO HEALTH (F99): Events = { onDamage, onHeal, onDeath, onRevive } no config são do lado de quem
+apanha; onDamage é o IN.PostDamage.
+
 INSCRIÇÕES (Listen): Owner por entidade com StateTable.OwnerToken(entidade, "tag"), nunca string.
 
 FORÇAS: Soft e caminhada do NPC proporcionais à massa (Physics/Settings: Force_Mass_Scaling); MassScaling = false
