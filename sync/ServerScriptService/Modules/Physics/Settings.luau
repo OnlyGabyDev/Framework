@@ -96,4 +96,14 @@ return {
 
 	-- Intervalo mínimo (s) entre dois warns de correção do mesmo player.
 	Movement_Warn_Interval = 1,
+
+	-- Atraso (s) com que o servidor vê um corpo simulado pelo cliente, sem contar o ping (medido
+	-- em 11/11 no Studio: ~0,35 s). Base do NetworkView, que prevê onde o corpo está de verdade.
+	-- As janelas do AntiCheat acima são tolerâncias, com outro papel: não derive uma da outra.
+	Client_View_Lag = 0.35,
+	-- Quanto do GetNetworkPing (ida e volta) entra no atraso de visão: 0,5 = um sentido.
+	Client_View_Ping_Factor = 0.5,
+	-- Margem (studs) da busca de candidatos de uma zona para corpos de cliente: cobre o quanto
+	-- um corpo anda durante o atraso (100 studs/s × 0,4 s)
+	Zone_Prediction_Margin = 40,
 }

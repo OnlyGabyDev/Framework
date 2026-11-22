@@ -1,6 +1,8 @@
 local RunService = game:GetService("RunService")
 local ServerScriptService = game:GetService("ServerScriptService")
 local DataManager = require(ServerScriptService.EntityData.DataManager)
+local NetworkView = require(ServerScriptService.Modules.Physics.NetworkView)
+local Settings = require(ServerScriptService.Modules.Physics.Settings)
 
 local AreaEffect = {}
 AreaEffect.__index = AreaEffect
@@ -27,7 +29,10 @@ function AreaEffect.new(cframeProvider, shape, size, pollRate)
     
     self.OverlapParams = OverlapParams.new()
     self.OverlapParams.FilterType = Enum.RaycastFilterType.Exclude
-    
+    -- Busca só nas peças de UMA entidade (corpo de cliente com a posição prevista, no _Query)
+    self._ownParams = OverlapParams.new()
+    self._ownParams.FilterType = Enum.RaycastFilterType.Include
+
     self.Inside = {} -- [EntityCore] = true, pra distinguir OnEnter de OnStay
     self.CallbacksEnter = {}
     self.CallbacksStay = {}
@@ -43,20 +48,41 @@ function AreaEffect:OnEnter(cb) table.insert(self.CallbacksEnter, cb); return se
 function AreaEffect:OnStay(cb)  table.insert(self.CallbacksStay, cb);  return self end
 function AreaEffect:OnExit(cb)  table.insert(self.CallbacksExit, cb);  return self end
 
+-- Peças na forma da zona (crescida por `margin` studs), com o filtro dado
+function AreaEffect:_PartsIn(cframe: CFrame, margin: number, params: OverlapParams)
+    if self.Shape == "Box" then
+        return workspace:GetPartBoundsInBox(cframe, self.Size + Vector3.one * (2 * margin), params)
+    end
+    return workspace:GetPartBoundsInRadius(cframe.Position, self.Size + margin, params)
+end
+
 function AreaEffect:_Query(): {any} -- devolve lista de EntityCore atualmente dentro
     local cframe = self.CFrameProvider()
-    local parts
-    if self.Shape == "Box" then
-        parts = workspace:GetPartBoundsInBox(cframe, self.Size, self.OverlapParams)
-    else
-        parts = workspace:GetPartBoundsInRadius(cframe.Position, self.Size, self.OverlapParams)
-    end
-
     local found = {}
-    for _, part in ipairs(parts) do
+    for _, part in ipairs(self:_PartsIn(cframe, 0, self.OverlapParams)) do
         local entity = DataManager.GetEntityFromInstance(part)
         if entity then found[entity] = true end
     end
+
+    -- Corpo simulado por um cliente (player, ou o que ele possui): o servidor o vê ~0,35 s
+    -- atrasado (NetworkView). Para ele, vale onde o corpo ESTÁ: a zona testa as peças dele
+    -- deslocadas pelo que ele andou nesse atraso. Antes a zona via o player sair 0,35 s depois de
+    -- ele sair de verdade, e o vento seguia empurrando no cliente (F104). Corpo do servidor: igual
+    local checked = {}
+    for _, part in ipairs(self:_PartsIn(cframe, Settings.Zone_Prediction_Margin, self.OverlapParams)) do
+        local entity = DataManager.GetEntityFromInstance(part)
+        if entity and not checked[entity] and entity:HasComponent(entity.ComponentKey.Character) then
+            checked[entity] = true
+            local root = entity.GetRoot()
+            local shift = root and NetworkView.PredictedShift(root)
+            if shift then
+                self._ownParams.FilterDescendantsInstances = { entity.Instance }
+                local inside = #self:_PartsIn(cframe - shift, 0, self._ownParams) > 0
+                found[entity] = inside or nil
+            end
+        end
+    end
+
     return found
 end
 

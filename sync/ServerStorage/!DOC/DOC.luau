@@ -367,6 +367,10 @@ assembly do líder (WeldConstraint) e anda com ele sem atraso, também quando o 
 caminhada do preso ficam suspensas, o Humanoid em PlatformStand e as peças sem massa. Detach()/GetAttachment().
 FollowTarget (Force) persegue com elasticidade; AttachTo carrega. A Ultimate da Schema usa AttachTo.
 
+CORPO DE CLIENTE (F104): o servidor vê o corpo do player ~0,35 s atrasado (Physics/NetworkView, Settings.
+Client_View_Lag). Decisão de posição do servidor sobre corpo de cliente usa NetworkView.PredictedShift(root);
+o AreaEffect já faz isso (a zona solta o vento quando o player sai de verdade).
+
 INSCRIÇÕES (Listen): Owner por entidade com StateTable.OwnerToken(entidade, "tag"), nunca string.
 
 FORÇAS: Soft e caminhada do NPC proporcionais à massa (Physics/Settings: Force_Mass_Scaling); MassScaling = false

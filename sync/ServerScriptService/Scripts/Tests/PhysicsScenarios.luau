@@ -514,4 +514,39 @@ return function(env)
 		t.log(string.format("player: vz médio visto %.1f (esperado %d; antes do F32: ~-1,6)", vz or 0, -WIND))
 		t.assert(vz and math.abs(vz + WIND) < 5, string.format("A Soft padrão deu %.1f no player", vz or 0))
 	end)
+
+	run("Física 21 — player real: a zona solta o vento quando ele sai de verdade, não quando o servidor o vê sair (F104)", function(t)
+		local player = Players:GetPlayers()[1]
+		local character = player and player.Character
+		local body = character and character:GetAttribute("EntityID") and DataManager.Get(character)
+		if not body then
+			t.log("sem player com entidade neste Play: teste pulado")
+			return
+		end
+		local home = body.GetRoot().CFrame
+		-- Zona de 30 de largura (x de -15 a 15), funda no eixo do vento: o dash de lado (+X, 28 studs)
+		-- sai dela perto do fim, o caso medido no cliente em 22/11 (até 14 studs de vento depois do dash)
+		character:PivotTo(origin() * CFrame.new(-12, 4, -2))
+		t.wait(0.8)
+		local zone, key = windZone(Vector3.new(0, 5, -25), Vector3.new(30, 10, 60))
+		t.wait(0.6)
+		t.assert(hasWind(body, key), "Pré-condição: o vento deveria estar ativo no player antes do dash")
+		local rec = record(body, function(ent) return hasWind(ent, key) end)
+		body.AddForce({ Type = "TestDash", Duration = DASH_TIME, Speed = DashModule.data.speed,
+			Direction = Vector3.new(1, 0, 0), Hard = true, IgnoreGravity = true, Priority = 10 })
+		t.wait(DASH_TIME + 1.0)
+		rec.stop()
+		zone:Stop()
+		character:PivotTo(home)
+		-- Saída vista pelo servidor: o root passa da borda com folga para a largura do corpo
+		local edgeX = (origin() * CFrame.new(15, 0, 0)).Position.X
+		local seenOut = rec.firstWhere(0, function(s) return s.pos.X > edgeX + 2 end)
+		local windOff = rec.firstWhere(0, function(s) return not s.extra end)
+		t.log(string.format("servidor vê a saída em %s s; vento solto em %s s", tostring(seenOut), tostring(windOff)))
+		t.assert(seenOut ~= nil and windOff ~= nil, "Pré-condição: o servidor não viu o player sair, ou o vento nunca saiu")
+		-- O servidor vê o corpo ~0,35 s atrasado: o vento tem de sair ANTES de ele ver a saída
+		t.assert(windOff <= seenOut - 0.15, string.format(
+			"O vento saiu %.2f s depois de o servidor ver a saída (devia sair ~0,35 s antes: no cliente ele já tinha saído)",
+			windOff - seenOut))
+	end)
 end
