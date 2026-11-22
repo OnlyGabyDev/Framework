@@ -27,7 +27,8 @@ CombatComponent.__index = CombatComponent
 --[[
 Inicializa o componente de combate na entidade
 @param entity - Entidade dona do componente Entity, enviar EntityData
-@param config - Configurações iniciais do componente TABLE { ChosenChar: string, Mode: string, CancelSkillsOnDeath: boolean? }
+@param config - Configurações iniciais do componente TABLE { ChosenChar: string | false, Mode: string, CancelSkillsOnDeath: boolean? }
+	(ChosenChar ausente = Enum.CombatDefaults.ChosenChar; false = sem personagem)
 @return nova instância do CombatComponent CombatComponent
 ]]
 function CombatComponent.new(entity, config)
@@ -54,8 +55,13 @@ function CombatComponent.new(entity, config)
 	self.IntentRunners = {} -- [intent] = runner
 
 	-- Personagem e modo
-	self.ChosenChar = config.ChosenChar or "Schema"
-	self.Mode = config.Mode or "Base"
+	-- Padrão do JOGO em Enum.CombatDefaults; ChosenChar = false = sem personagem (F106): kit montado
+	-- em runtime (EquipSkill/ApplyLoadout), sem o loadout do banco e sem aviso. Antes todo Combat
+	-- sem config nascia com o kit Schema, e quem não queria kit usava um nome inexistente
+	local chosenChar = config.ChosenChar
+	if chosenChar == nil then chosenChar = StateEnum.CombatDefaults.ChosenChar end
+	self.ChosenChar = chosenChar or nil
+	self.Mode = config.Mode or StateEnum.CombatDefaults.Mode
 	self.baseStats = {}
 
 	-- Regra de morte do motor (F20): padrão em Enum.DeathDefaults, override no config
@@ -658,8 +664,10 @@ end
 Função de inicialização do componente, tenta carregar skills automaticamente
 ]]
 function CombatComponent:OnAdded()
-	-- Carrega personagem padrão
+	-- Carrega o personagem (sem personagem: loadout vazio, montado pelo jogo)
+	if self.ChosenChar then
 		self:SetCharMode(self.ChosenChar, self.Mode)
+	end
 
 	-- F20: a morte encerra as skills ativas. O Combat reage ao IN.OnDeath da própria entidade
 	-- (o Health não conhece o Combat, Regra 20) e cancela só runners de skill: os status seguem

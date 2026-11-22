@@ -264,6 +264,15 @@ enum.AffectsDefaults = table.freeze({
     Neutral = true,
 })
 
+--==== PERSONAGEM (F106) ====--
+-- Personagem do CombatComponent quando o config não diz (dado do JOGO: troque aqui). O player
+-- nasce sem config, então é este. ChosenChar = false no config = entidade sem personagem (kit
+-- montado em runtime com EquipSkill/ApplyLoadout, sem aviso e sem loadout do banco).
+enum.CombatDefaults = table.freeze({
+    ChosenChar = "Schema",
+    Mode = "Base",
+})
+
 -- Profundidade SÍNCRONA máxima de uma cadeia dano<->status na mesma pilha. Acima dela a ação NÃO
 -- roda nesta pilha: vai para a fila de ChainLimits (ou é recusada, com deferAtMaxDepth = false).
 -- Ver StateTable.RunInChain.

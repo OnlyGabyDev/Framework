@@ -939,4 +939,27 @@ return function(env)
 		runner:endSkill(false)
 		for _, e in { attacker, ally, enemy, neutral } do cleanup(e) end
 	end)
+
+	run("F106 — Combat sem personagem: sem aviso e sem loadout do banco; o kit montado em runtime funciona", function(t)
+		local warned = {}
+		local conn = LogService.MessageOut:Connect(function(message)
+			if string.find(message, "Char não existe") or string.find(message, "AnimLib não encontrada") then
+				table.insert(warned, message)
+			end
+		end)
+		local bare = still(CFrame.new(-4, 5, 0), COMBAT, { Combat = { ChosenChar = false } })
+		task.wait()
+		task.wait()
+		conn:Disconnect()
+		t.assert(bare.GetChosenChar() == nil, "ChosenChar = false virou " .. tostring(bare.GetChosenChar()))
+		t.assert(bare.GetSkillFromSlot(Intents.Id.Primary) == nil, "A entidade sem personagem nasceu com o loadout do banco")
+		t.assert(#warned == 0, "Aviso de personagem inexistente: " .. tostring(warned[1]))
+		local started = 0
+		equip(bare, Intents.Id.Ability2, "__HardBareSkill", { cooldown = 0, duration = 0.1 }, { onStart = function() started += 1 end })
+		t.assert(press(bare, Intents.Id.Ability2) == true and started == 1, "O kit montado em runtime não castou")
+		local default = still(CFrame.new(4, 5, 0), COMBAT)
+		t.assert(default.GetChosenChar() == E.CombatDefaults.ChosenChar, "Sem config o personagem não é o padrão do jogo")
+		cleanup(bare)
+		cleanup(default)
+	end)
 end

@@ -375,6 +375,9 @@ ALVO E TIME (F105): componente Affiliation { Team = ... }. StateTable.Relation(a
 a hitbox da arma só entrega à skill os alvos que data.affects permite (padrão Enum.AffectsDefaults: inimigo e
 neutro). Zona de skill: area:SetFilter(StateTable.AffectsFilter(runner)). Damage/ApplyStatus direto não filtram.
 
+SEM PERSONAGEM (F106): Combat = { ChosenChar = false } cria a entidade sem personagem (sem loadout do banco e sem
+aviso); o padrão do jogo é Enum.CombatDefaults.ChosenChar.
+
 INSCRIÇÕES (Listen): Owner por entidade com StateTable.OwnerToken(entidade, "tag"), nunca string.
 
 FORÇAS: Soft e caminhada do NPC proporcionais à massa (Physics/Settings: Force_Mass_Scaling); MassScaling = false
