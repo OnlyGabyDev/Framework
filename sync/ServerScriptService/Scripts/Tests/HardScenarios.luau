@@ -398,4 +398,35 @@ return function(env)
 		t.assert(body.GetActiveTags()[E.Tags.canMove] ~= false, "O corpo ficou sem andar")
 		cleanup(body)
 	end)
+
+	--=========================================================================
+	--  STATUS
+	--=========================================================================
+
+	run("Duro — status que se renova no onEnd, tirado por RemoveAmount, não deixa instância órfã", function(t)
+		local dummy = still(CFrame.new(0, 5, 0))
+		local renewals = 0
+		local Renew
+		Renew = { data = { name = "__HardRenew", category = E.Categories.Buff, tags = { [E.Tags.canMove] = false } }, callbacks = {
+			onEnd = function(self, ctx)
+				if ctx.reason == E.EndReasons.Cancel and renewals < 1 then
+					renewals += 1
+					self.Entity.ApplyStatus(Renew, { Duration = 30 }) -- volta sozinho (ex.: maldição que não sai)
+				end
+			end,
+		} }
+		dummy.ApplyStatus(Renew, { Duration = 30 })
+		dummy.RemoveAmount("__HardRenew", 1)
+		t.assert(renewals == 1, "Pré-condição: o status não se reaplicou no onEnd")
+
+		-- O que voltou tem de estar no registro: listado, com tags valendo e removível
+		local entry = dummy.GetStatus("__HardRenew")
+		t.assert(entry ~= nil and entry[1].runner and not entry[1].runner:IsEnded(),
+			"O status reaplicado no onEnd sumiu do registro (runner órfão, rodando fora dele)")
+		t.assert(dummy.GetActiveTags()[E.Tags.canMove] == false, "As tags do status reaplicado não valem")
+		local runner = entry[1].runner
+		dummy.RemoveStatus("__HardRenew")
+		t.assert(runner:IsEnded(), "O status reaplicado não pôde ser removido")
+		cleanup(dummy)
+	end)
 end

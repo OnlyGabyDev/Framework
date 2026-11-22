@@ -442,25 +442,28 @@ function StatusComponent:RemoveAmount(name: string, amount: number): boolean
 		return false
 	end
 
+	-- Desregistra ANTES de encerrar, como o RemoveStatus: antes o runner era encerrado e só então a
+	-- entrada saía (group[name] = nil). Um status que se reaplica no onEnd (maldição que volta)
+	-- gravava a entrada nova ali no meio, e o nil logo depois a apagava: o runner novo seguia
+	-- rodando fora do registro, sem tags valendo e sem poder ser removido
+	local detached = {}
+
 	--Remoção de stacks na mesma instância
 	if entry.runner and entry.runner.skill.counter then
 		entry.runner.skill.counter -= amount
 		removed = true
 
 		if entry.runner.skill.counter <= 0 then
-			entry.runner:endSkill(true)
 			group[name] = nil
+			table.insert(detached, entry)
 		end
 
 	--Remoção de múltiplas instâncias
 	elseif type(entry) == "table" then
 		local toRemove = math.min(amount, #entry)
 
-		for i = 1, toRemove do
-			local item = table.remove(entry,1)
-			if item.runner then
-				item.runner:endSkill(true)
-			end
+		for _ = 1, toRemove do
+			table.insert(detached, table.remove(entry, 1))
 		end
 
 		if #entry == 0 then
@@ -473,6 +476,7 @@ function StatusComponent:RemoveAmount(name: string, amount: number): boolean
 	if removed then
 		self:_MarkTagsDirty()
 	end
+	endDetached(detached)
 
 	return removed
 end
