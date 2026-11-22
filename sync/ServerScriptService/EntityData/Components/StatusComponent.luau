@@ -112,7 +112,8 @@ ApplyStatus dela ou use runner:ApplyStatus(status, { Target = alvo }).
 @param sourceSkill - (só no estilo legado) Runner ou proxy de skill responsável
 @param ID - (só no estilo legado) ID único do status
 @param targetEntity - (só no estilo legado) ignorado se for outra entidade, com warn
-@return ID do status STRING ou nil se não aplicado
+@return ID do status STRING ou nil se não aplicado (também quando a cadeia estava funda demais e
+	o status vai ser aplicado no próximo frame: StateTable.Enum.ChainLimits, F62)
 ]]
 function StatusComponent:ApplyStatus(statusData, durationOrOpts, sourceSkill, ID, targetEntity)
 	local ran, resultID = StateTable.RunInChain(
@@ -122,6 +123,10 @@ function StatusComponent:ApplyStatus(statusData, durationOrOpts, sourceSkill, ID
 end
 
 function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSkill, ID, targetEntity)
+	-- Entidade saindo não recebe status. Primeiro de tudo: um status adiado pela cadeia (F62) roda
+	-- no frame seguinte, e o Destroy já pode ter zerado self.Entity
+	if self._destroying then return nil end
+
 	-- Aceita opts (estilo novo) OU os parâmetros posicionais antigos (compatibilidade)
 	local opts
 	if type(durationOrOpts) == "table" then
@@ -141,10 +146,10 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 			statusData.data and statusData.data.name)
 	end
 
-	-- F39: entidade morta (ou sendo destruída) não recebe status. Configurável por entidade
-	-- (RefuseStatusOnDeath = false no config: nem checa a morte) e por status (um status que
-	-- precise agir sobre cadáver declara data.allowOnDead = true).
-	if self._destroying or (self._refuseStatusOnDeath and isDead(self.Entity) and not (statusData.data and statusData.data.allowOnDead)) then
+	-- F39: entidade morta não recebe status. Configurável por entidade (RefuseStatusOnDeath = false
+	-- no config: nem checa a morte) e por status (um status que precise agir sobre cadáver declara
+	-- data.allowOnDead = true).
+	if self._refuseStatusOnDeath and isDead(self.Entity) and not (statusData.data and statusData.data.allowOnDead) then
 		return nil
 	end
 

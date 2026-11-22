@@ -101,21 +101,24 @@ Valida se um ataque pode afetar a entidade baseado em suas tags de imunidade
 Aplica dano à entidade
 @param amount - Quantidade de dano a ser aplicada NUMBER
 @param source - Fonte do dano ANY
-@return sucesso BOOLEAN, quantidade real de dano aplicada NUMBER]]
+@return sucesso BOOLEAN, quantidade real de dano aplicada NUMBER | false, Enum.ChainOutcomes
+	(Deferred: a cadeia estava funda demais e o dano roda no próximo frame, F62)]]
 function HealthComponent:TakeDamage(amountOrContext : number | {}, source : any?)
-	if self.IsDead then return false end
-
 	local ran, success, actualDamage, context = StateTable.RunInChain(
 		"[HealthComponent] TakeDamage", self.Entity and self.Entity.ID,
 		self._TakeDamageInner, self, amountOrContext, source)
 	if not ran then
-		return false, success -- `success` traz o motivo: "MaxRecursion" | "Error"
+		return false, success -- `success` traz o motivo (StateTable.Enum.ChainOutcomes)
 	end
 
 	return success, actualDamage, context
 end
 
 function HealthComponent:_TakeDamageInner(amountOrContext, source)
+	-- Aqui e não no TakeDamage: um dano adiado pela cadeia (F62) roda no frame seguinte, quando o
+	-- alvo pode ter morrido ou saído do jogo (Destroy zera self.Entity)
+	if self.IsDead or not self.Entity then return false, 0 end
+
 	local context
 	if type(amountOrContext) == "table" then
 		context = amountOrContext

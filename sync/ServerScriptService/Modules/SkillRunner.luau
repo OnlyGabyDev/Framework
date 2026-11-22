@@ -20,6 +20,8 @@ local STATES = {  				--Breakpoints do ciclo de vida da skill
 
 -- Motivo do fim, entregue em ctx.reason no onCancel/onEnd (dono: StateTable.Enum.EndReasons)
 local REASONS = StateTable.Enum.EndReasons
+local CHAIN = StateTable.Enum.ChainLimits
+local Log = require(ReplicatedStorage.Logger).Channel("SkillRunner")
 
 --[[
 Dono único do isolamento de erro dos callbacks do ciclo de vida (onStart, onCancel, onEnd
@@ -168,9 +170,23 @@ end
 
 --[[
 Registra e inicia o runner.
-@return false se o onStart falhou (o runner já foi cancelado e limpo) BOOLEAN
+@return false se o onStart falhou ou o motor recusou o início (o runner já foi encerrado e limpo) BOOLEAN
 ]]
 function SkillRunner:start(): boolean
+	-- Largura da cadeia assíncrona (F62): runners vivos ao mesmo tempo sob a mesma raiz da Lineage.
+	-- Uma árvore em que cada runner cria dois chegava a 1023 vivos sem limite nenhum
+	local root = self.Lineage and self.Lineage.Root
+	if root then
+		local live = root.LiveRunners or 0
+		if live >= CHAIN.maxLiveRunnersPerRoot then
+			return self:_RefuseStart("ChainWidth:" .. tostring(root.Cause),
+				"cadeia assíncrona larga demais: " .. live .. " runners vivos sob a raiz " .. tostring(root.Cause)
+					.. " (Enum.ChainLimits.maxLiveRunnersPerRoot); não iniciou: " .. tostring(self.skillName))
+		end
+		root.LiveRunners = live + 1
+		self._chainRoot = root
+	end
+
 	--Conecta com a skill ao heartbeat global.
 		self.connection.Register(self,self.type)
 
@@ -209,13 +225,27 @@ function SkillRunner:start(): boolean
 	return true
 end
 
+--[[
+O motor não deixa o runner começar (Enum.ChainLimits). Nenhum callback roda e
+nada é registrado; o cooldown cobrado na ativação volta pelo refund do motivo refused (padrão:
+inteiro), e o onFinish tira o status do registro do StatusComponent. Um aviso por `warnKey` (as
+repetições saem em Debug).
+]]
+function SkillRunner:_RefuseStart(warnKey: string, message: string): boolean
+	Log.WarnOnce(warnKey, message)
+	self.state = STATES.Ended
+	if self._cooldownState then
+		protect(self, "CooldownPolicy.OnEnd", CooldownPolicy.OnEnd, self, REASONS.Refused)
+	end
+	if self.onFinish then self.onFinish() end
+	return false
+end
+
 
 --[[
 Controla o tempo de execução do SkillRunner (atualizado pelo Heartbeat global)
 ]]
 function SkillRunner:_internalUpdate(dt)
-
-	-- TODO: reintroduzir Pipeline/Limites de fila aqui em vez do MAX_RECURSION global
 
 	--Se a skill não tiver onStep, nao rode heartbeat
 	if self.connection == nil then return end
@@ -479,6 +509,12 @@ function SkillRunner:endSkill(cancel, reason)
 	end
 
 	self.state = STATES.Ended
+
+	-- Devolve a vaga na raiz da cadeia (F62) logo no fim: nada abaixo pode pular isto
+	if self._chainRoot then
+		self._chainRoot.LiveRunners -= 1
+		self._chainRoot = nil
+	end
 
 	-- Ownership automático: desinscreve os Listen() e roda os Own() antes do onEnd
 	if self.Entity then

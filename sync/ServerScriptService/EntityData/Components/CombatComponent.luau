@@ -583,9 +583,25 @@ Aplica dano a uma entidade alvo, acionando o pipeline OUT do atacante antes e de
 @param amount - Quantidade de dano base NUMBER
 @param source - Fonte do dano (ex: SkillRunner) ANY
 @param targetEntity - Entidade alvo (EntityCore)
-@return sucesso BOOLEAN, actualDamage NUMBER
+@return sucesso BOOLEAN, actualDamage NUMBER | false, StateTable.Enum.ChainOutcomes (Deferred: o hit
+	inteiro roda no próximo frame, F62)
 ]]
 function CombatComponent:ApplyDamage(amount: number, source: any, targetEntity: any)
+	-- O hit inteiro (OUT.onHit, TakeDamage e OUT.OnDamage) é um elo só da cadeia: reserva o nível
+	-- do TakeDamage de dentro, para não adiar só o dano e perder o OUT.OnDamage (F62)
+	local ran, success, actualDamage = StateTable.RunInChainReserving(2,
+		"[CombatComponent] ApplyDamage", self.Entity and self.Entity.ID,
+		self._ApplyDamageInner, self, amount, source, targetEntity)
+	if not ran then
+		return false, success
+	end
+	return success, actualDamage
+end
+
+function CombatComponent:_ApplyDamageInner(amount: number, source: any, targetEntity: any)
+	-- Um hit adiado (F62) roda no frame seguinte: o atacante pode ter saído do jogo
+	if not self.Entity then return false, 0 end
+
 	-- O stub do EntityCore também é função: o guarda olha o componente (F65)
 	if not targetEntity or type(targetEntity.HasComponent) ~= "function"
 		or not targetEntity:HasComponent(targetEntity.ComponentKey.Health) then

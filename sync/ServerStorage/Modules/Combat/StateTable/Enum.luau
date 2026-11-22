@@ -83,6 +83,7 @@ enum.EndReasons = {
     Stop = "stop",          --A própria skill se encerrou sem cancelar (Stop(false))
     Error = "error",        --Erro num callback (onStart/onStep): o motor encerrou o runner
     Fizzle = "fizzle",      --A skill desistiu do cast (self:Fizzle()): o cast não aconteceu
+    Refused = "refused",    --O motor não deixou o runner começar (ChainLimits): nenhum callback rodou
 }
 
 --==== EFEITOS ON-HIT (D6, F41) ====--
@@ -120,7 +121,7 @@ enum.RecastPolicy = table.freeze({
 enum.CooldownDefaults = table.freeze({
     start = "Cast",
     recastLegacy = "Restart",  --só para skill com onRecast que não declarou recast (com aviso)
-    refund = table.freeze({ error = 1, fizzle = 1 }), --erro e desistência não cobram o cooldown
+    refund = table.freeze({ error = 1, fizzle = 1, refused = 1 }), --erro, desistência e recusa não cobram
     maxReduction = 0.8,        --teto PADRÃO da redução de cooldown (design de jogo: troque aqui ou
                                --por skill em cooldownPolicy.maxReduction, 0..1; 1 = sem teto)
 })
@@ -236,9 +237,31 @@ enum.DeathDefaults = table.freeze({
     RefuseCastOnDeath = true, -- CombatComponent: morto não inicia cast novo (F75)
 })
 
--- Limite de profundidade SÍNCRONA de uma cadeia dano<->status (TakeDamage/ApplyStatus se
--- recusam a continuar acima disso). Ver StateTable.RunInChain.
+-- Profundidade SÍNCRONA máxima de uma cadeia dano<->status na mesma pilha. Acima dela a ação NÃO
+-- roda nesta pilha: vai para a fila de ChainLimits (ou é recusada, com deferAtMaxDepth = false).
+-- Ver StateTable.RunInChain.
 enum.MAX_RECURSION = 50
+
+--==== LIMITES DE CADEIA (F62; dono: StateTable/Helper RunInChain e SkillRunner:start) ====--
+-- SÍNCRONA (dano -> morte -> dano... na mesma pilha): passou de MAX_RECURSION, a ação vai para uma
+-- fila e roda no próximo frame, numa pilha nova, em vez de ser descartada. Ação adiada que adia
+-- outra soma uma geração; acima de maxDeferrals a ação é recusada (e avisa). É isso que para o
+-- ping-pong infinito de dois reflexos, sem cortar a cadeia longa e finita (80 alvos em linha).
+-- ASSÍNCRONA (runner que cria runner): o perigo é a LARGURA, não a profundidade. Uma cadeia linear
+-- é um laço legítimo (status que se renova sozinho) e não tem limite; uma árvore que dobra a cada
+-- geração tem: runners vivos ao mesmo tempo sob a mesma raiz da Lineage.
+enum.ChainOutcomes = table.freeze({
+    Deferred = "Deferred",          --a ação foi para a fila e roda no próximo frame (sem retorno)
+    MaxRecursion = "MaxRecursion",  --a ação foi recusada (limite de gerações, ou sem fila)
+    Error = "Error",                --a ação deu erro (warn com traceback)
+})
+
+enum.ChainLimits = table.freeze({
+    deferAtMaxDepth = true,       --false = acima de MAX_RECURSION recusa na hora (o comportamento antigo)
+    maxDeferrals = 20,            --gerações de adiamento por cadeia: 20 × 50 = ~1000 ações em linha
+    deferredPerFrame = 256,       --orçamento da fila por frame; o que sobra espera o próximo
+    maxLiveRunnersPerRoot = 256,  --runners vivos ao mesmo tempo sob a mesma raiz da Lineage
+})
 
 
 --Lista de traits que ignoram block

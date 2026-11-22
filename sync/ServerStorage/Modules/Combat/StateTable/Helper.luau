@@ -45,12 +45,33 @@ estouro de call stack do SERVIDOR inteiro, não só de uma entidade.
 ]]
 local activeChainDepth = 0
 
-function Helper.TryEnterChain(): boolean
-	if activeChainDepth >= Enum.MAX_RECURSION then
+--[[
+Fila das ações adiadas (F62). Acima de MAX_RECURSION a ação não roda nesta pilha: entra aqui e roda
+no próximo Heartbeat, com a pilha zerada. Antes ela era descartada, e a cadeia em linha de 80 alvos
+parava em 50. A conexão só existe enquanto a fila tem ação: custo zero fora de cadeia longa.
+Formato de um item (dono: este arquivo): { reserve, label, subject, fn, args = table.pack(...), gen }
+- gen: gerações de adiamento da cadeia. A ação que roda a partir da fila marca currentGeneration;
+  se ela adiar outra, a nova recebe gen + 1. Acima de ChainLimits.maxDeferrals, recusa.
+]]
+local CHAIN = Enum.ChainLimits
+local OUTCOME = Enum.ChainOutcomes
+local RunService = game:GetService("RunService")
+local deferredQueue = {}
+local queueHead, queueTail = 1, 1 -- itens válidos em [head, tail)
+local currentGeneration = 0
+local drainConnection = nil
+
+-- Entra um nível, desde que caibam `reserve` níveis a partir daqui (a ação e as de dentro dela)
+local function enterChain(reserve: number): boolean
+	if activeChainDepth + reserve > Enum.MAX_RECURSION then
 		return false
 	end
 	activeChainDepth += 1
 	return true
+end
+
+function Helper.TryEnterChain(): boolean
+	return enterChain(1)
 end
 
 function Helper.ExitChain()
@@ -61,7 +82,7 @@ local function finishChain(label: string, subject: any, ok: boolean, ...: any)
 	Helper.ExitChain()
 	if not ok then
 		warn(label, "erro dentro da cadeia, ação abortada. Entidade:", tostring(subject), "\n" .. tostring((...)))
-		return false, "Error"
+		return false, OUTCOME.Error
 	end
 	return true, ...
 end
@@ -77,16 +98,87 @@ da pilha (o risco é estourar a pilha do servidor). Um contador no context não
 enxergaria reentradas que não repassam o context — ex.: um block que reflete dano
 chamando attacker.TakeDamage(dano, self.Runner) monta um context novo a cada nível.
 
+Acima de MAX_RECURSION a ação vai para a fila (Enum.ChainLimits, F62) e roda no próximo frame.
+Quem chama recebe false, Deferred e não tem o retorno dela (ela roda depois, numa pilha nova).
+Como a ação adiada pode rodar com o alvo já morto ou fora do jogo, `fn` confere o estado da
+entidade no começo (o miolo do HealthComponent e o do StatusComponent conferem).
+
 @param label - prefixo dos warns, ex. "[HealthComponent] TakeDamage" STRING
 @param subject - identificação da entidade, só usada nos warns ANY
-@return true, ...retornos de fn | false, "MaxRecursion" | false, "Error"
+@return true, ...retornos de fn | false, Enum.ChainOutcomes (Deferred | MaxRecursion | Error)
 ]]
-function Helper.RunInChain(label: string, subject: any, fn: (...any) -> ...any, ...: any)
-	if not Helper.TryEnterChain() then
-		warn(label, "MAX_RECURSION excedido, ação recusada. Entidade:", tostring(subject))
-		return false, "MaxRecursion"
+local deferChain
+
+local function runReserving(reserve: number, label: string, subject: any, fn: (...any) -> ...any, ...: any)
+	if not enterChain(reserve) then
+		return deferChain(reserve, label, subject, fn, ...)
 	end
 	return finishChain(label, subject, xpcall(fn, debug.traceback, ...))
+end
+
+function Helper.RunInChain(label: string, subject: any, fn: (...any) -> ...any, ...: any)
+	return runReserving(1, label, subject, fn, ...)
+end
+
+--[[
+Igual ao RunInChain, para uma ação que chama outra ação da cadeia por dentro e precisa das duas
+na mesma pilha. O ApplyDamage reserva 2 (ele e o TakeDamage do alvo): se só o TakeDamage fosse
+adiado, o dano aconteceria e o OUT.OnDamage do atacante, emitido depois dele, se perderia.
+@param levels - níveis que a ação usa NUMBER
+]]
+function Helper.RunInChainReserving(levels: number, label: string, subject: any, fn: (...any) -> ...any, ...: any)
+	return runReserving(levels, label, subject, fn, ...)
+end
+
+local function drainDeferred()
+	local budget = CHAIN.deferredPerFrame
+	-- Só o que já estava na fila: o que for adiado agora é do próximo frame (uma geração por frame)
+	local stop = queueTail
+	while budget > 0 and queueHead < stop do
+		local job = deferredQueue[queueHead]
+		deferredQueue[queueHead] = nil
+		queueHead += 1
+		budget -= 1
+		currentGeneration = job.gen
+		runReserving(job.reserve, job.label, job.subject, job.fn, table.unpack(job.args, 1, job.args.n))
+		currentGeneration = 0
+	end
+	if queueHead >= queueTail then
+		queueHead, queueTail = 1, 1
+		if drainConnection then
+			drainConnection:Disconnect()
+			drainConnection = nil
+		end
+	end
+end
+
+--[[
+Põe a ação na fila do próximo frame, ou recusa (Enum.ChainLimits). Chamado quando a pilha não tem
+mais os níveis que a ação pede.
+@return false, Enum.ChainOutcomes.Deferred | false, Enum.ChainOutcomes.MaxRecursion
+]]
+function deferChain(reserve: number, label: string, subject: any, fn: (...any) -> ...any, ...: any)
+	if not CHAIN.deferAtMaxDepth then
+		warn(label, "MAX_RECURSION excedido, ação recusada. Entidade:", tostring(subject))
+		return false, OUTCOME.MaxRecursion
+	end
+	if currentGeneration >= CHAIN.maxDeferrals then
+		warn(label, "a cadeia passou de", CHAIN.maxDeferrals, "adiamentos de", Enum.MAX_RECURSION,
+			"níveis (laço infinito?), ação recusada. Entidade:", tostring(subject))
+		return false, OUTCOME.MaxRecursion
+	end
+	deferredQueue[queueTail] = { reserve = reserve, label = label, subject = subject, fn = fn,
+		args = table.pack(...), gen = currentGeneration + 1 }
+	queueTail += 1
+	if not drainConnection then
+		drainConnection = RunService.Heartbeat:Connect(drainDeferred)
+	end
+	return false, OUTCOME.Deferred
+end
+
+--[[ Ações esperando na fila (0 = nenhuma cadeia adiada). Para teste e diagnóstico ]]
+function Helper.GetDeferredCount(): number
+	return queueTail - queueHead
 end
 
 --[[

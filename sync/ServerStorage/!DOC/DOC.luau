@@ -300,12 +300,17 @@ tags: dados binarios que podem ter bypasses como CanMove, CanCast, Block, iFrame
 
 =======================IMPORTANTE!========================
 
-Vale comentar que o block TEM segurança contra recursividade, mas a melhor forma de evitar é:
-1 - ter alguma forma de delay entre o recebimento do dano e a aplicação do parry, nem que visual
-2 - usar a flag "MAX_RECURSION" pra controlar a quantidade de ações recusrivas a partir do mesmo block
-3 - caso o seu parry devolva dano IMEDIATO, use task.defer
-4 - você pode escolher somente uma das soluções, delay e permitir recursividade infinita ou MAX_RECURSION pra quebrar a cadeia.
-vale notar que MAX_RECURSION por padrão é 50 (StateTable.Enum.MAX_RECURSION).
+Cadeias (dano -> status -> dano, reflexo de parry, explosão em cadeia) têm limite no motor (F62),
+declarado em StateTable.Enum.ChainLimits:
+1 - Na mesma pilha, acima de MAX_RECURSION (50) níveis, a ação vai para uma fila e roda no próximo
+frame (TakeDamage devolve false, "Deferred"; ApplyStatus devolve nil). A cadeia longa e finita
+termina inteira (80 alvos em linha: 2 frames).
+2 - Cada vez que uma ação adiada adia outra, conta uma geração. Acima de maxDeferrals (20) a ação é
+recusada com aviso: o ping-pong infinito de dois reflexos para aí (~1000 reflexos, um lote por frame).
+3 - Runner que cria runner (task.defer, status que aplica status): no máximo maxLiveRunnersPerRoot
+(256) vivos ao mesmo tempo sob a mesma raiz da Lineage. Cadeia linear não tem limite (um status que
+se renova é legítimo); a árvore que dobra a cada geração para na largura.
+Para um reflexo que não deve adiar, quebre a cadeia você mesmo (delay, ou um status de imunidade).
 
 
 SECONDARY TYPE são tabelas de tipos pra permitir modificações de tipo em runTime, NÃO CONFUNDIR COM TYPE, uma vez que type dita como o sistema lidara com aquela skill

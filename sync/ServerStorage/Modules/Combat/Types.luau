@@ -32,7 +32,8 @@ export type Lineage = {
 	Root: Lineage,
 	Depth: number,
 	Origin: any,
-	Cause: string
+	Cause: string,
+	LiveRunners: number?,            -- só na raiz: runners vivos sob ela (SkillRunner:start, F62)
 }
 
 --[[

@@ -1863,13 +1863,14 @@ run("F57 — o ControlStateChanged leva o model do corpo roteado", function(t)
 	t.assert(core and subject == core.Instance, "O payload não trouxe o model do corpo roteado")
 end)
 
--- Cenários de integração (substituem a GrandIntegrationDemo) e de física medida: mesmas faixas e mesmo Summary
+-- Cenários de integração (substituem a GrandIntegrationDemo), de física medida e os testes duros: mesmas faixas e mesmo Summary
 local scenarioEnv = {
-	run = run, makeDummy = makeDummy, cleanup = cleanup, makeRunner = makeRunner, COMBAT = COMBAT,
+	run = run, makeDummy = makeDummy, cleanup = cleanup, makeRunner = makeRunner, press = press, COMBAT = COMBAT,
 	origin = function() return zoneOrigin end, -- chão da faixa do teste atual
 }
 require(script.Parent.Scenarios)(scenarioEnv)
 require(script.Parent.PhysicsScenarios)(scenarioEnv)
+require(script.Parent.HardScenarios)(scenarioEnv)
 
 task.wait(1)
 TestHarness.Summary()

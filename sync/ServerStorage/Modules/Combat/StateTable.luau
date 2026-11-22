@@ -88,6 +88,14 @@ function StateTable.RunInChain(label, subject, fn, ...)
 	return Helper.RunInChain(label, subject, fn, ...)
 end
 
+function StateTable.RunInChainReserving(levels, label, subject, fn, ...)
+	return Helper.RunInChainReserving(levels, label, subject, fn, ...)
+end
+
+function StateTable.GetDeferredCount()
+	return Helper.GetDeferredCount()
+end
+
 function StateTable.ResolveDeathPolicy(config, key)
 	return Helper.ResolveDeathPolicy(config, key)
 end
