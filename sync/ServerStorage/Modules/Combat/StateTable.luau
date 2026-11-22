@@ -76,6 +76,10 @@ function StateTable.ResolveRunner(runnerOrProxy)
 	return Helper.ResolveRunner(runnerOrProxy)
 end
 
+function StateTable.EffectOwner(source)
+	return Helper.EffectOwner(source)
+end
+
 function StateTable.TryEnterChain()
 	return Helper.TryEnterChain()
 end

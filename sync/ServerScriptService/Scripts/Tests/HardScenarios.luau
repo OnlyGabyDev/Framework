@@ -429,4 +429,35 @@ return function(env)
 		t.assert(runner:IsEnded(), "O status reaplicado não pôde ser removido")
 		cleanup(dummy)
 	end)
+
+	--=========================================================================
+	--  DANO E EVENTOS
+	--=========================================================================
+
+	run("Duro — DOT que mata credita quem aplicou: OUT.OnDeath no aplicador, não no portador", function(t)
+		local caster = still(CFrame.new(-4, 5, 0), COMBAT)
+		local victim = still(CFrame.new(4, 5, 0))
+		local src = makeRunner(caster, "__HardBleeder", { duration = 10 }, {})
+		src:start()
+		local creditCaster, creditVictim, origin, dotTraits = 0, 0, nil, nil
+		caster:Listen({ Role = E.Roles.OUT, Breakpoint = E.Breakpoints.OnDeath, Owner = src, Action = function(ctx)
+			if ctx.targetEntity == victim then creditCaster += 1 end
+		end })
+		victim:Listen({ Role = E.Roles.OUT, Breakpoint = E.Breakpoints.OnDeath, Action = function() creditVictim += 1 end })
+		victim:Listen({ Role = E.Roles.IN, Breakpoint = E.Breakpoints.PostDamage, Action = function(ctx)
+			origin = ctx.Lineage and ctx.Lineage.Origin
+			dotTraits = ctx.traits
+		end })
+		victim.SetHP(2) -- Bleed: 1 de dano por tick (0,3 s): morre no 2º tick
+		src:ApplyStatus(StateTable.Status.Bleed, { Target = victim, Duration = 5 })
+		t.wait(1.2)
+		t.assert(not victim.IsAlive(), "Pré-condição: o Bleed não matou")
+		t.assert(origin == caster, "A raiz da cadeia do dano do Bleed não é quem aplicou")
+		t.assert(dotTraits and table.find(dotTraits, E.Traits.DOT) ~= nil, "O dano do Bleed chegou sem a trait DOT")
+		t.assert(creditCaster == 1 and creditVictim == 0, string.format(
+			"Crédito da morte: aplicador %d, portador %d (esperado 1 e 0: a vítima se credita a própria morte)", creditCaster, creditVictim))
+		src:endSkill(false)
+		cleanup(caster)
+		cleanup(victim)
+	end)
 end

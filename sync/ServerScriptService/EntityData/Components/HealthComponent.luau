@@ -229,11 +229,13 @@ function HealthComponent:Die(killer : any)
 	local context = StateTable.BuildContext(killer, 0)
 	self.Entity:Emit(StateEnum.Roles.IN, StateEnum.Breakpoints.OnDeath, context)
 
-	-- Emite OUT.OnDeath no atacante (se killer for um Runner e tiver Entity associada)
-	if killer and type(killer) == "table" and killer.Entity then
+	-- OUT.OnDeath no DONO do que matou (StateTable.EffectOwner): numa morte por DOT o runner do
+	-- status roda na própria vítima, e antes ela recebia o crédito da própria morte
+	local owner = StateTable.EffectOwner(killer)
+	if owner then
 		local outContext = StateTable.BuildContext(killer, 0)
 		outContext.targetEntity = self.Entity
-		killer.Entity:Emit(StateEnum.Roles.OUT, StateEnum.Breakpoints.OnDeath, outContext)
+		owner:Emit(StateEnum.Roles.OUT, StateEnum.Breakpoints.OnDeath, outContext)
 	end
 
 end

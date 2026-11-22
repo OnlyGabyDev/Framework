@@ -347,6 +347,10 @@ Schema em qualquer corpo. data.requires = { ComponentKey.Animation, ... } (Serve
 ComponentsExport): sem esses componentes o runner é recusado antes de qualquer callback (aviso uma vez,
 cooldown devolvido pelo motivo refused), em vez de errar no meio do onStart.
 
+CRÉDITO DE MORTE (StateTable.EffectOwner): o OUT.OnDeath vai para o DONO do que matou. Um status (DOT,
+reflexo) roda no portador, mas o dono é quem o aplicou (sobe runner.Source até a skill). A morte por
+Bleed credita quem aplicou o Bleed, não a vítima. O OUT.OnDamage de dano indireto (D3) ainda não existe.
+
 INSCRIÇÕES (Listen): Owner por entidade com StateTable.OwnerToken(entidade, "tag"), nunca string.
 
 FORÇAS: Soft e caminhada do NPC proporcionais à massa (Physics/Settings: Force_Mass_Scaling); MassScaling = false

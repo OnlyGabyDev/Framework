@@ -37,6 +37,29 @@ function Helper.ResolveRunner(runnerOrProxy)
 	return runnerOrProxy
 end
 
+local MAX_OWNER_HOPS = 8 -- status aplicado por status aplicado por...: ciclo de Source não trava
+
+--[[
+Entidade DONA de um efeito: quem causou, não onde ele roda. Um status (DOT, reflexo, aura) roda no
+PORTADOR (runner.Entity), mas foi aplicado por alguém (runner.Source). Sobe o Source até um runner
+de skill (ou sem Source). Antes o Die creditava a morte por DOT à própria vítima (OUT.OnDeath no
+portador). Dono único desta regra; a parte de dano indireto do D3 (OUT.OnDamage) segue em aberto.
+@param source - runner, proxy de skill ou nil
+@return EntityCore? (nil sem runner, ou se o dono já saiu do jogo)
+]]
+function Helper.EffectOwner(source)
+	local runner = Helper.ResolveRunner(source)
+	if type(runner) ~= "table" then return nil end
+	for _ = 1, MAX_OWNER_HOPS do
+		local parent = Helper.ResolveRunner(runner.Source)
+		if runner.type == Enum.Types.Skill or type(parent) ~= "table" or parent == runner then break end
+		runner = parent
+	end
+	local owner = runner.Entity
+	if owner == nil or owner.Active == false then return nil end
+	return owner
+end
+
 --[[
 Disjuntor de recursão SÍNCRONA. Cadeias dano->status->dano (ex: parry devolvendo
 dano na hora) não tinham nenhum limite real — MAX_RECURSION existia no Enum mas
