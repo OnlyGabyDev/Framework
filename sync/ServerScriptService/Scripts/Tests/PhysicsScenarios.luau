@@ -525,8 +525,10 @@ return function(env)
 		end
 		local home = body.GetRoot().CFrame
 		-- Zona de 30 de largura (x de -15 a 15), funda no eixo do vento: o dash de lado (+X, 28 studs)
-		-- sai dela perto do fim, o caso medido no cliente em 22/11 (até 14 studs de vento depois do dash)
-		character:PivotTo(origin() * CFrame.new(-12, 4, -2))
+		-- sai dela perto do fim, o caso medido no cliente em 22/11 (até 14 studs de vento depois do dash).
+		-- Começa em x = -9: termina em ~19, além da "saída vista" (borda + 2 = 17). De x = -12 terminava
+		-- em ~16 e a pré-condição dependia de sobra de momento (falhou 1 vez em 22/11)
+		character:PivotTo(origin() * CFrame.new(-9, 4, -2))
 		t.wait(0.8)
 		local zone, key = windZone(Vector3.new(0, 5, -25), Vector3.new(30, 10, 60))
 		t.wait(0.6)
