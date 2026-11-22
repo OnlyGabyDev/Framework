@@ -77,6 +77,14 @@ function MovementController.ProcessEntity(comp, dt)
 	end
 	if comp.IsFrozen then return end
 
+	-- Presa a outro corpo (MovementComponent:AttachTo): o weld manda; Forces e caminhada ficam
+	-- suspensas. Weld quebrado (líder saiu do jogo) solta a entidade e ela volta a ser processada
+	local attachment = comp._attachment
+	if attachment then
+		if not attachment.IsBroken() then return end
+		attachment.Release()
+	end
+
 	local tags = { canMove = true, canDisplace = true }
 	if entity:HasComponent(entity.ComponentKey.Status) then
 		local activeTags = entity.GetActiveTags()

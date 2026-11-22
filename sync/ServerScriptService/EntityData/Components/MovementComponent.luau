@@ -209,8 +209,139 @@ function MovementComponent:SetMovement()
 	return true
 end
 
+-- ==========================================
+-- AGARRÃO RÍGIDO (AttachTo)
+-- ==========================================
+
+-- Dono de rede de uma peça, sem erro em peça ancorada/fora do workspace: owner, auto
+local function networkOwnerOf(part: BasePart): (Player?, boolean)
+	local okOwner, owner = pcall(part.GetNetworkOwner, part)
+	local okAuto, auto = pcall(part.GetNetworkOwnershipAuto, part)
+	return okOwner and owner or nil, okAuto and auto or false
+end
+
+local function setNetworkOwner(part: BasePart, owner: Player?, auto: boolean?)
+	if part.Anchored or not part:IsDescendantOf(workspace) or not part:CanSetNetworkOwnership() then return end
+	if auto then
+		pcall(part.SetNetworkOwnershipAuto, part)
+	else
+		pcall(part.SetNetworkOwner, part, owner)
+	end
+end
+
+--[[
+Prende esta entidade a uma peça de outro corpo (agarrão rígido, F103): um WeldConstraint põe o
+corpo no assembly do líder, e ele passa a ser simulado por quem simula o líder. É o que tira o
+atraso do agarrão de um player: a Force com FollowTarget é calculada no SERVIDOR com a posição que
+ele vê do líder, ~0,35 s atrasada quando o líder é do cliente, e o agarrado aparecia para trás.
+Use FollowTarget para perseguir (tether elástico) e AttachTo para carregar.
+
+Enquanto preso: as Forces e a caminhada desta entidade ficam suspensas (o MovementController a
+pula), o Humanoid fica em PlatformStand e as peças, sem massa (não pesam no líder). O dono de rede
+do assembly passa a ser o do líder. Se o líder sumir, o weld quebra e a entidade se solta sozinha.
+@param leaderPart - peça do líder (ex.: líder.GetRoot()) BasePart
+@param offset - CFrame do root desta entidade no espaço da peça do líder (padrão: onde está agora)
+@param opts - { Massless: boolean? } (padrão true)
+@return release () -> () (idempotente), ou nil se não deu para prender
+]]
+function MovementComponent:AttachTo(leaderPart: BasePart, offset: CFrame?, opts: { Massless: boolean? }?)
+	local entity = self.Entity
+	local root = entity and entity.GetRoot and entity.GetRoot()
+	local model = entity and entity.Instance
+	if not root or not model or typeof(leaderPart) ~= "Instance" or not leaderPart:IsA("BasePart")
+		or not leaderPart:IsDescendantOf(workspace) or leaderPart:IsDescendantOf(model) then
+		return nil
+	end
+	if self._attachment then self._attachment.Release() end
+
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	local owner, auto = networkOwnerOf(root)
+	local state = {
+		anchored = root.Anchored,
+		platformStand = humanoid and humanoid.PlatformStand,
+		massless = {},
+	}
+
+	-- Forças e caminhada suspensas: o rig não pode brigar com o weld
+	local wrapper = self.MovementWrapper
+	if wrapper then
+		wrapper:ReleaseForces()
+		wrapper:ReleaseFaceDirection()
+		wrapper:SetAmbientGravityScale(1)
+	end
+	if humanoid then humanoid.PlatformStand = true end
+	if not opts or opts.Massless ~= false then
+		for _, part in model:GetDescendants() do
+			if part:IsA("BasePart") and not part.Massless then
+				part.Massless = true
+				table.insert(state.massless, part)
+			end
+		end
+	end
+
+	-- Posiciona e solda (o model inteiro vai junto do root)
+	local relative = offset or leaderPart.CFrame:ToObjectSpace(root.CFrame)
+	local desired = leaderPart.CFrame * relative
+	root.Anchored = false
+	model:PivotTo(desired * root.CFrame:ToObjectSpace(model:GetPivot()))
+	root.AssemblyLinearVelocity = Vector3.zero
+	local weld = Instance.new("WeldConstraint")
+	weld.Name = "_FWAttach"
+	weld.Part0 = leaderPart
+	weld.Part1 = root
+	weld.Parent = root
+
+	-- Um assembly só: o dono é o do líder (player = o cliente dele simula tudo junto)
+	local leaderOwner, leaderAuto = networkOwnerOf(leaderPart)
+	setNetworkOwner(leaderPart, leaderOwner, leaderAuto)
+
+	local released = false
+	local function release()
+		if released then return end
+		released = true
+		if self._attachment and self._attachment.Weld == weld then self._attachment = nil end
+		weld:Destroy()
+		for _, part in state.massless do
+			if part.Parent then part.Massless = false end
+		end
+		if humanoid and humanoid.Parent then humanoid.PlatformStand = state.platformStand end
+		if root.Parent then
+			root.Anchored = state.anchored
+			setNetworkOwner(root, owner, auto) -- o dono de antes (NPC: servidor; player: o cliente dele)
+		end
+	end
+
+	self._attachment = {
+		Leader = leaderPart,
+		Offset = relative,
+		Weld = weld,
+		Release = release,
+		-- O weld quebra se o líder ou esta entidade sair do jogo
+		IsBroken = function()
+			return weld.Parent == nil or weld.Part0 == nil or weld.Part1 == nil
+				or not leaderPart:IsDescendantOf(workspace)
+		end,
+	}
+	return release
+end
+
+--[[ Solta o agarrão rígido atual, se houver ]]
+function MovementComponent:Detach(): boolean
+	local attachment = self._attachment
+	if not attachment then return false end
+	attachment.Release()
+	return true
+end
+
+--[[ { Leader, Offset } do agarrão rígido atual, ou nil (cópia: não mexa no estado interno) ]]
+function MovementComponent:GetAttachment()
+	local attachment = self._attachment
+	return attachment and { Leader = attachment.Leader, Offset = attachment.Offset } or nil
+end
+
 --CleanUp
 function MovementComponent:Destroy()
+	if self._attachment then self._attachment.Release() end
 	MovementController.Unregister(self)
 	if self.MovementWrapper and self.MovementWrapper.Destroy then
 		self.MovementWrapper:Destroy()
@@ -369,6 +500,9 @@ local ExposeAPI = {
 	AddFilter = function(Component, ...) return Component:AddFilter(...) end,
 	RemoveFilter = function(Component, ...) return Component:RemoveFilter(...) end,
 	SetDrivesInput = function(Component, v) return Component:SetDrivesInput(v) end,
+	AttachTo = function(Component, ...) return Component:AttachTo(...) end,
+	Detach = function(Component) return Component:Detach() end,
+	GetAttachment = function(Component) return Component:GetAttachment() end,
 }
 
 return { new = MovementComponent.new, ExposeAPI = ExposeAPI, Requires = { "Character" } }

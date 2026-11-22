@@ -70,20 +70,12 @@ local Skill = {
 			local lateral = side * math.floor(index / 2) * (self.data.GrabSpacing or 3)
 			local offset = (self.data.GrabOffset or Vector3.new(0, 0, -4)) + Vector3.new(lateral, 0, 0)
 
-			local grabID = targetEntity.AddForce({
-				Type = "UltGrab",
-				-- O restante da skill (D9): antes eram os 20 s inteiros contados a partir do hit
-				Duration = math.max(0.05, self:GetRemainingTime() or self.data.duration),
-				Hard = true,
-				IgnoreGravity = true,
-				RequiresControl = false,
-				FollowTarget = function() return self.Entity.GetRoot() end,
-				FollowOffset = offset,
-				FollowOffsetIsLocal = true,
-				FollowResponsiveness = self.data.GrabResponsiveness or 16,
-				FollowMaxSpeed = self.data.Speed,
-			})
-			if not grabID then return end
+			-- Agarrão rígido (F103): o alvo vira parte do assembly do caster e anda com ele sem atraso,
+			-- também quando o caster é um player. A Force com FollowTarget era calculada no servidor
+			-- com a posição atrasada do player, e o agarrado aparecia para trás. Dura o restante da
+			-- skill (D9): o Own abaixo solta no fim
+			local release = targetEntity.AttachTo(self.Entity.GetRoot(), CFrame.new(offset))
+			if not release then return end
 			self.grabbed[targetEntity] = true
 
 			-- Agarrados não colidem entre si nem com o caster (F19); o grupo volta no fim do grab
@@ -94,7 +86,7 @@ local Skill = {
 			end
 			-- O grab pertence ao runner: cancel, morte do caster e fim do voo soltam o alvo
 			self:Own(function()
-				targetEntity.RemoveForce(grabID)
+				release()
 				restoreTarget()
 			end)
 		end,

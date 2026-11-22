@@ -1553,7 +1553,7 @@ run("D5/F16 — loadout em camadas: o modo troca só os slots que declara", func
 	cleanup(dummy)
 end)
 
-run("D9/F19 — grab da Ultimate: restante da skill, offset por alvo e colisão", function(t)
+run("D9/F19/F103 — grab da Ultimate: weld no caster até o fim da skill, offset por alvo e colisão", function(t)
 	local CollisionGroups = require(ServerScriptService.Modules.Physics.CollisionGroups)
 	local caster = makeDummy(CFrame.new(0, 3, 0), COMBAT)
 	local targetA = makeDummy(CFrame.new(0, 3, -6), { "Character", "Health", "Status", "Movement" })
@@ -1569,25 +1569,22 @@ run("D9/F19 — grab da Ultimate: restante da skill, offset por alvo e colisão"
 	runner:onHit({ target = targetA })
 	runner:onHit({ target = targetB })
 	runner:onHit({ target = targetA }) -- o mesmo alvo de novo não agarra duas vezes
-	local function grabOf(entity)
-		for _, force in entity:GetComponent(entity.ComponentKey.Movement).ActiveForces do
-			if force.Data.Type == "UltGrab" then return force.Data end
-		end
+	local attA, attB = targetA.GetAttachment(), targetB.GetAttachment()
+	t.assert(attA and attB, "Os dois alvos deveriam estar presos ao caster")
+	t.assert(attA.Leader == caster.GetRoot(), "O alvo não ficou preso ao root do caster")
+	t.assert((attA.Offset.Position - attB.Offset.Position).Magnitude > 1, "Os dois alvos receberam o mesmo offset (empilham)")
+	local welds = 0
+	for _, d in targetA.Instance:GetDescendants() do
+		if d.Name == "_FWAttach" then welds += 1 end
 	end
-	local grabA, grabB = grabOf(targetA), grabOf(targetB)
-	t.assert(grabA and grabB, "Os dois alvos deveriam estar agarrados")
-	t.assert(grabA.Duration <= 1.6 and grabA.Duration >= 1.2, string.format("Duração do grab deveria ser o restante (~1,5 s), foi %.2f", grabA.Duration))
-	t.assert(grabA.FollowOffset ~= grabB.FollowOffset, "Os dois alvos receberam o mesmo offset (empilham)")
-	local count = 0
-	for _, force in targetA:GetComponent(targetA.ComponentKey.Movement).ActiveForces do
-		if force.Data.Type == "UltGrab" then count += 1 end
-	end
-	t.assert(count == 1, "O mesmo alvo foi agarrado " .. count .. " vezes")
+	t.assert(welds == 1, "O mesmo alvo foi soldado " .. welds .. " vezes")
 	t.assert(targetA.GetRoot().CollisionGroup == CollisionGroups.Grabbed, "O agarrado não entrou no grupo de colisão")
 	t.assert(caster.GetRoot().CollisionGroup == CollisionGroups.Grabber, "O caster não entrou no grupo de colisão")
 
-	runner:endSkill(true)
-	t.assert(grabOf(targetA) == nil and grabOf(targetB) == nil, "O fim da skill não soltou os alvos")
+	-- D9: dura o restante da skill (2 s desde o start): solta no fim natural, sem ninguém pedir
+	t.wait(1.8)
+	t.assert(runner:IsEnded(), "Pré-condição: a skill não terminou pela duração")
+	t.assert(targetA.GetAttachment() == nil and targetB.GetAttachment() == nil, "O fim da skill não soltou os alvos")
 	t.assert(targetA.GetRoot().CollisionGroup == "Default" and caster.GetRoot().CollisionGroup == "Default",
 		"O grupo de colisão não foi restaurado")
 	cleanup(caster)

@@ -362,6 +362,11 @@ apanha; onDamage é o IN.PostDamage.
 LIMITES DE STAT (F100): Enum.StatLimits (padrão Enum.StatLimitDefault: mínimo 0) vale para o valor final
 do GetStat, com ou sem modificador. Defense pode ficar negativa (amplifica, D1).
 
+AGARRÃO RÍGIDO (F103): entity.AttachTo(peçaDoLíder, offsetCFrame) devolve release(). O corpo vira parte do
+assembly do líder (WeldConstraint) e anda com ele sem atraso, também quando o líder é um player; Forces e
+caminhada do preso ficam suspensas, o Humanoid em PlatformStand e as peças sem massa. Detach()/GetAttachment().
+FollowTarget (Force) persegue com elasticidade; AttachTo carrega. A Ultimate da Schema usa AttachTo.
+
 INSCRIÇÕES (Listen): Owner por entidade com StateTable.OwnerToken(entidade, "tag"), nunca string.
 
 FORÇAS: Soft e caminhada do NPC proporcionais à massa (Physics/Settings: Force_Mass_Scaling); MassScaling = false

@@ -856,4 +856,41 @@ return function(env)
 		t.assert(explicit == true, "Com o kit explícito o EquipWeapon falhou")
 		cleanup(thief)
 	end)
+
+	--=========================================================================
+	--  AGARRÃO, ALVO, PERSONAGEM, CURA E OPÇÕES DO HIT (3ª rodada de 22/11)
+	--=========================================================================
+
+	run("F103 — AttachTo: preso sem erro em movimento rápido; solta tudo no release e quando o líder some", function(t)
+		local LIMB = { "Character", "Health", "Movement" }
+		local leader = makeDummy(CFrame.new(-10, 3, 0), LIMB)
+		local follower = makeDummy(CFrame.new(-10, 3, 4), LIMB)
+		local root = follower.GetRoot()
+		t.wait(0.3)
+		local release = follower.AttachTo(leader.GetRoot(), CFrame.new(0, 0, 4))
+		t.assert(release ~= nil, "O AttachTo recusou")
+		leader.AddForce({ Type = "__HardRun", Duration = 1, Speed = 60, Direction = Vector3.new(1, 0, 0),
+			Hard = true, IgnoreGravity = true, FaceDirection = false })
+		t.wait(0.6)
+		local speed = leader.GetRoot().AssemblyLinearVelocity.Magnitude
+		local desired = leader.GetRoot().CFrame:PointToWorldSpace(Vector3.new(0, 0, 4))
+		local err = (root.Position - desired).Magnitude
+		t.log(string.format("líder a %.0f studs/s; erro do preso %.3f studs", speed, err))
+		t.assert(speed > 40, "Pré-condição: o líder não estava em movimento rápido")
+		t.assert(err < 0.05, string.format("O preso saiu do lugar: %.2f studs", err))
+		t.assert(root.Massless, "O preso pesa no líder (não ficou sem massa)")
+
+		release()
+		release() -- idempotente
+		t.assert(follower.GetAttachment() == nil and not root:FindFirstChild("_FWAttach"), "O release deixou o weld")
+		t.assert(not root.Massless, "O release não devolveu a massa")
+
+		-- Líder some com o preso: o weld quebra e o controller solta a entidade sozinho
+		follower.AttachTo(leader.GetRoot(), CFrame.new(0, 0, 4))
+		cleanup(leader)
+		t.wait(0.2)
+		t.assert(follower.GetAttachment() == nil, "Com o líder fora do jogo, o preso seguiu marcado como preso")
+		t.assert(not root.Massless, "Com o líder fora do jogo, o preso ficou sem massa")
+		cleanup(follower)
+	end)
 end
