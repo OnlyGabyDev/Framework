@@ -25,6 +25,9 @@ local AnimationLib = require(ServerStorage.Modules.Animation.AnimationLib)
 local AreaEffect = require(ServerStorage.Modules.Combat.AreaEffect)
 local HitboxWrapper = require(ServerStorage.Modules.Combat.Hitbox.HitboxWrapper)
 local Intents = require(ReplicatedStorage.Input.Intents)
+local GestureResolver = require(ReplicatedStorage.Input.GestureResolver)
+local EntityCore = require(ServerScriptService.EntityData.EntityCore)
+local SkillHandler = require(ServerScriptService.Modules.SkillHandler)
 
 local E = StateTable.Enum
 local CHAIN = E.ChainLimits
@@ -1151,6 +1154,111 @@ return function(env)
 			tostring(onHit and onHit.onHit), tostring(onHit and onHit.boost)))
 		src:endSkill(false)
 		cleanup(caster)
+		cleanup(target)
+	end)
+
+	--=========================================================================
+	--  INTERRUPÇÃO, ENTIDADE DE DADO, BARRAMENTO GLOBAL E ALVO NO INPUT
+	--=========================================================================
+
+	run("F113 — Stun (tag interrupt) cancela as skills com o motivo interrupted; Uninterruptible fica; Root não", function(t)
+		local dummy = still(CFrame.new(0, 5, 0), COMBAT)
+		local reasons = {}
+		equip(dummy, Intents.Id.Ability2, "__HardChannel", { cooldown = 0, duration = 5 }, {
+			onEnd = function(_, ctx) reasons.channel = ctx.reason end })
+		equip(dummy, Intents.Id.Ability3, "__HardUnstop", { cooldown = 0, duration = 5,
+			traits = { E.Traits.Uninterruptible } }, { onEnd = function(_, ctx) reasons.unstop = ctx.reason end })
+		t.assert(press(dummy, Intents.Id.Ability2) and press(dummy, Intents.Id.Ability3), "Pré-condição: as duas skills não começaram")
+		local channel = dummy.GetActiveSkills("__HardChannel")[1]
+		local unstop = dummy.GetActiveSkills("__HardUnstop")[1]
+
+		dummy.ApplyStatus(StateTable.States.Root, { Duration = 0.3 })
+		t.assert(not channel:IsEnded() and not unstop:IsEnded(), "Root (sem a tag interrupt) cancelou skill")
+
+		dummy.ApplyStatus(StateTable.States.Stun, { Duration = 0.3 })
+		t.assert(channel:IsEnded() and reasons.channel == E.EndReasons.Interrupted,
+			"O Stun não interrompeu a skill (motivo " .. tostring(reasons.channel) .. ")")
+		t.assert(#dummy.GetActiveSkills("__HardChannel") == 0, "A skill interrompida ficou em ActiveSkills")
+		t.assert(not unstop:IsEnded(), "A skill Uninterruptible foi cancelada pelo Stun")
+		dummy.StopAllActiveSkills(true)
+		cleanup(dummy)
+	end)
+
+	run("F114 — entidade só de dado (CreateData); Create com entrada inválida não registra nada", function(t)
+		local deck = DataManager.CreateData({ "Health", "Status" }, { Health = { MaxHP = 30 } })
+		t.assert(deck and deck.Instance == nil and DataManager.Get(deck.ID) == deck, "CreateData não registrou a entidade")
+		deck.TakeDamage(10)
+		local Mark = { data = { name = "__HardDataMark", category = E.Categories.Debuff }, callbacks = {} }
+		deck.ApplyStatus(Mark, { Duration = 1 })
+		t.assert(deck.GetHP() == 20 and deck.GetStatus("__HardDataMark") ~= nil, "A entidade de dado não tomou dano/status")
+		DataManager.Remove(deck)
+		t.assert(not DataManager.Exists(deck.ID) and not deck.Active, "Remove(entidade) não tirou a entidade de dado")
+
+		local ticks = 0
+		local invalid = DataManager.Create(Instance.new("Folder"), { "AI" }, { AI = { Brain = function() ticks += 1 end } })
+		t.wait(0.2)
+		t.assert(invalid == nil, "Create aceitou uma Folder")
+		t.assert(ticks == 0, "A entrada inválida deixou um componente registrado rodando (" .. ticks .. " ticks de IA)")
+	end)
+
+	run("F115 — barramento global: ListenWorld recebe o evento de qualquer entidade, com quem emitiu", function(t)
+		local a = still(CFrame.new(-4, 5, 0))
+		local b = still(CFrame.new(4, 5, 0))
+		local deaths = {}
+		local unsubscribe = EntityCore.ListenWorld({ Role = E.Roles.IN, Breakpoint = E.Breakpoints.OnDeath,
+			Action = function(_, emitter) table.insert(deaths, emitter) end })
+		a.TakeDamage(1e4)
+		b.TakeDamage(1e4)
+		t.assert(#deaths == 2 and deaths[1] == a and deaths[2] == b, "O mundo recebeu " .. #deaths .. " morte(s) (esperado a e b)")
+		unsubscribe()
+		a.Revive()
+		a.TakeDamage(1e4)
+		t.assert(#deaths == 2, "O ouvinte do mundo seguiu recebendo depois de sair")
+
+		-- A checagem pré-output vale para quem escuta no mundo (HasListeners conta o mundo)
+		local caster = still(CFrame.new(0, 5, 8), COMBAT)
+		local src = makeRunner(caster, "__HardWorldSrc", { duration = 2 }, {})
+		src:start()
+		local owner = StateTable.OwnerToken(caster, "__HardWorld")
+		EntityCore.ListenWorld({ Role = E.Roles.OUT, Breakpoint = E.Breakpoints.PreApplyStatus, Owner = owner,
+			Action = function(ctx) ctx.cancelled = true end })
+		local Mark = { data = { name = "__HardWorldMark", category = E.Categories.Debuff }, callbacks = {} }
+		src:ApplyStatus(Mark, { Target = b, Duration = 1 })
+		EntityCore.UnsubscribeWorldByOwner(owner)
+		t.assert(b.GetStatus("__HardWorldMark") == nil, "Um ouvinte do mundo no OUT.PreApplyStatus não conseguiu cancelar")
+		src:endSkill(false)
+		cleanup(a)
+		cleanup(b)
+		cleanup(caster)
+	end)
+
+	run("F116 — alvo/ponto no input: validação, o resolver leva o payload e a skill lê em ctx.input", function(t)
+		t.assert(Intents.SanitizePayload({ Target = 5, Point = Vector3.new(0 / 0, 0, 0) }) == nil, "Payload inválido passou")
+		local clean = Intents.SanitizePayload({ Target = "Entity_1", Point = Vector3.new(1, 2, 3), Extra = true })
+		t.assert(clean and clean.Target == "Entity_1" and clean.Point == Vector3.new(1, 2, 3) and clean.Extra == nil,
+			"A validação perdeu ou deixou passar campo")
+
+		local events = {}
+		local resolver = GestureResolver.new(Intents.Id.Ability2, function(event) table.insert(events, event) end)
+		local pressPoint, releasePoint = Vector3.new(1, 0, 0), Vector3.new(2, 0, 0)
+		resolver:Press(os.clock(), GestureResolver.Normalize({ Hold = 0.1 }), { Target = "A", Point = pressPoint })
+		t.wait(0.2)
+		resolver:Release(os.clock(), { Point = releasePoint })
+		t.assert(events[1] and events[1].Gesture == Intents.Gesture.Hold and events[1].Target == "A" and events[1].Point == pressPoint,
+			"O Hold não levou o payload do Press")
+		t.assert(events[2] and events[2].Kind == Intents.Kind.Release and events[2].Point == releasePoint,
+			"O Release não levou o payload de quando soltou")
+
+		local dummy = still(CFrame.new(-4, 5, 0), COMBAT)
+		local target = still(CFrame.new(4, 5, 0))
+		local seen
+		equip(dummy, Intents.Id.Ability2, "__HardAim", { cooldown = 0, duration = 0.1 }, {
+			onStart = function(_, ctx) seen = ctx.input end })
+		local point = Vector3.new(5, 0, 5)
+		SkillHandler.HandleIntent(dummy.ID, Intents.NewEvent(Intents.Id.Ability2, Intents.Kind.Activate,
+			Intents.Gesture.Press, 0, { Target = target.ID, Point = point }))
+		t.assert(seen and seen.Target == target.ID and seen.Point == point, "A skill não recebeu o alvo/ponto em ctx.input")
+		cleanup(dummy)
 		cleanup(target)
 	end)
 end

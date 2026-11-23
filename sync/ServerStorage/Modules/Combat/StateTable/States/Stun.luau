@@ -8,7 +8,8 @@ return {
 		tags = {
 			[Enum.Tags.canMove] = false,
 			[Enum.Tags.canRotate] = false,
-			[Enum.Tags.canCast] = false
+			[Enum.Tags.canCast] = false,
+			[Enum.Tags.interrupt] = true,
 		},
 		
 		visual = {}

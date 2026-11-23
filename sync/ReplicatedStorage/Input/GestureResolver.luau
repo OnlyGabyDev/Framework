@@ -86,11 +86,12 @@ function GestureResolver.new(intent: string, sink: (Intents.InputEvent) -> ())
 		_pendingTap = false, -- 1º toque esperando um 2º
 		_holdThread = nil,
 		_tapThread = nil,
+		_payload = nil, -- alvo/ponto do ciclo: o do Press, trocado pelo do Release se vier
 	}, GestureResolver)
 end
 
 function GestureResolver:_fire(kind: Intents.Kind, gesture: Intents.Gesture?, heldTime: number?)
-	self._sink(Intents.NewEvent(self._intent, kind, gesture, heldTime))
+	self._sink(Intents.NewEvent(self._intent, kind, gesture, heldTime, self._payload))
 end
 
 function GestureResolver:_clearTap()
@@ -107,13 +108,15 @@ end
 --[[
 @param now - timestamp do evento (servidor: os.clock() na chegada)
 @param cfg - Config normalizada da skill que está no slot de agora
+@param payload - Intents.InputPayload? (alvo/ponto), entregue em todos os eventos do ciclo
 ]]
-function GestureResolver:Press(now: number, cfg: Config?)
+function GestureResolver:Press(now: number, cfg: Config?, payload: Intents.InputPayload?)
 	-- Release perdido/duplicado: fecha o ciclo anterior antes de abrir outro
 	if self._down then
 		self:Release(now)
 	end
 
+	self._payload = payload
 	self._down = true
 	self._downAt = now
 
@@ -147,9 +150,15 @@ function GestureResolver:Press(now: number, cfg: Config?)
 	end
 end
 
-function GestureResolver:Release(now: number)
+--[[
+@param payload - Intents.InputPayload? do momento de soltar; sem ele, vale o do Press
+]]
+function GestureResolver:Release(now: number, payload: Intents.InputPayload?)
 	if not self._down then
 		return
+	end
+	if payload then
+		self._payload = payload
 	end
 
 	self._down = false

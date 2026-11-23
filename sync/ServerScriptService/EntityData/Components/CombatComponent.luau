@@ -710,6 +710,39 @@ function CombatComponent:OnAdded()
 			end,
 		})
 	end
+
+	-- Estado com a tag interrupt (Stun): cancela as skills ativas com o motivo interrupted
+	self._unsubscribeInterrupt = self.Entity:Listen({
+		Role = StateEnum.Roles.IN,
+		Breakpoint = StateEnum.Breakpoints.OnInterrupt,
+		Priority = StateEnum.EnginePriority,
+		Owner = self,
+		Action = function()
+			self:InterruptSkills()
+		end,
+	})
+end
+
+--[[
+Cancela as skills ativas com o motivo interrupted, menos as que declaram a trait Uninterruptible.
+O onCancel da skill ainda pode recusar (devolvendo false).
+]]
+function CombatComponent:InterruptSkills()
+	local runners = {}
+	for _, list in pairs(self.ActiveSkills) do
+		for _, runner in ipairs(list) do
+			if runner.type == StateEnum.Types.Skill
+				and not StateTable.HasTrait(runner.data, StateEnum.Traits.Uninterruptible) then
+				table.insert(runners, runner)
+			end
+		end
+	end
+	for _, runner in runners do
+		runner:endSkill(true, StateEnum.EndReasons.Interrupted)
+		if runner:IsEnded() then
+			self:RemoveActiveSkill(runner.skillName, runner)
+		end
+	end
 end
 
 
@@ -719,6 +752,7 @@ Função de destruição do componente, para todas as skills ativas e limpa tabe
 ]]
 function CombatComponent:Destroy()
 	if self._unsubscribeDeath then self._unsubscribeDeath() end
+	if self._unsubscribeInterrupt then self._unsubscribeInterrupt() end
 	self:StopAllActiveSkills(true)
 	table.clear(self.Cooldowns)
 	table.clear(self.ActiveSkills)
@@ -758,6 +792,7 @@ local ExposeAPI = {
 	GetActiveSkillCount = function(component,...) return component:GetActiveSkillCount(...) end,
 	HasActiveSkill = function(component, ...) return component:HasActiveSkill(...) end,
 	StopAllActiveSkills = function(component, ...) return component:StopAllActiveSkills(...) end,
+	InterruptSkills = function(component) return component:InterruptSkills() end,
 
 	--Personagem/modo
 	GetChosenChar = function(component,...) return component:GetChosenChar(...) end,

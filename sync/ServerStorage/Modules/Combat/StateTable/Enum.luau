@@ -40,6 +40,7 @@ enum.Traits = {
         --INTERAÇÕES
         TrueHit = "TrueHit",            --Ignora iFrame
         TrueDamage = "TrueDamage",      --Ignora as proteções de stat (Defense, Armor: D11)
+        Uninterruptible = "Uninterruptible", --A skill não é cancelada por estado com a tag interrupt
         SoftCancel = "LightCancel",     --Cancelamento fraco (TODO)
         HeavyCancel = "HeavyCancel",    --Cancelamento forte (TODO)
     }
@@ -58,6 +59,7 @@ enum.Breakpoints = {
                                            -- pré-output (F112). Pode cancelar e injetar context.inherited
         OnDeath = "OnDeath",
         OnRevive = "OnRevive",
+        OnInterrupt = "OnInterrupt", -- canal IN: entrou um estado com a tag interrupt (o Combat cancela as skills)
         
         onStart = "onStart",
         onTrigger = "onTrigger",
@@ -86,6 +88,7 @@ enum.EndReasons = {
     Error = "error",        --Erro num callback (onStart/onStep): o motor encerrou o runner
     Fizzle = "fizzle",      --A skill desistiu do cast (self:Fizzle()): o cast não aconteceu
     Refused = "refused",    --O motor não deixou o runner começar (ChainLimits): nenhum callback rodou
+    Interrupted = "interrupted", --Cancelada por um estado com a tag interrupt (Stun)
 }
 
 --==== EFEITOS ON-HIT (D6, F41) ====--
@@ -150,6 +153,7 @@ enum.Tags = {
     canCast = "canCast",         --Pode usar skills
     canRotate = "canRotate",     --Pode rotacionar o char
     canDisplace = "canDisplace", --Pode ser deslocado por forças externas
+    interrupt = "interrupt",     --Ao entrar, cancela as skills ativas (menos as Uninterruptible)
 
     iFrame = "iFrame",
     block = "block",
@@ -166,6 +170,7 @@ enum.tagsBase = {
     canDisplace = true,
 	iFrame = false,
     block = false,
+    interrupt = false,
 	}
 
 

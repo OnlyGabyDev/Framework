@@ -7,6 +7,10 @@
 	  - Botão de tela (mobile/UI):        qualquer GuiButton com a tag e o atributo de InputConfig
 	  - Código (npcs):                    InputService.Press(intent, source) / Release(intent, source)
 
+	ALVO (opcional): InputService.SetPayloadProvider(fn) faz cada envio levar fn(intent), um
+	Intents.InputPayload { Target = ID da entidade, Point = Vector3 } (ex.: o que está sob o mouse).
+	Press/Release também aceitam um payload explícito (carta arrastada até um alvo).
+
 
 ]]
 
@@ -33,17 +37,29 @@ local active: { [string]: { [any]: true } } = {} -- [intent][fonte] = true
 local lookup: { [EnumItem]: { string } } = {} -- [código físico] = { intents }
 local bindings: { [string]: { EnumItem } } = {} -- cópia mutável de InputConfig.Bindings
 local started = false
+local payloadProvider: ((string) -> any)? = nil
 
 
 --=============================================================================
 --  ESTADO DAS INTENTS
 --=============================================================================
 
+--[[ Define quem fornece o alvo/ponto de cada envio (nil desliga) ]]
+function InputService.SetPayloadProvider(provider: ((string) -> any)?)
+	payloadProvider = provider
+end
+
+local function payloadFor(intent: string, explicit: any)
+	if explicit ~= nil then return explicit end
+	return payloadProvider and payloadProvider(intent) or nil
+end
+
 --[[
 @param intent - Intents.Id
 @param source - qualquer valor único da fonte (EnumItem, InputObject, GuiButton...)
+@param payload - Intents.InputPayload? explícito (senão, o do provider)
 ]]
-function InputService.Press(intent: string, source: any)
+function InputService.Press(intent: string, source: any, payload: any?)
 	local sources = active[intent]
 	if not sources then
 		sources = {}
@@ -56,11 +72,11 @@ function InputService.Press(intent: string, source: any)
 	local wasIdle = next(sources) == nil
 	sources[source] = true
 	if wasIdle then
-		RequestIntent:FireServer(intent, true)
+		RequestIntent:FireServer(intent, true, payloadFor(intent, payload))
 	end
 end
 
-function InputService.Release(intent: string, source: any)
+function InputService.Release(intent: string, source: any, payload: any?)
 	local sources = active[intent]
 	if not sources or not sources[source] then
 		return
@@ -68,7 +84,7 @@ function InputService.Release(intent: string, source: any)
 
 	sources[source] = nil
 	if next(sources) == nil then
-		RequestIntent:FireServer(intent, false)
+		RequestIntent:FireServer(intent, false, payloadFor(intent, payload))
 	end
 end
 

@@ -301,6 +301,13 @@ function StatusComponent:_StartRunner(runner, suppliedID)
 	if not runner:start() then
 		return nil
 	end
+	-- Estado com a tag interrupt: avisa a entidade (o Combat escuta e cancela as skills ativas)
+	local tags = runner.data and runner.data.tags
+	if tags and tags[StateEnum.Tags.interrupt] and self.Entity then
+		local context = StateTable.BuildContext(runner.Source, 0)
+		context.incomingStatus = runner.data
+		self.Entity:Emit(StateEnum.Roles.IN, StateEnum.Breakpoints.OnInterrupt, context)
+	end
 	return suppliedID
 end
 

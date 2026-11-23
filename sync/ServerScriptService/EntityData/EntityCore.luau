@@ -70,14 +70,36 @@ function EntityCore:Listen(sub: any)
 	return self._triggerSet:Subscribe(sub)
 end
 
-function EntityCore:Emit(role: string, breakpoint: string, context: any, ...)
-	if not self._triggerSet then return end
-	self._triggerSet:Emit(role, breakpoint, context, ...)
+-- Barramento do mundo: recebe os eventos de todas as entidades
+local WorldTriggers = TriggerSet.new()
+
+--[[
+Escuta um canal de TODAS as entidades ("sempre que qualquer lacaio morrer"). Mesmo formato do
+Listen (Types.Subscription); a Action recebe (context, entidade que emitiu, ...). Roda depois dos
+ouvintes da própria entidade. Sem ouvinte no mundo, o Emit não paga nada a mais.
+@return unsubscribe
+]]
+function EntityCore.ListenWorld(sub: any)
+	return WorldTriggers:Subscribe(sub)
 end
 
---[[ Alguém escuta este canal da entidade? (evita montar contexto que ninguém vai ler) ]]
+function EntityCore.UnsubscribeWorldByOwner(owner: any)
+	WorldTriggers:UnsubscribeByOwner(owner)
+end
+
+function EntityCore:Emit(role: string, breakpoint: string, context: any, ...)
+	if self._triggerSet then
+		self._triggerSet:Emit(role, breakpoint, context, ...)
+	end
+	if WorldTriggers:HasAny(role, breakpoint) then
+		WorldTriggers:Emit(role, breakpoint, context, self, ...)
+	end
+end
+
+--[[ Alguém escuta este canal da entidade, ou do mundo? (evita montar contexto que ninguém vai ler) ]]
 function EntityCore:HasListeners(role: string, breakpoint: string): boolean
-	return self._triggerSet ~= nil and self._triggerSet:HasAny(role, breakpoint)
+	return (self._triggerSet ~= nil and self._triggerSet:HasAny(role, breakpoint))
+		or WorldTriggers:HasAny(role, breakpoint)
 end
 
 function EntityCore:UnsubscribeByOwner(owner: any)

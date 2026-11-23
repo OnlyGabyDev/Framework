@@ -8,99 +8,107 @@ local entityMap = {
 	NPCs = {}
 }
 
---Cria o EntityCore do jogador
-
 --[[
-DataManager.Create(Entity)
-Caso Player, passar o Player Character (modelo do player), caso NPC, passar o modelo da entidade
-@param Entity - Player.Character ou modelo de entidade MODEL
-@param components - tabela de componentes a serem adicionados {}
-@return void
+Tipo da entrada do Create: "player" ({ Model, Player }), "model" (NPC/objeto) ou nil (inválida).
 ]]
-function DataManager.Create(Entity, components : {}, configs : {[string]: any}?, parentEntity : any?)
-
-
-	if not Entity then
-		Log.Warn("Entidade não recebida, func Create")
-		return nil
+local function entityKind(Entity): string?
+	if typeof(Entity) == "table" then
+		local ok = typeof(Entity.Model) == "Instance" and Entity.Model:IsA("Model") and typeof(Entity.Player) == "Instance"
+		return if ok then "player" else nil
 	end
-	if not components then
-		Log.Warn("Componentes não recebidos, func Create")
-		return nil
+	if typeof(Entity) == "Instance" and Entity:IsA("Model") then
+		return "model"
 	end
+	return nil
+end
 
-	--Gera um ID único pra entidade
-	local id,entityType = DataManager.CreateID(Entity)
-	
+-- Monta o EntityCore, os componentes e registra no mapa. `kind` já validado; Entity é nil numa
+-- entidade só de dado (CreateData)
+local function build(Entity, kind: string?, components, configs, parentEntity)
+	local id, entityType
+	if kind == nil then
+		id, entityType = DataManager.CreateID(nil), EntityCore.EntityTypes.Generic
+	else
+		id, entityType = DataManager.CreateID(Entity)
+	end
 	Log.Debug(entityType, "registrado, ID:", id)
-	
-	-- Respawn reaproveita o ID do player: destrói a entidade anterior ANTES de sobrescrever
+
+	-- Respawn reaproveita o ID do player: destrói a entidade anterior antes de sobrescrever
 	local previous = entityMap.players[id]
 	if previous then
 		previous:Destroy()
 		entityMap.players[id] = nil
 	end
-	
-	local Model
-	local Player
 
-	--Salva esse ID no mapa de entidades
-	if typeof(Entity) == "table" then Model = Entity.Model; Player = Entity.Player
+	local Model, Player
+	if kind == "player" then
+		Model, Player = Entity.Model, Entity.Player
 	else
-		Model = Entity; Player = nil
+		Model = Entity
 	end
-	local core = EntityCore.new(Model,entityType,id,Player)
+	local core = EntityCore.new(Model, entityType, id, Player)
 
-	-- NOVO: herança de reações (Regra 4). TriggerSet.Fork() já suporta
-	-- Inherit.Generations/Limit.Scope — só faltava alguém chamar isso na
-	-- criação.
+	-- Herança de reações (regra 4): o filho nasce com o Fork do TriggerSet do pai
 	if parentEntity and parentEntity._triggerSet then
 		core._triggerSet = parentEntity._triggerSet:Fork()
 	end
 
-	--DEBUG
-	local compList = {}
-
-	--Adiciona os componentes recebidos como argumento
-	for _,comp in pairs(components) do
+	for _, comp in pairs(components) do
 		core:AddComponent(comp, configs and configs[comp] or {})
-		compList[#compList + 1] = comp
 	end
-	Log.Debug("componentes de", id .. ":", table.concat(compList, ", "))
-
-	--Setta o wrapper no componente Character (vital)
 	if core:HasComponent(core.ComponentKey.Character) then
-	core.SetEntity(Entity)
+		core.SetEntity(Entity)
 	end
-
-	-- inicializa o wrapper e guarda o modelo/character da entidade
 	core:ComponentsLoaded()
 
-	--Salva o EntityCore no mapa correto
-	if typeof(Entity) == "table"  then
-
+	if kind == "player" then
 		entityMap.players[id] = core
-		Entity.Model:SetAttribute("EntityID",id)
-		Entity.Player:SetAttribute("EntityID",id)
-
-	elseif Entity:IsA("Model") then
-		entityMap.NPCs[id] = core
-		Entity:SetAttribute("EntityID",id)
-		
+		Model:SetAttribute("EntityID", id)
+		Player:SetAttribute("EntityID", id)
 	else
-		Log.Warn("Entidade inválida, func Create")
+		entityMap.NPCs[id] = core
+		if Model then Model:SetAttribute("EntityID", id) end
+	end
+
+	if core:HasComponent(core.ComponentKey.Movement) then
+		core.SetMovement()
+	end
+	return core
+end
+
+--[[
+Cria a entidade de um corpo.
+@param Entity - { Model = character, Player = player } (player) ou um Model (NPC, objeto)
+@param components - nomes dos componentes (ComponentKey) {string}
+@param configs - config por componente { [nome]: table }?
+@param parentEntity - entidade pai: o filho herda as reações dela (Fork do TriggerSet)
+@return EntityCore, ou nil se a entrada for inválida (nada é registrado)
+]]
+function DataManager.Create(Entity, components : {}, configs : {[string]: any}?, parentEntity : any?)
+	if not components then
+		Log.Warn("Componentes não recebidos, func Create")
 		return nil
 	end
-
-
-
-	--inicializa o wrapper de movimentação
-	if core:HasComponent(core.ComponentKey.Movement) then
-	core.SetMovement()
+	local kind = entityKind(Entity)
+	if not kind then
+		Log.Warn("Entidade inválida, func Create (use um Model, { Model, Player } ou DataManager.CreateData)")
+		return nil
 	end
+	return build(Entity, kind, components, configs, parentEntity)
+end
 
-	return core
-
+--[[
+Cria uma entidade só de dado, sem Instance (baralho, gerente de turno, aura invisível). Componentes
+que dependem de corpo (Character, Movement, Weapon, Animation) não servem nela. Remova com
+DataManager.Remove(entidade) ou Remove(ID).
+@return EntityCore
+]]
+function DataManager.CreateData(components : {}, configs : {[string]: any}?, parentEntity : any?)
+	if not components then
+		Log.Warn("Componentes não recebidos, func CreateData")
+		return nil
+	end
+	return build(nil, nil, components, configs, parentEntity)
 end
 
 
@@ -137,6 +145,11 @@ function DataManager.Get(Entity)
 
 end
 
+--[[ Existe entidade com este ID? Sem warn: serve para validar entrada da rede ]]
+function DataManager.Exists(ID: any): boolean
+	return typeof(ID) == "string" and (entityMap.NPCs[ID] ~= nil or entityMap.players[ID] ~= nil)
+end
+
 --[[
 Busca o Entity do alvo atingido subindo a hierarquia até achar um Model com EntityID
 ]]
@@ -158,14 +171,21 @@ end
 
 --[[
 Remove o EntityCore da entidade
-@param Entity - Player ou entidade
+@param Entity - o Player, o Model, o ID da entidade ou o próprio EntityCore
 ]]
 function DataManager.Remove(Entity)
-	local isPlayer = typeof(Entity) == "Instance" and Entity:IsA("Player")
-	local map = isPlayer and entityMap.players or entityMap.NPCs
+	local ID
+	if typeof(Entity) == "Instance" then
+		ID = Entity:GetAttribute("EntityID")
+	elseif typeof(Entity) == "string" then
+		ID = Entity
+	elseif typeof(Entity) == "table" then
+		ID = Entity.ID
+	end
+	if typeof(ID) ~= "string" then return end
 
-	local ID = Entity:GetAttribute("EntityID")
-	local core = ID and map[ID]
+	local map = if entityMap.players[ID] then entityMap.players else entityMap.NPCs
+	local core = map[ID]
 	if not core then return end -- player saiu antes de ter entidade, ou já removido
 
 	core:Destroy()
@@ -175,8 +195,6 @@ end
 --Cria os IDS pra redirecionamento ao ED
 function DataManager.CreateID(Entity)
 	
-	--Se não existir uma entidade, saia da função e retorne nil
-	if not Entity then return nil end
 
 	--Se a entidade for um player, então:
 

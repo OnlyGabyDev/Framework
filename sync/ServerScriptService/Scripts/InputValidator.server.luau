@@ -2,7 +2,7 @@
 	InputValidator (SERVIDOR) — única borda de rede do input.
 	Valida tipo/faixa/taxa e entrega ao resto do framework:
 
-	  RequestIntent(intent, isDown) -> GestureResolver -> SkillHandler.HandleIntent
+	  RequestIntent(intent, isDown, payload?) -> GestureResolver -> SkillHandler.HandleIntent
 	  RequestDir(Vector3)           -> SkillHandler.HandleMovementInput
 	  RequestLook(Vector3)          -> SkillHandler.HandleLookInput
 	  RequestJump()                 -> Humanoid.Jump do corpo dirigido (só fora do corpo nativo)
@@ -84,7 +84,19 @@ end
 --  INTENTS (botões)
 --=============================================================================
 
-RequestIntent.OnServerEvent:Connect(function(player: Player, intent: any, isDown: any)
+-- Payload da rede: tipos validados e alvo que exista como entidade (o resto vira nil)
+local function readPayload(raw: any)
+	local payload = Intents.SanitizePayload(raw)
+	if payload and payload.Target and not DataManager.Exists(payload.Target) then
+		payload.Target = nil
+		if payload.Point == nil then
+			return nil
+		end
+	end
+	return payload
+end
+
+RequestIntent.OnServerEvent:Connect(function(player: Player, intent: any, isDown: any, rawPayload: any)
 	if typeof(isDown) ~= "boolean" or not Intents.IsButton(intent) then
 		return
 	end
@@ -100,7 +112,7 @@ RequestIntent.OnServerEvent:Connect(function(player: Player, intent: any, isDown
 	-- Release NUNCA passa por rate limit: perder um Release deixaria a skill presa em "segurado".
 	-- Não abre brecha: Release sem Press correspondente é no-op no resolver.
 	if not isDown then
-		resolver:Release(os.clock())
+		resolver:Release(os.clock(), readPayload(rawPayload))
 		return
 	end
 
@@ -117,7 +129,7 @@ RequestIntent.OnServerEvent:Connect(function(player: Player, intent: any, isDown
 
 	-- A spec é lida AGORA e fica congelada no resolver durante o ciclo (trocar de slot no meio não afeta)
 	local spec = GestureResolver.Normalize(SkillHandler.GetGestureSpec(entityCore, intent))
-	resolver:Press(os.clock(), spec)
+	resolver:Press(os.clock(), spec, readPayload(rawPayload))
 end)
 
 --=============================================================================
