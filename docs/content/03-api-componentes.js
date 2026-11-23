@@ -149,9 +149,9 @@ ${T(["Config", "Padrão", "O quê"], [
   F(G, "GetSkillFromSlot", "entity.GetSkillFromSlot(slot)", "A skill efetiva no slot.", [["slot", "string", "Intent."]], "Tabela da skill ou <code>nil</code>.");
   F(G, "GetChosenChar", "entity.GetChosenChar()", "O kit atual.", null, "<code>string?</code>.");
   F(G, "GetCharMode", "entity.GetCharMode()", "A forma atual.", null, "<code>string</code>.");
-  F(G, "SetCharMode", "entity.SetCharMode(kit, mode)", "Troca personagem/forma: aplica os Stats (Speed, JumpPower, MaxHP mantendo a proporção) e o Loadout da forma na camada Base.",
+  F(G, "SetCharMode", "entity.SetCharMode(kit, mode)", "Troca personagem/forma: aplica os Stats (Speed, JumpForce e os demais no Attributes; MaxHP mantendo a proporção) e o Loadout da forma na camada Base.",
     [["kit", "string", "Pasta do CharacterDatabase."], ["mode", "string", "Módulo da forma."]], "<code>true</code>, ou warn.",
-    { notes: W("<p><strong>Limitação conhecida:</strong> com AttributesComponent, a troca em runtime não atualiza os stats base do Attributes (Speed, JumpForce, Defense, DamageMult, GravityScale continuam os da forma inicial; o MovementController relê Speed/JumpForce do Attributes todo frame). MaxHP e o loadout trocam. Até isso ser ajustado, troque os stats também com <code>entity.SetStat</code>. Veja " + L("fluxo.limitacoes") + ".</p>") });
+    { notes: N("<p>Na troca em runtime, os Stats da forma viram a base do Attributes (MaxHP pelo SetMaxHP). Stat que a forma nova não declara fica como estava. Na criação, o <code>BaseStats</code> do config do Attributes continua valendo.</p>") });
   F(G, "HasCooldown", "entity.HasCooldown(skillName)", "A skill está em cooldown (com cargas: sem nenhuma)?", [["skillName", "string", "<code>data.name</code>."]], "<code>boolean</code>.");
   F(G, "GetCooldown", "entity.GetCooldown(skillName)", "Segundos restantes (com cargas: 0 enquanto houver carga).", [["skillName", "string", "Nome."]], "<code>number</code>.");
   F(G, "SetCooldown", "entity.SetCooldown(skillName, seconds?)", "Define o tempo restante (sem segundos: o cooldown do módulo).", [["skillName", "string", "Nome."], ["seconds", "number?", "Segundos."]], null);

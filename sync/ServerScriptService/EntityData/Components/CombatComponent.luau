@@ -647,11 +647,19 @@ function CombatComponent:GetCharMode()
 	return self.Mode
 end
 
--- Aplica Stats
+-- Aplica os Stats da forma. Na troca em runtime, eles viram a base do Attributes (o
+-- MovementController relê Speed/JumpForce de lá a cada frame). Na carga inicial, quem dá a base é o
+-- OnAdded do Attributes, que respeita BaseStats vindo do config
 function CombatComponent:_ApplyStats(stats)
+	local MaxHP = StateEnum.Stats.MaxHP
+	if self._charLoaded and self.Entity:HasComponent(self.Entity.ComponentKey.Attributes) then
+		for statName, value in pairs(stats) do
+			if statName ~= MaxHP then self.Entity.SetStat(statName, value) end
+		end
+	end
 	if stats.Speed then self.Entity.SetSpeed(stats.Speed) end
-	if stats.JumpPower then self.Entity.SetJumpForce(stats.JumpPower) end
-	
+	if stats.JumpForce then self.Entity.SetJumpForce(stats.JumpForce) end
+
 	local health = self.Entity:GetComponent(self.Entity.ComponentKey.Health)
 	if health and stats.MaxHP then
 		local ratio = self.Entity.GetHealthRatio()
@@ -671,6 +679,7 @@ function CombatComponent:OnAdded()
 	if self.ChosenChar then
 		self:SetCharMode(self.ChosenChar, self.Mode)
 	end
+	self._charLoaded = true
 
 	-- A morte encerra as skills ativas (só runners de skill: os status seguem a política do
 	-- StatusComponent). Prioridade do motor: roda antes dos listeners de conteúdo do OnDeath.

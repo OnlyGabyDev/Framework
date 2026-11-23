@@ -10,5 +10,3 @@ Estado em 23/11/2026: 429 páginas, 0 links quebrados (validação: carregar `as
 - Sinônimos (`content/sinonimos.js`): ampliar conforme as buscas que não acharem nada.
 - Comentário em `sync/ServerStorage/Modules/Combat/Types.luau` (linha 48) cita `.agents/rules/01`,
   que não vai no git: trocar por `docs/`.
-- Limitação para decidir: `SetCharMode` em runtime não atualiza os stats do Attributes
-  (ver `fluxo.limitacoes`).

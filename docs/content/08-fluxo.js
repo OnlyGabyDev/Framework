@@ -80,7 +80,6 @@ DOCS.page({
   id: "fluxo.limitacoes", parent: "fluxo", title: "Limitações conhecidas",
   kw: "limitações bugs conhecidos não testado pendente problema",
   html: `<ul>
-<li><b>SetCharMode em runtime com Attributes</b>: a troca de forma não atualiza os stats base do AttributesComponent (Speed, JumpForce, Defense, DamageMult, GravityScale ficam os da forma inicial; o MovementController relê Speed/JumpForce do Attributes todo frame). MaxHP e loadout trocam. O <code>_ApplyStats</code> lê <code>JumpPower</code>, mas a forma declara <code>JumpForce</code>. Contorno: <code>entity.SetStat</code> depois do SetCharMode. Correção pendente de decisão.</li>
 <li>Nunca testado: mais de um player ao mesmo tempo, latência real (simulador de rede), carga depois de 15/10/2026.</li>
 <li>A arma é achada pelo kit (<code>Assets/Weapons/&lt;Kit&gt;</code>): uma skill de arma roubada por outro kit só funciona se a arma estiver equipada.</li>
 <li>Anti-cheat fora de escopo: noclip, voo contínuo, empurrão físico fora das Forces, veículos.</li>
