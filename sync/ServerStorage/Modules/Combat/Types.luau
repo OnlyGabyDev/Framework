@@ -45,7 +45,7 @@ Dois contextos:
   proteções de stat, PreDamage/PostDamage e os listeners de onHit. Montado por
   StateTable.BuildContext (Helper.BuildContext).
 ]]
--- Context por Breakpoint (design em .agents/rules/01)
+-- Context por Breakpoint (documentado em docs/index.html#conceitos.context)
 export type RunnerContext = {
 	depth: number,                   -- profundidade na Lineage (cast por input = 1)
 	history: {string},               -- trilha de nomes, raiz -> ... -> este runner (só leitura)

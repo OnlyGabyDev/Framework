@@ -28,14 +28,11 @@ ${T(["Tabela", "O quê"], [
   var G = "api.StateTable";
   M(G, "Relation", "StateTable.Relation", "StateTable.Relation(a, b)", "Relação entre duas entidades.", [["a", "EntityCore", ""], ["b", "EntityCore", ""]], "<code>Enum.Relations</code>: Self, Ally, Enemy ou Neutral.", { see: ["conceitos.alvos"] });
   M(G, "CanAffect", "StateTable.CanAffect", "StateTable.CanAffect(source, target, affects?)", "A ação de <code>source</code> afeta <code>target</code>? Vale o <code>data.affects</code> da skill sobre <code>Enum.AffectsDefaults</code>.",
-    [["source", "runner | self | EntityCore | nil", "Runner/self de skill (vale o dono do efeito e o affects dele), entidade, ou nil (ambiente: afeta todos)."], ["target", "EntityCore", ""], ["affects", "table?", "Sobrescreve o affects."]], "<code>boolean</code>.",
-    { ex: "for _, e in alvosNaArea do\n    if StateTable.CanAffect(self, e) then self:Damage(e, 20) end\nend" });
-  M(G, "AffectsFilter", "StateTable.AffectsFilter", "StateTable.AffectsFilter(source, affects?)", "Predicado pronto para <code>AreaEffect:SetFilter</code>.", null, "<code>(entity) -> boolean</code>.", { ex: "zona:SetFilter(StateTable.AffectsFilter(self))" });
-  M(G, "EffectOwner", "StateTable.EffectOwner", "StateTable.EffectOwner(source)", "Dono de um efeito: sobe o <code>Source</code> dos status até um runner de skill. É quem recebe OUT.OnDamage/OnDeath/OnHeal.", [["source", "runner | self | nil", ""]], "<code>EntityCore?</code>.",
-    { ex: "-- dentro de um DOT: quem aplicou\nlocal dono = StateTable.EffectOwner(self.Runner)" });
+    [["source", "runner | self | EntityCore | nil", "Runner/self de skill (vale o dono do efeito e o affects dele), entidade, ou nil (ambiente: afeta todos)."], ["target", "EntityCore", ""], ["affects", "table?", "Sobrescreve o affects."]], "<code>boolean</code>.");
+  M(G, "AffectsFilter", "StateTable.AffectsFilter", "StateTable.AffectsFilter(source, affects?)", "Predicado pronto para <code>AreaEffect:SetFilter</code>.", null, "<code>(entity) -> boolean</code>.");
+  M(G, "EffectOwner", "StateTable.EffectOwner", "StateTable.EffectOwner(source)", "Dono de um efeito: sobe o <code>Source</code> dos status até um runner de skill. É quem recebe OUT.OnDamage/OnDeath/OnHeal.", [["source", "runner | self | nil", ""]], "<code>EntityCore?</code>.");
   M(G, "OwnerToken", "StateTable.OwnerToken", "StateTable.OwnerToken(entity, tag)", "Token de Owner por entidade: sempre o mesmo para o par (entidade, tag). Use em vez de string.", [["entity", "EntityCore", ""], ["tag", "string", ""]], "Token.");
-  M(G, "HasTrait", "StateTable.HasTrait", "StateTable.HasTrait(data, trait)", "O data declara a trait?", [["data", "table", "data de skill/status."], ["trait", "string", ""]], "<code>boolean</code>.",
-    { ex: "if StateTable.HasTrait(ctx.sourceRunner.skill.data, Enum.Traits.Ultimate) then ... end" });
+  M(G, "HasTrait", "StateTable.HasTrait", "StateTable.HasTrait(data, trait)", "O data declara a trait?", [["data", "table", "data de skill/status."], ["trait", "string", ""]], "<code>boolean</code>.");
   M(G, "ResolveRunner", "StateTable.ResolveRunner", "StateTable.ResolveRunner(runnerOrSelf)", "Normaliza o self de skill para o runner (para comparar identidade).", null, "runner.");
   M(G, "IsDead", "StateTable.IsDead", "StateTable.IsDead(entity)", "Morta do ponto de vista do motor (sem Health, nunca).", null, "<code>boolean</code>.");
   M(G, "MitigateDamage", "StateTable.MitigateDamage", "StateTable.MitigateDamage(damage, getStat, traits)", "Aplica as proteções de <code>Enum.DamageMitigation</code> (usado pelo TakeDamage).", null, "Dano mitigado (≥ 0).");
@@ -47,8 +44,7 @@ ${T(["Tabela", "O quê"], [
   M(G, "GetDeferredCount", "StateTable.GetDeferredCount", "StateTable.GetDeferredCount()", "Ações esperando na fila da cadeia (diagnóstico).", null, "<code>number</code>.");
   M(G, "BuildContext", "StateTable.BuildContext", "StateTable.BuildContext(source, amount, parentContext?)", "Monta um HitContext (traits e effects do data do source, dono, direção, Lineage).", null, "HitContext.");
   M(G, "ResolveDeathPolicy", "StateTable.ResolveDeathPolicy", "StateTable.ResolveDeathPolicy(config, key)", "Regra de morte: o valor do config ou <code>Enum.DeathDefaults[key]</code>.", null, "<code>boolean</code>.");
-  M(G, "BuildEffect", "StateTable:BuildEffect", "StateTable:BuildEffect(status, callbackName, fn)", "Clona um status com um callback injetado (variação de um status sem novo módulo).", [["status", "table", ""], ["callbackName", "string", "Ex.: \"onTrigger\"."], ["fn", "function", ""]], "O status clonado.",
-    { ex: "-- um block que reflete: o próprio onTrigger devolve dano ao agressor\nlocal Refletor = StateTable:BuildEffect(StateTable.Status.GenericBlock, \"onTrigger\", function(self, hitCtx)\n    if hitCtx.ownerEntity then hitCtx.ownerEntity.TakeDamage(hitCtx.damage * 0.5) end\n    return 0\nend)" });
+  M(G, "BuildEffect", "StateTable:BuildEffect", "StateTable:BuildEffect(status, callbackName, fn)", "Clona um status com um callback injetado (variação de um status sem novo módulo).", [["status", "table", ""], ["callbackName", "string", "Ex.: \"onTrigger\"."], ["fn", "function", ""]], "O status clonado.");
 
   // ---------------------------------------------------------------- TriggerSet
   DOCS.group({
@@ -108,11 +104,9 @@ ${C(`
   });
   G = "api.AreaEffect";
   M(G, "new", "AreaEffect.new", "local zona = AreaEffect.new(cframeProvider, shape, size, pollRate?)", "Cria a zona (parada).",
-    [["cframeProvider", "() -> CFrame", "Lido a cada poll (zona que se move)."], ["shape", "string", "\"Box\" ou \"Sphere\"."], ["size", "Vector3 | number", "Tamanho (Box) ou raio (Sphere)."], ["pollRate", "number?", "Hz (padrão 10)."]], "AreaEffect.",
-    { ex: "local zona = AreaEffect.new(function() return self.Entity.GetCFrame() end, \"Sphere\", 12, 10)" });
+    [["cframeProvider", "() -> CFrame", "Lido a cada poll (zona que se move)."], ["shape", "string", "\"Box\" ou \"Sphere\"."], ["size", "Vector3 | number", "Tamanho (Box) ou raio (Sphere)."], ["pollRate", "number?", "Hz (padrão 10)."]], "AreaEffect.");
   M(G, "OnEnter", "zona:OnEnter", "zona:OnEnter(fn)", "Ao entrar.", [["fn", "function", "<code>(entity, zona)</code>."]], "A zona.");
-  M(G, "OnStay", "zona:OnStay", "zona:OnStay(fn)", "A cada poll com a entidade dentro.", [["fn", "function", "<code>(entity, zona)</code>."]], "A zona.",
-    { ex: "zona:OnStay(function(e) e.TakeDamage(2, self.Runner) end) -- 2 por poll" });
+  M(G, "OnStay", "zona:OnStay", "zona:OnStay(fn)", "A cada poll com a entidade dentro.", [["fn", "function", "<code>(entity, zona)</code>."]], "A zona.");
   M(G, "OnExit", "zona:OnExit", "zona:OnExit(fn)", "Ao sair (também no Stop).", [["fn", "function", "<code>(entity, zona)</code>."]], "A zona.");
   M(G, "SetFilter", "zona:SetFilter", "zona:SetFilter(fn?)", "Só entidades com <code>fn(entity) == true</code> entram.", [["fn", "function?", ""]], "A zona.");
   M(G, "Start", "zona:Start", "zona:Start()", "Começa a consultar.", null, null);
@@ -124,7 +118,7 @@ ${C(`
   M(G, "BindDirectionalForce", "AreaBehaviors.BindDirectionalForce", "AreaBehaviors.BindDirectionalForce(zona, direction, speed, forceType, opts?)",
     "Liga uma força à zona: vale da entrada até a saída (inclusive no Stop). Não sobra empurrão depois da borda.",
     [["zona", "AreaEffect", ""], ["direction", "Vector3 | () -> Vector3", ""], ["speed", "number", ""], ["forceType", "string", "Type da Force (padrão \"AreaWind\")."], ["opts", "table?", "<code>{ Key?, Duration?, Hard?, RequiresControl?, MaxForce? }</code>."]], "A zona.",
-    { ex: "AreaBehaviors.BindDirectionalForce(zona, Vector3.new(0, 0, -1), 30, \"Vento\")", see: ["receitas.vento"] });
+    { see: ["receitas.vento"] });
   M(G, "DirectionalForce", "AreaBehaviors.DirectionalForce", "AreaBehaviors.DirectionalForce(entity, direction, speed, forceType, opts?)",
     "Aplica (renova pela Key) uma força de ambiente numa entidade. Externa: empurra mesmo sem canMove. Solta, sem zona, dura o Duration (0,5 s).", null, "ID da Force.");
 
@@ -179,7 +173,7 @@ return {
   DOCS.group({ id: "api.ComboWindow", parent: "api.combate", title: "ComboWindow", kw: "combowindow combo janela marcar consumir sequência", src: "ServerStorage/DataBase/SkillDatabase/BaseSkills/ComboWindow", lead: "Janela de combo curta entre skills, sem acoplar A e B: A marca, B lê e consome. É um status interno por baixo.", html: C(`local ComboWindow = require(game.ServerStorage.DataBase.SkillDatabase.BaseSkills).ComboWindow`) });
   G = "api.ComboWindow";
   M(G, "Mark", "ComboWindow.Mark", "ComboWindow.Mark(entity, marker, window, payload?, source?)", "Abre a janela por <code>window</code> segundos.", [["entity", "EntityCore", ""], ["marker", "string", "Nome."], ["window", "number", "Segundos."], ["payload", "table?", ""], ["source", "runner?", ""]], "ID ou nil.", { see: ["receitas.combo"] });
-  M(G, "Consume", "ComboWindow.Consume", "local payload = ComboWindow.Consume(entity, marker)", "Fecha a janela e devolve o payload.", null, "<code>table?</code> (nil se fechada).");
+  M(G, "Consume", "ComboWindow.Consume", "local payload = ComboWindow.Consume(entity, marker)", "Fecha a janela e devolve o payload.", null, "<code>table?</code>: o payload (<code>{}</code> se a janela foi aberta sem payload), ou nil se fechada.");
   M(G, "Peek", "ComboWindow.Peek", "ComboWindow.Peek(entity, marker)", "A janela está aberta?", null, "<code>boolean</code>.");
 
   // ================================================================ INPUT
@@ -283,8 +277,7 @@ return {
 
   DOCS.group({ id: "api.NetworkView", parent: "api.fisica", title: "NetworkView", kw: "networkview atraso lag ping previsão predicted shift cliente", src: "ServerScriptService/Modules/Physics/NetworkView", lead: "Quanto atrasado o servidor vê um corpo simulado por cliente, e quanto ele andou nesse atraso. Corpo do servidor devolve nil.", html: C(`local NetworkView = require(game.ServerScriptService.Modules.Physics.NetworkView)`) });
   M("api.NetworkView", "Lag", "NetworkView.Lag", "NetworkView.Lag(player)", "Segundos de atraso de visão do corpo do player.", null, "<code>number</code>.");
-  M("api.NetworkView", "PredictedShift", "NetworkView.PredictedShift", "NetworkView.PredictedShift(part)", "Quanto o corpo andou desde a posição que o servidor vê (velocidade × atraso do dono).", [["part", "BasePart", "O root."]], "<code>Vector3?</code> (nil para corpo do servidor).",
-    { ex: "local shift = NetworkView.PredictedShift(alvo.GetRoot())\nlocal posReal = alvo.GetPosition() + (shift or Vector3.zero)" });
+  M("api.NetworkView", "PredictedShift", "NetworkView.PredictedShift", "NetworkView.PredictedShift(part)", "Quanto o corpo andou desde a posição que o servidor vê (velocidade × atraso do dono).", [["part", "BasePart", "O root."]], "<code>Vector3?</code> (nil para corpo do servidor).");
 
   DOCS.group({ id: "api.CollisionGroups", parent: "api.fisica", title: "CollisionGroups", kw: "collisiongroups colisão grupos grab agarrado", src: "ServerScriptService/Modules/Physics/CollisionGroups", lead: "Grupos do motor: agarrado (FW_Grabbed) não colide com outro agarrado nem com quem agarrou (FW_Grabber).", html: "" });
   M("api.CollisionGroups", "Assign", "CollisionGroups.Assign", "local restore = CollisionGroups.Assign(model, group)", "Põe as BaseParts no grupo.", [["model", "Instance?", ""], ["group", "string", "<code>CollisionGroups.Grabbed</code> ou <code>.Grabber</code>."]], "<code>restore()</code>: devolve cada peça ao grupo original.");
@@ -295,9 +288,9 @@ return {
   M(G, "GetControlledEntityId", "AntiCheat.GetControlledEntityId", "AntiCheat.GetControlledEntityId(player)", "ID da entidade dirigida (ignora o Lock).", null, "<code>string?</code>.");
   M(G, "GetNativeEntityId", "AntiCheat.GetNativeEntityId", "AntiCheat.GetNativeEntityId(player)", "ID do corpo do próprio player.", null, "<code>string?</code>.");
   M(G, "GetMovementCorrections", "AntiCheat.GetMovementCorrections", "AntiCheat.GetMovementCorrections(player)", "Quantas correções de movimento desde o spawn.", null, "<code>number</code>.");
-  M(G, "LockPlayerInput", "AntiCheat.LockPlayerInput", "AntiCheat.LockPlayerInput(player)", "Corta todo input do player na raiz.", null, null);
-  M(G, "UnlockPlayerInput", "AntiCheat.UnlockPlayerInput", "AntiCheat.UnlockPlayerInput(player)", "Devolve o input.", null, null);
-  M(G, "SetControlledEntity", "AntiCheat.SetControlledEntity", "AntiCheat.SetControlledEntity(player, id, suspendNative?)", "Redireciona o input (o ControlComponent usa; prefira Possess).", null, null);
+  M(G, "LockPlayerInput", "AntiCheat.LockPlayerInput", "AntiCheat.LockPlayerInput(player)", "Corta todo input do player na raiz.", null, "<code>boolean</code> (false se o player não está registrado ou já estava travado).");
+  M(G, "UnlockPlayerInput", "AntiCheat.UnlockPlayerInput", "AntiCheat.UnlockPlayerInput(player)", "Devolve o input.", null, "<code>boolean</code> (false se não havia Lock).");
+  M(G, "SetControlledEntity", "AntiCheat.SetControlledEntity", "AntiCheat.SetControlledEntity(player, id, suspendNative?)", "Redireciona o input (o ControlComponent usa; prefira Possess).", null, "<code>boolean</code> (false se o player não está registrado).");
 
   // ================================================================ CLIENTE E UTILITÁRIOS
   DOCS.page({ id: "api.cliente", parent: "api", title: "Cliente e utilitários", kw: "cliente utilitários módulos", lead: "VFX, som, câmera, Logger, animações e utilitários.", html: "" });
@@ -366,8 +359,7 @@ lib.character.Schema = {
   DOCS.group({ id: "api.Utils", parent: "api.cliente", title: "Utils", kw: "utils utilitários vetor direção rotacionar lerp clamp octante", src: "ReplicatedStorage/Utils", lead: "Utilitários de número e direção (servidor e cliente).", html: "" });
   G = "api.Utils";
   M(G, "rotateTowards", "Utils.rotateTowards", "Utils.rotateTowards(current, target, maxRadians)", "Gira um vetor em direção a outro, com ângulo máximo por chamada (giro de Force e homing).", null, "<code>Vector3</code>.");
-  M(G, "classifyDirection", "Utils.classifyDirection", "Utils.classifyDirection(move, facing)", "Octante do movimento relativo ao facing: Forward, ForwardRight, Right, BackRight, Back, BackLeft, Left, ForwardLeft ou None. É o <code>ctx.direction.Id</code>.", null, "<code>string</code>.",
-    { ex: "-- golpe diferente andando para trás\nif ctx.direction and ctx.direction.Id == \"Back\" then ... end" });
+  M(G, "classifyDirection", "Utils.classifyDirection", "Utils.classifyDirection(move, facing)", "Octante do movimento relativo ao facing: Forward, ForwardRight, Right, BackRight, Back, BackLeft, Left, ForwardLeft ou None. É o <code>ctx.direction.Id</code>.", null, "<code>string</code>.");
   M(G, "worldToLocalPlanar", "Utils.worldToLocalPlanar", "Utils.worldToLocalPlanar(move, facing)", "Projeção no espaço local 2D do facing (X lateral, Z frontal).", null, "<code>Vector3</code>.");
   M(G, "getRoot", "Utils.getRoot", "Utils.getRoot(character)", "HumanoidRootPart do model.", null, "<code>BasePart?</code>.");
   M(G, "clamp", "Utils.clamp", "Utils.clamp(v, min, max)", "Limita.", null, "<code>number</code>.");

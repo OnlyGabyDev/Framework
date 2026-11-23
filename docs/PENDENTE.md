@@ -1,12 +1,11 @@
 # Documentação: o que falta
 
-Estado em 23/11/2026: 429 páginas, 0 links quebrados (validação: carregar `assets/app.js` e
-`content/*.js` no node e chamar `DOCS.check()`).
+Estado em 23/11/2026: 434 páginas, 0 links quebrados, as 297 funções da API com exemplo de uso
+(320 exemplos, no estilo do manual do GameMaker) e 22 receitas completas no formato de tutorial.
+Validação: carregar `assets/app.js` e `content/*.js` no node e chamar `DOCS.check()` (lista vazia).
+Como escrever páginas e exemplos: `docs/index.html#fluxo.docs`.
 
-- Receitas em rascunho (só apontam para o guia): `dot`, `vento`, `minion`, `roubar`, `mira`,
-  `global`, `cardgame` (só tópicos), `personagem` (`content/07-receitas.js`).
-- Receitas sem página: buff de stat com ícone, escudo de bloqueio, times/cura em área, IA completa.
-- Fluxo (`content/08-fluxo.js`): páginas curtas; dá para detalhar testes e sync.
+- Exemplos e receitas foram conferidos lendo o código-fonte, não rodando no Studio. Ao usar uma
+  receita pela primeira vez no jogo, confira e corrija aqui o que divergir.
+- Fluxo (`content/08-fluxo.js`): as páginas de sync e testes continuam curtas.
 - Sinônimos (`content/sinonimos.js`): ampliar conforme as buscas que não acharem nada.
-- Comentário em `sync/ServerStorage/Modules/Combat/Types.luau` (linha 48) cita `.agents/rules/01`,
-  que não vai no git: trocar por `docs/`.

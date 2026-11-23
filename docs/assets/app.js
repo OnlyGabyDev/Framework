@@ -5,14 +5,17 @@
   Conteúdo (content/*.js):
     DOCS.page({ id, title, parent, kw, lead, html, src })      página de texto
     DOCS.group({ ... mesmos campos ... })                         página que lista as funções filhas
-    DOCS.fn(groupId, { name, title?, call, desc, args, ret, ex, exDesc, notes, see, kw })
+    DOCS.fn(groupId, { name, title?, call, desc, args, ret, notes, see, kw })
+    DOCS.example(idDaFunção, { t?, code, desc } | [{ t?, code, desc }, ...])
+        exemplos de uso das funções (content/exemplos-*.js), no estilo do manual do GameMaker: o código
+        em contexto e, embaixo, o parágrafo "O código acima...". Toda função tem pelo menos um.
   Helpers: C(código) bloco Luau, E(texto) escapa HTML, L(id, texto?) link, T(cabeçalhos, linhas) tabela,
            N(html) nota, W(html) aviso.
 */
 (function () {
   "use strict";
 
-  var DOCS = (window.DOCS = { pages: {}, children: {}, roots: [], synonyms: [] });
+  var DOCS = (window.DOCS = { pages: {}, children: {}, roots: [], synonyms: [], examples: {} });
 
   // ---------------------------------------------------------------- helpers de conteúdo
   function esc(s) {
@@ -64,6 +67,15 @@
       id: id, title: f.title || f.name, parent: groupId, kind: "fn", fn: f, kw: f.kw || "", src: f.src,
     });
   };
+  // Exemplos ficam num mapa à parte: o arquivo de exemplos pode carregar antes ou depois da função
+  DOCS.example = function (id, ex) {
+    if (DOCS.examples[id]) throw new Error("exemplo duplicado: " + id);
+    DOCS.examples[id] = Array.isArray(ex) ? ex : [ex];
+  };
+  function examplesOf(p) {
+    if (DOCS.examples[p.id]) return DOCS.examples[p.id];
+    return p.fn && p.fn.ex ? [{ code: p.fn.ex, desc: p.fn.exDesc }] : [];
+  }
 
   // ---------------------------------------------------------------- render de função
   function plain(html) {
@@ -88,10 +100,13 @@
     } else out += "<p>Nenhum.</p>";
     out += "<h4>Retorna</h4><p>" + (f.ret || "Nada.") + "</p>";
     if (f.notes) out += f.notes;
-    if (f.ex) {
-      out += "<h4>Exemplo</h4>" + C(f.ex);
-      if (f.exDesc) out += "<p>" + f.exDesc + "</p>";
-    }
+    var exs = examplesOf(p);
+    exs.forEach(function (ex, i) {
+      var head = exs.length > 1 ? "Exemplo " + (i + 1) : "Exemplo";
+      if (ex.t) head += ": " + ex.t;
+      out += '<h4 class="ex-head">' + head + "</h4>" + C(ex.code);
+      if (ex.desc) out += '<div class="ex-desc">' + (/^\s*</.test(ex.desc) ? ex.desc : "<p>" + ex.desc + "</p>") + "</div>";
+    });
     return out;
   }
   function groupList(p) {
@@ -155,7 +170,8 @@
       var p = DOCS.pages[id];
       var body = p.kind === "fn"
         ? [p.fn.call, plain(p.fn.desc), (p.fn.args || []).map(function (a) { return a[0] + " " + plain(a[2]); }).join(" "),
-           plain(p.fn.ret), plain(p.fn.notes), p.fn.ex || "", plain(p.fn.exDesc)].join(" ")
+           plain(p.fn.ret), plain(p.fn.notes),
+           examplesOf(p).map(function (ex) { return (ex.t || "") + " " + ex.code + " " + plain(ex.desc); }).join(" ")].join(" ")
         : plain((p.lead || "") + " " + (p.html || ""));
       return {
         id: id, p: p,
@@ -503,13 +519,24 @@
     route();
   };
 
-  // Para validação fora do navegador (node): links quebrados e páginas sem pai
+  // Para validação fora do navegador (node): links quebrados, páginas sem pai e função sem exemplo
   DOCS.check = function () {
     var problems = [];
+    Object.keys(DOCS.examples).forEach(function (id) {
+      var p = DOCS.pages[id];
+      if (!p || p.kind !== "fn") problems.push("exemplo para função inexistente: " + id);
+      else if (p.fn.ex) problems.push(id + ": exemplo no DOCS.fn e no arquivo de exemplos (deixe só um)");
+      DOCS.examples[id].forEach(function (ex, i) {
+        if (!ex.code || !String(ex.code).trim()) problems.push(id + ": exemplo " + (i + 1) + " sem código");
+        if (!ex.desc || !String(ex.desc).trim()) problems.push(id + ": exemplo " + (i + 1) + " sem explicação");
+      });
+    });
     Object.keys(DOCS.pages).forEach(function (id) {
       var p = DOCS.pages[id];
       if (p.parent && !DOCS.pages[p.parent]) problems.push(id + ": pai inexistente " + p.parent);
-      var html = (p.html || "") + (p.lead || "") + (p.fn ? [p.fn.desc, p.fn.ret, p.fn.notes, p.fn.exDesc].join(" ") : "");
+      if (p.kind === "fn" && !examplesOf(p).length) problems.push(id + ": função sem exemplo");
+      var exHtml = p.kind === "fn" ? examplesOf(p).map(function (ex) { return ex.desc || ""; }).join(" ") : "";
+      var html = (p.html || "") + (p.lead || "") + (p.fn ? [p.fn.desc, p.fn.ret, p.fn.notes, exHtml].join(" ") : "");
       (html.match(/href="#([^"]+)"/g) || []).forEach(function (h) {
         var t = h.slice(7, -1);
         if (!DOCS.pages[t]) problems.push(id + ": link para " + t);

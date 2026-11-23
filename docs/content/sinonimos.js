@@ -51,4 +51,9 @@ DOCS.synonyms = [
   ["combo", "sequencia", "combowindow", "encadear"],
   ["centralizacao", "dono unico", "string magica", "enum", "config"],
   ["criar", "novo", "nova", "adicionar", "custom", "customizado"],
+  ["exemplo", "exemplos", "example", "uso", "como usar", "tutorial", "receita", "passo a passo"],
+  ["placar", "leaderstats", "abates", "kill feed", "pontuacao", "score"],
+  ["patrulha", "patrulhar", "perseguir", "chase", "fugir", "maquina de estados", "inimigo"],
+  ["arremessar", "arremesso", "jogar longe", "throw", "lancar"],
+  ["roubar", "steal", "copiar skill", "transfer"],
 ];

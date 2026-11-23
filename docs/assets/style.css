@@ -200,6 +200,21 @@ li:not(.open) > ul { display: none; }
 .page h2 { font-size: 20px; margin: 32px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
 .page h3 { font-size: 16px; margin: 24px 0 8px; }
 .page h4 { font-size: 14px; margin: 18px 0 6px; color: var(--text-2); text-transform: uppercase; letter-spacing: .4px; }
+.page h4.ex-head { margin-top: 26px; }
+/* Receitas: ficha do tutorial (o cabeçalho de post de tutorial do fórum do GameMaker) */
+.tut-head {
+  display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 4px 0 20px;
+  padding: 12px 16px; background: var(--code-bg); border: 1px solid var(--code-border);
+  border-left: 3px solid var(--accent); border-radius: var(--radius); font-size: 14px;
+}
+.tut-head dt { font-weight: 600; color: var(--text-2); }
+.tut-head dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 520px) {
+  .tut-head { grid-template-columns: 1fr; gap: 2px; }
+  .tut-head dd { margin-bottom: 6px; }
+}
+.ex-desc { margin: -6px 0 18px; }
+.ex-desc > p:first-child { margin-top: 0; }
 .page p, .page li { color: var(--text); }
 .page ul, .page ol { padding-left: 22px; }
 .page li { margin: 3px 0; }

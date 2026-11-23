@@ -35,7 +35,7 @@ ${N("<p><strong>O framework está finalizado.</strong> O motor está completo no
 <ul>
   <li><b>Guia básico</b>: entidades, skills, status, eventos, dano, input, movimento, HUD, a regra de centralização e como criar tags e enums. Leia na ordem se você é novo.</li>
   <li><b>Guia avançado</b>: contexto e herança explícita, cadeias, rede, possessão, herança de reações, desempenho, segurança e como estender sem mexer no motor.</li>
-  <li><b>Referência da API</b> tem uma página por função, no estilo de manual de engine: sintaxe, argumentos, retorno, exemplo e links.</li>
+  <li><b>Referência da API</b> tem uma página por função, no estilo do manual do GameMaker: sintaxe, argumentos, retorno e exemplos de uso em contexto, cada um seguido do parágrafo "O código acima..." que explica o que ele faz.</li>
   <li><b>Enums</b> lista os valores e padrões (todo número de design do motor mora num enum, não no código).</li>
   <li><b>Receitas</b> resolvem casos reais só com a API pública.</li>
   <li><b>Fluxo de trabalho</b> cobre sync com o Studio, testes, convenções e as decisões de design já tomadas.</li>

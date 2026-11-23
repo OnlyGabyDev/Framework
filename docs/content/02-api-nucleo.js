@@ -4,7 +4,7 @@ DOCS.page({
   id: "api",
   title: "Referência da API",
   kw: "api referência funções métodos reference",
-  lead: "Uma página por função, com sintaxe, argumentos, retorno e exemplo. As funções de componente são chamadas na entidade, com ponto.",
+  lead: "Uma página por função, com sintaxe, argumentos, retorno e exemplos de uso em contexto (cada um explicado logo abaixo, no estilo do manual do GameMaker). As funções de componente são chamadas na entidade, com ponto.",
   html: `
 <div class="cards">
   <a class="card" href="#api.nucleo"><b>Núcleo</b><span>DataManager e EntityCore: criar, achar, escutar.</span></a>
@@ -53,18 +53,6 @@ DOCS.fn("api.DataManager", {
     ["parentEntity", "EntityCore?", "Pai: o filho herda as inscrições com <code>Inherit</code> (Fork do TriggerSet)."],
   ],
   ret: "<code>EntityCore</code>, ou <code>nil</code> se a entrada for inválida.",
-  ex: `
-local boss = DataManager.Create(workspace.Boss, {
-    Component.Character, Component.Health, Component.Status, Component.Movement,
-    Component.Attributes, Component.Combat, Component.Affiliation, Component.AI,
-}, {
-    Health = { MaxHP = 5000, HealCap = 1.2 },
-    Combat = { ChosenChar = false },
-    Affiliation = { Team = "Chefes" },
-    AI = { Brain = brainDoChefe },
-})
-`,
-  exDesc: "Um chefe sem personagem do banco (o kit é montado depois com EquipSkill), num time próprio e dirigido por um Brain.",
   see: ["api.DataManager.CreateData", "api.DataManager.Remove", "conceitos.entidades"],
   kw: "criar spawn instanciar nova entidade npc",
 });
@@ -79,14 +67,6 @@ DOCS.fn("api.DataManager", {
     ["parentEntity", "EntityCore?", "Pai (herança de reações)."],
   ],
   ret: "<code>EntityCore</code> com <code>Type = \"Generic\"</code> e <code>Instance = nil</code>.",
-  ex: `
-local carta = DataManager.CreateData({ Component.Health, Component.Status, Component.Attributes }, {
-    Health = { MaxHP = 3 },
-    Attributes = { BaseStats = { Custo = 2, Ataque = 4 } },
-})
-carta.TakeDamage(1)
-DataManager.Remove(carta)
-`,
   see: ["receitas.cardgame", "api.DataManager.Remove"],
   kw: "card carta deck baralho sem corpo sem model dado abstrata",
 });
@@ -95,9 +75,8 @@ DOCS.fn("api.DataManager", {
   title: "DataManager.Get",
   call: "DataManager.Get(entity)",
   desc: "Devolve o EntityCore a partir do ID, do Model, do Player ou do próprio core. Entrada inválida devolve <code>nil</code> com warn (não dá erro).",
-  args: [["entity", "string | Instance | EntityCore", "ID (mais rápido), Model, Player ou o core."]],
+  args: [["entity", "string | Instance", "ID (mais rápido), o Model ou o Player (os dois têm o atributo <code>EntityID</code>). O próprio EntityCore não é aceito."]],
   ret: "<code>EntityCore</code> ou <code>nil</code>.",
-  ex: `local alvo = DataManager.Get(ctx.input.Target)`,
   notes: N("<p>Para validar entrada da rede sem warn, use " + L("api.DataManager.Exists") + ".</p>"),
   see: ["api.DataManager.Exists", "api.DataManager.GetEntityFromInstance"],
   kw: "buscar achar encontrar obter",
@@ -109,7 +88,6 @@ DOCS.fn("api.DataManager", {
   desc: "Existe entidade com este ID? Sem warn: serve para validar entrada da rede.",
   args: [["id", "any", "Qualquer valor (não-string devolve false)."]],
   ret: "<code>boolean</code>.",
-  ex: `if not DataManager.Exists(payload.Target) then return end`,
   see: ["api.DataManager.Get"],
 });
 DOCS.fn("api.DataManager", {
@@ -119,12 +97,6 @@ DOCS.fn("api.DataManager", {
   desc: "Sobe a hierarquia a partir de uma peça atingida até achar um Model com EntityID e devolve a entidade dele.",
   args: [["instance", "Instance", "Peça atingida (ex.: <code>raycastResult.Instance</code>)."]],
   ret: "<code>EntityCore</code> ou <code>nil</code>.",
-  ex: `
-hitbox:OnHit(function(result)
-    local atingido = DataManager.GetEntityFromInstance(result.Instance)
-    if atingido then self:Damage(atingido, 12) end
-end)
-`,
   see: ["api.HitboxSpawner"],
   kw: "raycast peça part hit atingido",
 });
@@ -135,7 +107,6 @@ DOCS.fn("api.DataManager", {
   desc: "Destrói a entidade (todos os componentes, skills e status) e tira do registro.",
   args: [["entity", "Player | Model | string | EntityCore", "O Player, o Model, o ID ou o core."]],
   ret: "Nada.",
-  ex: `DataManager.Remove(minion)`,
   see: ["api.EntityCore.Destroy"],
   kw: "destruir apagar deletar remover",
 });
@@ -173,22 +144,6 @@ DOCS.fn("api.EntityCore", {
   desc: "Inscreve uma reação num breakpoint desta entidade. É o mecanismo de reação do framework inteiro.",
   args: [["subscription", "Types.Subscription", "<code>{ Role, Breakpoint, Action, Query?, Priority?, Owner?, TTD?, Limit?, Inherit? }</code>. Ver " + L("api.TriggerSet.Subscription") + "."]],
   ret: "Função <code>unsubscribe()</code>.",
-  ex: `
-local Enum = StateTable.Enum
--- espinhos: devolve 20% do dano recebido para quem bateu
-alvo:Listen({
-    Role = Enum.Roles.IN,
-    Breakpoint = Enum.Breakpoints.PostDamage,
-    Query = { None = { Enum.Traits.DOT } },
-    Owner = StateTable.OwnerToken(alvo, "Espinhos"),
-    Action = function(ctx)
-        local agressor = ctx.ownerEntity
-        if agressor and agressor ~= alvo then
-            agressor.TakeDamage(ctx.actualDamage * 0.2)
-        end
-    end,
-})
-`,
   notes: N("<p>Dentro de skill, prefira <code>self:Listen(sub)</code>: a inscrição sai sozinha no fim do runner.</p>"),
   see: ["conceitos.eventos", "api.EntityCore.ListenWorld", "api.EntityCore.UnsubscribeByOwner", "api.skill.Listen"],
   kw: "escutar ouvir evento reagir subscribe inscrever",
@@ -200,19 +155,6 @@ DOCS.fn("api.EntityCore", {
   desc: "Escuta um canal de TODAS as entidades. A Action recebe <code>(ctx, entidadeQueEmitiu, ...)</code>. Roda depois dos ouvintes da própria entidade. Sem ouvinte no mundo, o Emit não paga nada a mais.",
   args: [["subscription", "Types.Subscription", "Mesmo formato do Listen."]],
   ret: "Função <code>unsubscribe()</code>.",
-  ex: `
-local EntityCore = require(game.ServerScriptService.EntityData.EntityCore)
--- "sempre que qualquer lacaio morrer, o chefe ganha 5% de dano"
-EntityCore.ListenWorld({
-    Role = Enum.Roles.IN, Breakpoint = Enum.Breakpoints.OnDeath,
-    Owner = StateTable.OwnerToken(chefe, "Furia"),
-    Action = function(ctx, morto)
-        if morto:GetComponent(Component.Affiliation) and morto.GetTeam() == "Lacaios" then
-            chefe.AddModifier("DamageMult", "Furia_" .. morto.ID, "AddPercent", 0.05)
-        end
-    end,
-})
-`,
   see: ["api.EntityCore.UnsubscribeWorldByOwner", "receitas.global"],
   kw: "global mundo todos qualquer entidade world",
 });
@@ -235,11 +177,6 @@ DOCS.fn("api.EntityCore", {
     ["context", "table?", "Contexto entregue às Actions (precisa de <code>traits</code> para Query; o motor cria se faltar)."],
     ["...", "any", "Argumentos extras para as Actions."],
   ],
-  ex: `
-if mesa:HasListeners(Enum.Roles.OUT, "OnCardPlayed") then
-    mesa:Emit(Enum.Roles.OUT, "OnCardPlayed", { traits = { "Feitiço" }, carta = carta })
-end
-`,
   see: ["api.EntityCore.HasListeners"],
   kw: "disparar emitir evento próprio custom",
 });
@@ -258,10 +195,6 @@ DOCS.fn("api.EntityCore", {
   call: "entity:UnsubscribeByOwner(owner)",
   desc: "Remove todas as inscrições desta entidade com este Owner.",
   args: [["owner", "any", "Use <code>StateTable.OwnerToken(entidade, tag)</code> para um dono por entidade."]],
-  ex: `
-local dono = StateTable.OwnerToken(self.Entity, "Combo")
-self.Entity:UnsubscribeByOwner(dono) -- limpa combos antigos antes de inscrever de novo
-`,
   see: ["api.StateTable.OwnerToken"],
 });
 DOCS.fn("api.EntityCore", {
@@ -275,7 +208,6 @@ DOCS.fn("api.EntityCore", {
     ["callOnAddedNow", "boolean?", "true = roda o OnAdded agora (use sempre que a entidade já existe)."],
   ],
   ret: "A instância do componente (ou a existente, com warn).",
-  ex: `npc:AddComponent(Component.AI, { Brain = patrulha }, true)`,
   see: ["api.EntityCore.RemoveComponent"],
 });
 DOCS.fn("api.EntityCore", {
@@ -292,7 +224,6 @@ DOCS.fn("api.EntityCore", {
   desc: "A instância do componente (para ler campos ou chamar métodos que não estão na ExposeAPI).",
   args: [["name", "string", "Nome do componente."]],
   ret: "O componente ou <code>nil</code>.",
-  ex: `local weapon = self.Entity:GetComponent(self.Entity.ComponentKey.Weapon)`,
 });
 DOCS.fn("api.EntityCore", {
   name: "HasComponent",
@@ -301,7 +232,6 @@ DOCS.fn("api.EntityCore", {
   desc: "A entidade tem este componente?",
   args: [["name", "string", "Nome do componente."]],
   ret: "<code>boolean</code>.",
-  ex: `if alvo:HasComponent(Component.Movement) then alvo.AddForce(knockback) end`,
 });
 DOCS.fn("api.EntityCore", {
   name: "Destroy",

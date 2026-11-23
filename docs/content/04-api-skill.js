@@ -43,25 +43,23 @@ ${T(["Campo", "O quê"], [
     "Causa dano com este runner como fonte: DamageMult do dono, OUT.onHit, pipeline do alvo, crédito correto.",
     [["target", "EntityCore", "Alvo."], ["amount", "number", "Dano base."], ["opts", "DamageOptions?", "<code>{ Traits?, Effects?, Hit?, Prescaled?, Inherited? }</code>."]],
     "<code>sucesso, danoReal</code>, ou <code>false, Enum.ChainOutcomes.X</code>.",
-    { ex: "onHit = function(self, hit)\n    local ok, dano = self:Damage(hit.target, 12, { Hit = hit })\n    if ok and dano > 0 then\n        self:ApplyStatus(self.statusTable.States.Stun, { Target = hit.target, Duration = 0.4 })\n    end\nend,", see: ["conceitos.dano", "api.Combat.ApplyDamage"] });
+    { see: ["conceitos.dano", "api.Combat.ApplyDamage"] });
   S("ApplyStatus", "local id = self:ApplyStatus(status, opts?)",
     "Aplica um status com Source = este runner. <code>opts.Target</code> escolhe a entidade (padrão: a própria).",
     [["status", "{ data, callbacks }", "O status."], ["opts", "table?", "<code>{ Target?, Duration?, ID?, Inherited?, Source? }</code>."]],
-    "ID ou <code>nil</code>.", { ex: "self:ApplyStatus(self.statusTable.Status.Bleed, { Target = alvo, Duration = 4, Inherited = { mult = 2 } })", see: ["api.Status.ApplyStatus"] });
+    "ID ou <code>nil</code>.", { see: ["api.Status.ApplyStatus"] });
   S("StartHitbox", "self:StartHitbox(duration)", "Liga a hitbox da arma DESTA skill. Os acertos chegam no <code>onHit(self, hit)</code>; sai sozinha no fim do runner.",
     [["duration", "number", "Segundos."]], "<code>boolean</code> (false sem Weapon).",
     { notes: N("<p><code>hit</code> = <code>{ target, position, normal, distance, instance, hitboxName, flags, segment }</code>. Um alvo por sessão: para acertar de novo, StopHitbox e StartHitbox.</p>") });
   S("StopHitbox", "self:StopHitbox()", "Desliga a hitbox desta skill e zera a lista de já acertados.", null, null);
   S("Listen", "local unsubscribe = self:Listen(subscription)", "Inscreve na entidade dona com Owner = este runner: sai sozinha quando a skill termina.",
     [["subscription", "Subscription", "Mesmo formato do Listen."]], "Função <code>unsubscribe()</code>.",
-    { ex: "-- enquanto a skill durar, metade do dano recebido\nself:Listen({\n    Role = Enum.Roles.IN, Breakpoint = Enum.Breakpoints.PreDamage,\n    Action = function(ctx) ctx.damage *= 0.5 end,\n})", see: ["api.EntityCore.Listen"] });
+    { see: ["api.EntityCore.Listen"] });
   S("Own", "self:Own(cleanup)", "Registra uma limpeza que roda sozinha no fim (qualquer motivo), antes do onEnd. Chamado depois do fim, roda na hora.",
-    [["cleanup", "function", "<code>() -> ()</code>."]], null,
-    { ex: "local release = alvo.AttachTo(self.Entity.GetRoot(), CFrame.new(0, 0, -4))\nself:Own(release)" });
+    [["cleanup", "function", "<code>() -> ()</code>."]], null);
   S("Stop", "self:Stop(cancel?)", "Encerra a skill. Com <code>true</code>, é cancelamento (roda onCancel, que pode recusar).",
     [["cancel", "boolean?", "true = cancel; false/nil = fim normal (motivo stop)."]], null);
-  S("Fizzle", "self:Fizzle()", "Desiste do cast (alvo não encontrado, condição falhou). Motivo <code>fizzle</code>: por padrão devolve o cooldown inteiro.", null, null,
-    { ex: "onStart = function(self, ctx)\n    local alvo = ctx.input.Target and DataManager.Get(ctx.input.Target)\n    if not alvo then return self:Fizzle() end\nend," });
+  S("Fizzle", "self:Fizzle()", "Desiste do cast (alvo não encontrado, condição falhou). Motivo <code>fizzle</code>: por padrão devolve o cooldown inteiro.", null, null);
   S("CommitCooldown", "self:CommitCooldown()", "Confirma o cooldown numa skill com <code>cooldownPolicy.start = \"Manual\"</code> (uma vez por runner).", null, "<code>boolean</code>.");
   S("GetRemainingTime", "self:GetRemainingTime()", "Segundos até o fim pela duração (no Casting, a duração inteira).", null, "<code>number?</code> (nil sem duração).");
   S("endSkill", "self:endSkill(cancel, reason?)", "Encerra com um motivo explícito.",
@@ -201,20 +199,21 @@ return {
     desc: "Ativa, faz recast ou entrega o Release da skill do slot da intent. Faz todas as checagens (canCast, morto, maxInstances, recast, cooldown, ActionState).",
     args: [["id", "string", "ID da entidade."], ["event", "InputEvent", "De <code>Intents.NewEvent</code>."]],
     ret: "<code>sucesso</code>; em Activate, também o nome da skill e o cooldown.",
-    ex: "SkillHandler.HandleIntent(npc.ID, Intents.NewEvent(Intents.Id.Dash, Intents.Kind.Activate, Intents.Gesture.Press))",
     see: ["conceitos.skills", "api.Intents.NewEvent"],
   });
   DOCS.fn("api.SkillHandler", {
     name: "HandleMovementInput", title: "SkillHandler.HandleMovementInput",
     call: "SkillHandler.HandleMovementInput(id, direction)",
     desc: "Direção de movimento da entidade (achatada no plano). Vai também para as entidades linkadas com MirrorMovement.",
-    args: [["id", "string", "ID."], ["direction", "Vector3", "Direção."]],
+    args: [["id", "string", "ID."], ["direction", "Vector3", "Direção (o tamanho não importa: é normalizada)."]],
+    ret: "<code>boolean</code>: a entidade ficou andando (false com direção nula, ID inválido ou valor que não é Vector3).",
   });
   DOCS.fn("api.SkillHandler", {
     name: "HandleLookInput", title: "SkillHandler.HandleLookInput",
     call: "SkillHandler.HandleLookInput(id, look)",
     desc: "Direção de mira/câmera (3D; a LookDirection plana é derivada).",
     args: [["id", "string", "ID."], ["look", "Vector3", "Mira."]],
+    ret: "<code>boolean</code>: aplicou (false com vetor quase nulo, ID inválido ou valor que não é Vector3).",
   });
   DOCS.fn("api.SkillHandler", {
     name: "GetGestureSpec", title: "SkillHandler.GetGestureSpec",
@@ -256,7 +255,6 @@ ${T(["Campo", "O quê"], [
       ["input", "InputEvent?", ""], ["inherited", "table?", "Payload para <code>ctx.inherited</code> do filho."],
     ],
     ret: "O runner.",
-    ex: "local SkillRunner = require(game.ServerScriptService.Modules.SkillRunner)\nlocal SkillFactory = require(game.ServerScriptService.Modules.SkillFactory)\nlocal eco = SkillRunner.new(SkillFactory.GetSkill(EcoModule), self.Entity, \"Eco\",\n    StateTable.Enum.Types.Skill, self.Runner.Lineage, nil, { forca = 0.5 })\neco:start()",
   });
   DOCS.fn("api.SkillRunner", { name: "start", title: "runner:start", call: "runner:start()", desc: "Registra e inicia. Recusa sem os <code>requires</code> ou com a cadeia larga demais.", ret: "<code>false</code> se o onStart falhou ou o motor recusou." });
   DOCS.fn("api.SkillRunner", { name: "BuildContext", title: "runner:BuildContext", call: "runner:BuildContext(forListeners?)", desc: "Monta o RunnerContext (depth, history, rootOrigin, sourceRunner, input, inherited).", ret: "RunnerContext." });
@@ -280,7 +278,6 @@ ${T(["Campo", "O quê"], [
     desc: "Copia o estado de cooldown de uma skill entre entidades (tempo restante e cargas). Para skill roubada e possessão.",
     args: [["from", "EntityCore", "Origem (com Combat)."], ["to", "EntityCore", "Destino (com Combat)."], ["skillName", "string", "Nome."], ["mode", "string?", "\"Copy\" (padrão) ou \"Move\" (a origem fica pronta)."]],
     ret: "<code>boolean</code>.",
-    ex: "-- chefe rouba a ultimate do player com o cooldown que ela tinha\nchefe.EquipSkill(Intents.Id.Ultimate, Keys.Schema.Ultimate, \"Roubo\")\nCooldownPolicy.Transfer(player, chefe, \"Schema_Ultimate\", \"Move\")",
     see: ["receitas.roubar"],
   });
   DOCS.fn("api.CooldownPolicy", {

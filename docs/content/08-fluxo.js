@@ -9,7 +9,7 @@ DOCS.page({
 DOCS.page({
   id: "fluxo.finalizado", parent: "fluxo", order: 1, title: "Trabalhando com o framework finalizado",
   kw: "finalizado pronto completo mudar motor novo sistema redundante diretriz regra",
-  lead: "O motor está completo no escopo decidido (23/11/2026, 116 achados de auditoria, 0 abertos). O trabalho agora é fazer jogo com o que existe.",
+  lead: "O motor está completo no escopo decidido (23/11/2026, 117 achados de auditoria, 0 abertos). O trabalho agora é fazer jogo com o que existe.",
   html: `
 <ol class="flow">
   <li><b>Quase tudo se faz com o que já existe.</b> Antes de escrever código novo, procure aqui o sistema que resolve: Listen para reação, status para estado com duração, inherited para passar dado, camadas de loadout, CreateData, ListenWorld, AffectsFilter, Forces e AttachTo. Veja ${L("conceitos.estender")}.</li>
@@ -57,6 +57,40 @@ DOCS.page({
   <li>Nada de nomes duplicados (nem só na capitalização).</li>
   <li>Comentários descrevem o código atual e o porquê; histórico fica no git.</li>
 </ul>`,
+});
+
+DOCS.page({
+  id: "fluxo.docs", parent: "fluxo", title: "Escrevendo a documentação",
+  kw: "documentação manual docs escrever exemplo página função gamemaker gms estilo validar check",
+  lead: "Onde cada parte deste manual mora, o formato dos exemplos e como validar antes do commit.",
+  html: `
+<h2>Onde fica cada coisa</h2>
+${T(["Arquivo", "Conteúdo"], [
+  ["<code>docs/content/00</code> a <code>08</code>", "Páginas de texto e as definições da API (<code>DOCS.page</code>, <code>DOCS.group</code>, <code>DOCS.fn</code>): sintaxe, argumentos, retorno, notas."],
+  ["<code>docs/content/09</code> a <code>12</code>", "Os exemplos de uso de cada função (<code>DOCS.example</code>), na mesma ordem da API."],
+  ["<code>docs/content/sinonimos.js</code>", "Grupos de sinônimos da busca."],
+  ["<code>docs/assets/app.js</code>", "O motor do manual (registro, árvore, busca, realce, validação)."],
+])}
+<p>Arquivo novo em <code>content/</code> precisa de uma linha <code>&lt;script&gt;</code> no <code>index.html</code>.</p>
+
+<h2>Exemplos no estilo do manual do GameMaker</h2>
+<p>Toda função tem pelo menos um exemplo, e todo exemplo tem duas partes:</p>
+<ol class="flow">
+  <li><b>O código em contexto</b>, como apareceria num script do jogo: dentro de um <code>onHit</code>, de um Brain, de um listener, de um LocalScript. Não só a chamada solta.</li>
+  <li><b>O parágrafo "O código acima..."</b>, que diz o que o trecho faz e o que não é óbvio: um retorno <code>nil</code>, um efeito colateral, a razão de um argumento, a diferença para a função vizinha.</li>
+</ol>
+<p>Funções importantes têm mais de um exemplo, do básico ao completo, cada um com um título curto (vira "Exemplo 1: título").</p>
+${C(`
+// content/10a-exemplos-componentes.js (JavaScript)
+DOCS.example("api.Health.Heal", [
+  { t: "cura simples", code: "...", desc: "O código acima cura até 40 de vida..." },
+  { t: "cura de aliado, com sobrevida e crédito", code: "...", desc: "O código acima..." },
+]);
+`)}
+<p>Com um exemplo só, passe o objeto direto, sem lista. O <code>code</code> vai entre crases (template literal), para o Luau ficar com as quebras de linha. Confira o comportamento no código-fonte antes de escrever o parágrafo: o exemplo é a parte do manual que mais gente copia.</p>
+
+<h2>Validar</h2>
+<p>Carregue <code>assets/app.js</code> e todos os <code>content/*.js</code> no node e chame <code>DOCS.check()</code>. Ele acusa link quebrado, página sem pai, função sem exemplo, exemplo para função inexistente, exemplo sem código ou sem explicação, e exemplo declarado em dois lugares. O resultado precisa ser uma lista vazia.</p>`,
 });
 
 DOCS.page({

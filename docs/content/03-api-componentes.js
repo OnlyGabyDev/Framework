@@ -25,11 +25,9 @@
   });
   var G = "api.Character";
   F(G, "GetModel", "entity.GetModel()", "O Model da entidade.", null, "<code>Model</code>.");
-  F(G, "GetRoot", "entity.GetRoot()", "A peça raiz (HumanoidRootPart, ou PrimaryPart).", null, "<code>BasePart</code>.",
-    { ex: "local release = alvo.AttachTo(self.Entity.GetRoot(), CFrame.new(0, 0, -4))" });
+  F(G, "GetRoot", "entity.GetRoot()", "A peça raiz (HumanoidRootPart, ou PrimaryPart).", null, "<code>BasePart</code>.");
   F(G, "GetHumanoid", "entity.GetHumanoid()", "O Humanoid, se houver.", null, "<code>Humanoid?</code>.");
-  F(G, "GetPosition", "entity.GetPosition()", "Posição do root.", null, "<code>Vector3</code>.",
-    { ex: "local dist = (alvo.GetPosition() - self.Entity.GetPosition()).Magnitude" });
+  F(G, "GetPosition", "entity.GetPosition()", "Posição do root.", null, "<code>Vector3</code>.");
   F(G, "GetCFrame", "entity.GetCFrame()", "CFrame do root.", null, "<code>CFrame</code>.");
   F(G, "Teleport", "entity.Teleport(position)", "Teleporta o root para a posição (pelo servidor: o anti-cheat abre a janela de confiança).",
     [["position", "Vector3", "Destino."]], null);
@@ -56,12 +54,12 @@ ${T(["Config", "Tipo", "Padrão", "O quê"], [
     "Aplica dano nesta entidade pelo pipeline do alvo (imunidade, bloqueio, proteções, PreDamage, HP, efeitos on-hit, PostDamage, OnDamage no dono). Para dano de skill, prefira <code>self:Damage</code>, que passa pelo lado do atacante também.",
     [["amountOrContext", "number | HitContext", "Dano base, ou um contexto pronto."], ["source", "runner?", "Quem causou (crédito, traits, cadeia)."]],
     "<code>true, danoReal, ctx</code>; ou <code>false, motivo</code> (imunidade, cancelado, morto, ou <code>Enum.ChainOutcomes.Deferred</code>).",
-    { ex: "-- dano de ambiente (lava), sem fonte\nentity.TakeDamage(5)\n-- dano de um status (o runner do status é a fonte)\nself.Entity.TakeDamage(self.data.damage, self.Runner)", see: ["api.skill.Damage", "conceitos.dano"] });
+    { see: ["api.skill.Damage", "conceitos.dano"] });
   F(G, "Heal", "local subiu = entity.Heal(amount, opts?)",
     "Cura até <code>Cap × MaxHP</code>, nunca reduzindo o HP (sobrevida fica). Emite IN.OnHeal (antes) e, com Source, OUT.OnHeal no dono.",
     [["amount", "number", "Quanto curar."], ["opts", "HealOptions?", "<code>{ Source = runner?, Traits = {string}?, Cap = number? }</code>."]],
     "Quanto o HP subiu (<code>number</code>).",
-    { ex: "local subiu = aliado.Heal(30, { Source = self.Runner, Cap = 1.25 })", see: ["conceitos.cura", "receitas.lifesteal"] });
+    { see: ["conceitos.cura", "receitas.lifesteal"] });
   F(G, "Die", "entity.Die(killer?)", "Mata a entidade (HP 0): IN.OnDeath nela e OUT.OnDeath no dono do killer.",
     [["killer", "runner?", "Quem matou (crédito)."]], null, { see: ["conceitos.morte"] });
   F(G, "Revive", "entity.Revive(hp?)", "Revive com exatamente <code>hp</code> (ou o MaxHP). Emite IN.OnRevive.",
@@ -92,7 +90,7 @@ ${T(["Config", "Tipo", "Padrão", "O quê"], [
     [["status", "{ data, callbacks }", "O módulo do status (<code>StateTable.Status.X</code>, <code>StateTable.States.X</code>) ou uma tabela."],
      ["opts", "table | number", "<code>{ Duration?, Source?, ID?, Inherited? }</code>, ou só a duração."]],
     "O ID da aplicação, ou <code>nil</code> se não entrou (morto, escudo, cancelado no PreApplyStatus, em cooldown, no teto, ou adiado pela cadeia).",
-    { ex: "local id = entity.ApplyStatus(StateTable.States.Root, { Duration = 2, Source = runner })\n-- ...\nentity.RemoveStatusByID(id)", see: ["api.skill.ApplyStatus", "conceitos.status"] });
+    { see: ["api.skill.ApplyStatus", "conceitos.status"] });
   F(G, "RemoveStatusByID", "entity.RemoveStatusByID(id)", "Remove a aplicação com este ID (todas as entradas dele). É a forma recomendada.",
     [["id", "string", "O ID que o ApplyStatus devolveu."]], "<code>boolean</code>.");
   F(G, "RemoveStatus", "entity.RemoveStatus(name)", "Remove TODAS as instâncias do status com este nome (nos dois grupos).",
@@ -100,12 +98,12 @@ ${T(["Config", "Tipo", "Padrão", "O quê"], [
   F(G, "RemoveAmount", "entity.RemoveAmount(name, amount)", "Tira <code>amount</code> stacks/instâncias de um status empilhável.",
     [["name", "string", "Nome."], ["amount", "number", "Quantos."]], null);
   F(G, "GetStatus", "entity.GetStatus(name)", "As entradas ativas do status (<code>{ data, runner, sourceSkill, ID }</code>).",
-    [["name", "string", "Nome."]], "<code>table?</code>.", { ex: "local e = alvo.GetStatus(\"Bleed\")\nif e then print(e[1].runner.skill.counter) end" });
+    [["name", "string", "Nome."]], "<code>table?</code>.");
   F(G, "GetStatusCounter", "entity.GetStatusCounter(name)", "Stacks do status (o counter da instância, ou o número de instâncias).",
     [["name", "string", "Nome."]], "<code>number</code>.");
   F(G, "GetActiveTags", "local tags, donos = entity.GetActiveTags()", "Tags combinadas de todos os status ativos (false vence) e o dono de cada tag (aplicação mais recente).",
     null, "<code>{ [tag]: boolean }</code>, <code>{ [tag]: entrada }</code>.",
-    { ex: "if entity.GetActiveTags()[Enum.Tags.canMove] == false then return end", see: ["conceitos.tags"] });
+    { see: ["conceitos.tags"] });
   F(G, "GetActiveStates", "entity.GetActiveStates()", "Estados ativos (Stun, Root…).", null, "<code>{ [nome]: entrada }</code>.");
   F(G, "HasStateCategory", "entity.HasStateCategory(category)", "Algum estado ativo desta categoria?",
     [["category", "string", "Ex.: <code>Enum.States.Stun</code>."]], "<code>boolean</code>.");
@@ -137,10 +135,10 @@ ${T(["Config", "Padrão", "O quê"], [
   G = "api.Combat";
   F(G, "ApplyLoadout", "entity.ApplyLoadout(loadout, layer?)", "Troca uma camada inteira do loadout (padrão Base).",
     [["loadout", "table", "<code>{ Slots = { [Intents.Id] = chave | skill | false } }</code> ou <code>{ List = { chave, ... } }</code>."], ["layer", "string?", "Nome da camada."]],
-    null, { ex: "entity.ApplyLoadout({ Slots = { [Intents.Id.Ultimate] = Keys.Schema.Ultimate } }, \"Desperto\")", see: ["conceitos.loadout"] });
+    null, { see: ["conceitos.loadout"] });
   F(G, "EquipSkill", "entity.EquipSkill(slot, skill, layer?)", "Equipa uma skill num slot da camada (padrão Base). Carimba <code>data.name</code> e <code>data.kit</code> da skill do banco.",
     [["slot", "string", "<code>Intents.Id.X</code>."], ["skill", "string | table", "Chave do SkillDatabase ou uma tabela de skill."], ["layer", "string?", "Camada."]],
-    "<code>boolean</code>.", { ex: "entity.EquipSkill(Intents.Id.Ability2, Keys.Schema.Skill3)\n-- skill criada em código\nentity.EquipSkill(Intents.Id.Ability3, { data = { cooldown = 1, duration = 0.2 }, callbacks = { onStart = function(self) end } })" });
+    "<code>boolean</code>.");
   F(G, "AddSkill", "entity.AddSkill(skill, layer?)", "Equipa no próximo slot livre da camada, na ordem de <code>Intents.SkillOrder</code>.",
     [["skill", "string | table", "Chave ou tabela."], ["layer", "string?", "Camada."]], "O slot usado, ou <code>nil</code> (cheio).");
   F(G, "UnequipSlot", "entity.UnequipSlot(slot, layer?)", "Tira a skill do slot nesta camada (a de baixo volta a valer).", [["slot", "string", "Intent."], ["layer", "string?", "Camada."]], null);
@@ -158,7 +156,7 @@ ${T(["Config", "Padrão", "O quê"], [
   F(G, "StartCooldown", "entity.StartCooldown(skillName, duration, maxCharges?)", "Inicia uma contagem (ou gasta uma carga). O CooldownPolicy usa no cast; scripts podem chamar.",
     [["skillName", "string", "Nome."], ["duration", "number", "Segundos."], ["maxCharges", "number?", "Cargas."]], null);
   F(G, "ReduceCooldown", "entity.ReduceCooldown(skillName, seconds)", "Encurta a contagem corrente (redução pontual: on-hit, on-kill).",
-    [["skillName", "string", "Nome."], ["seconds", "number", "Segundos."]], null, { ex: "-- on-kill: -2 s na ultimate\nself:Listen({ Role = Enum.Roles.OUT, Breakpoint = Enum.Breakpoints.OnDeath,\n    Action = function() self.Entity.ReduceCooldown(\"Schema_Ultimate\", 2) end })" });
+    [["skillName", "string", "Nome."], ["seconds", "number", "Segundos."]], null);
   F(G, "GrantCooldownCharge", "entity.GrantCooldownCharge(skillName)", "Devolve uma carga (sem cargas: fica pronta).", [["skillName", "string", "Nome."]], null);
   F(G, "GetCooldownCharges", "entity.GetCooldownCharges(skillName)", "Cargas disponíveis e máximo.", [["skillName", "string", "Nome."]], "<code>number?, number?</code> (nil se a skill não usa cargas).");
   F(G, "ExportCooldown", "entity.ExportCooldown(skillName)", "Estado relativo, para copiar entre entidades.", [["skillName", "string", "Nome."]], "<code>{ remaining, duration, charges?, maxCharges? }</code> ou <code>nil</code> (pronta).");
@@ -197,13 +195,12 @@ ${T(["Config", "Padrão", "O quê"], [
   });
   G = "api.Attributes";
   F(G, "GetStat", "entity.GetStat(stat, default?)", "Valor final do stat: base, modificadores e limite.",
-    [["stat", "string", "<code>Enum.Stats.X</code> (ou um nome seu)."], ["default", "any?", "Usado se não há base registrada."]], "O valor.",
-    { ex: "local vel = entity.GetStat(Enum.Stats.Speed, Enum.StatDefaults.Speed)" });
+    [["stat", "string", "<code>Enum.Stats.X</code> (ou um nome seu)."], ["default", "any?", "Usado se não há base registrada."]], "O valor.");
   F(G, "SetStat", "entity.SetStat(stat, value)", "Define o valor base.", [["stat", "string", "Stat."], ["value", "any", "Valor."]], null);
   F(G, "GetStats", "entity.GetStats()", "A tabela da forma do personagem (<code>{ Stats, Loadout, Weapon, ... }</code>), ou <code>{ Stats = StatDefaults }</code> sem Combat.", null, "<code>table</code>.");
   F(G, "AddModifier", "entity.AddModifier(stat, sourceID, type, value)", "Adiciona (ou reforça) um modificador com contagem de referência.",
     [["stat", "string", "Stat."], ["sourceID", "any", "ID da origem."], ["type", "string", "<code>Enum.ModifierType</code>: Flat, AddPercent, MultPercent, Override."], ["value", "number", "Valor."]], null,
-    { ex: "entity.AddModifier(\"Speed\", zona.ID, \"MultPercent\", 0.6)", see: ["conceitos.stats"] });
+    { see: ["conceitos.stats"] });
   F(G, "RemoveModifier", "entity.RemoveModifier(stat, sourceID)", "Tira UMA referência do modificador (sai de vez com a contagem em zero).",
     [["stat", "string", "Stat."], ["sourceID", "any", "ID da origem."]], null);
 
@@ -239,7 +236,6 @@ ${T(["Config", "Padrão", "O quê"], [
       ["<code>FollowResponsiveness</code>, <code>FollowMaxSpeed</code>, <code>FollowFeedForward</code>", "number?, number?, boolean?", "Ganho, limite e soma da velocidade do líder (padrão true)."],
       ["<code>OnEnd</code>", "fn?", "Chamado no fim da Force."],
     ]),
-      ex: "-- knockback: externo, curto, fixo no plano\nalvo.AddForce({\n    Type = \"Knockback\", Duration = 0.25, Speed = 60,\n    Direction = (alvo.GetPosition() - self.Entity.GetPosition()).Unit,\n    Hard = true, RequiresControl = false, Priority = 5,\n})",
       see: ["conceitos.movimento", "api.Movement.RemoveForce"] });
   F(G, "RemoveForce", "entity.RemoveForce(id)", "Remove a Force pelo ID.", [["id", "string", "ID do AddForce."]], null);
   F(G, "RemoveForceByKey", "entity.RemoveForceByKey(key)", "Remove a Force ativa com esta Key.", [["key", "string", "Key."]], "<code>boolean</code>.");
@@ -253,7 +249,7 @@ ${T(["Config", "Padrão", "O quê"], [
   F(G, "SetDirection", "entity.SetDirection(dir)", "Direção de movimento (input). Players: vem do RequestDir; NPC: do Brain via SkillHandler.HandleMovementInput.", [["dir", "Vector3", "Direção."]], null);
   F(G, "GetDirection", "entity.GetDirection()", "Direção de movimento atual.", null, "<code>Vector3</code>.");
   F(G, "GetLastDirection", "entity.GetLastDirection()", "Última direção não nula.", null, "<code>Vector3</code>.");
-  F(G, "GetIntentDirection", "entity.GetIntentDirection()", "Direção pretendida (input) em uso pelo controlador.", null, "<code>Vector3</code>.");
+  F(G, "GetIntentDirection", "entity.GetIntentDirection()", "Octante do input de movimento em relação a para onde a entidade olha (o mesmo de <code>Utils.classifyDirection</code>).", null, "<code>string</code>: Forward, ForwardRight, Right, BackRight, Back, BackLeft, Left, ForwardLeft ou None.");
   F(G, "SetAimDirection", "entity.SetAimDirection(dir)", "Mira 3D (câmera). Atualiza a LookDirection plana.", [["dir", "Vector3", "Mira."]], null);
   F(G, "GetAimDirection", "entity.GetAimDirection()", "Mira 3D (com pitch: voo).", null, "<code>Vector3</code>.");
   F(G, "GetLookDirection", "entity.GetLookDirection()", "Direção da câmera no plano (combate).", null, "<code>Vector3</code>.");
@@ -262,8 +258,7 @@ ${T(["Config", "Padrão", "O quê"], [
   F(G, "SetJumpForce", "entity.SetJumpForce(value)", "Pulo direto no wrapper (mesma ressalva do SetSpeed).", [["value", "number", "Força."]], null);
   F(G, "SetFrozen", "entity.SetFrozen(frozen)", "Congela/descongela o corpo.", [["frozen", "boolean", ""]], null);
   F(G, "AddFilter", "entity.AddFilter(id, fn)", "Filtro de Forces: <code>fn(force)</code> devolvendo <code>false</code> recusa o AddForce.",
-    [["id", "any", "ID do filtro."], ["fn", "function", "<code>(force) -> boolean?</code>."]], null,
-    { ex: "-- chefe imune a knockback\nchefe.AddFilter(\"SemKnockback\", function(force) return force.Type ~= \"Knockback\" end)" });
+    [["id", "any", "ID do filtro."], ["fn", "function", "<code>(force) -> boolean?</code>."]], null);
   F(G, "RemoveFilter", "entity.RemoveFilter(id)", "Tira um filtro.", [["id", "any", "ID."]], null);
   F(G, "GetForceSpeedBudget", "entity.GetForceSpeedBudget()", "Quanto as Forces deslocam além da caminhada (usado pelo anti-cheat).", null, "horizontal, vertical (studs/s).");
   F(G, "SetDrivesInput", "entity.SetDrivesInput(value)", "Interno: o servidor dirige o corpo (NPC, possessão).", null, null);
@@ -298,11 +293,11 @@ ${T(["Config", "Padrão", "O quê"], [
   F(G, "GetWeaponCFrame", "entity.GetWeaponCFrame()", "CFrame da arma.", null, "<code>CFrame</code>.");
   F(G, "StartHitbox", "entity.StartHitbox(duration, owner?)", "Liga a hitbox da arma para o owner (um runner). Sem owner, a sessão compartilhada. Na skill, use <code>self:StartHitbox</code>.",
     [["duration", "number", "Segundos."], ["owner", "runner?", "Dono (recebe os acertos no onHit)."]], "<code>boolean</code>.", { see: ["api.skill.StartHitbox"] });
-  F(G, "StopHitbox", "entity.StopHitbox(owner?)", "Desliga a hitbox do owner (zera a lista de já acertados).", [["owner", "runner?", "Dono."]], null);
-  F(G, "IsHitboxActive", "entity.IsHitboxActive(owner?)", "A hitbox está ativa (do owner, ou qualquer)?", [["owner", "runner?", ""]], "<code>boolean</code>.");
+  F(G, "StopHitbox", "entity.StopHitbox(owner?)", "Desliga a hitbox do owner e zera a lista de já acertados; um StartHitbox depois religa do zero. Sem owner, a sessão compartilhada. Não apaga nada (para isso, DestroyHitbox).", [["owner", "runner?", "Dono (na skill, <code>self:StopHitbox()</code> passa o runner)."]], null);
+  F(G, "IsHitboxActive", "entity.IsHitboxActive(owner?)", "A hitbox está ativa (do owner, ou qualquer)?", [["owner", "runner?", "Dono; sem ele, qualquer sessão."]], "<code>boolean</code>.");
   F(G, "AddHitboxOwner", "entity.AddHitboxOwner(owner)", "Interno: o runner passa a receber acertos (o motor faz no start da skill).", null, null);
   F(G, "RemoveHitboxOwner", "entity.RemoveHitboxOwner(owner)", "Interno: o runner sai (no fim da skill).", null, null);
-  F(G, "GetActiveHitboxes", "entity.GetActiveHitboxes(owner?)", "Hitboxes ativas (debug).", null, "<code>table</code>.");
+  F(G, "GetActiveHitboxes", "entity.GetActiveHitboxes(owner?)", "Hitboxes ativas (debug).", [["owner", "runner?", "Só as da sessão dele; sem ele, todas."]], "<code>{ [nome]: hitbox }</code>.");
   F(G, "GetHitboxConfigs", "entity.GetHitboxConfigs()", "Partes de hitbox achadas na arma (<code>{ name, part, flags }</code>).", null, "<code>table</code>.");
   F(G, "GetHitbox", "entity.GetHitbox()", "O HitboxWrapper da arma.", null, "Wrapper.");
   F(G, "DestroyHitbox", "entity.DestroyHitbox()", "Destrói o wrapper de hitbox.", null, null);
@@ -318,14 +313,13 @@ ${T(["Config", "Padrão", "O quê"], [
   G = "api.Animation";
   F(G, "PlayAnimation", "local track = entity.PlayAnimation(id, key?, fade?, weight?, speed?)", "Toca uma animação. A chave identifica a track (padrão: o próprio id); tocar de novo na mesma chave substitui.",
     [["id", "string | number", "ID da animação."], ["key", "string?", "Chave."], ["fade", "number?", "Fade in (0,1)."], ["weight", "number?", "Peso."], ["speed", "number?", "Velocidade (1)."]],
-    "<code>AnimationTrack?</code> (nil sem Animator).", { ex: "local id = self.charLib.M1.M1Start\nlocal track = self.Entity.PlayAnimation(id)\nif track then track.Looped = false end" });
+    "<code>AnimationTrack?</code> (nil sem Animator).");
   F(G, "StopAnimation", "entity.StopAnimation(key, fade?)", "Para a track da chave.", [["key", "string", "Chave."], ["fade", "number?", "Fade out."]], null);
   F(G, "StopAllAnimations", "entity.StopAllAnimations(fade?)", "Para todas.", [["fade", "number?", ""]], null);
   F(G, "AdjustSpeed", "entity.AdjustSpeed(key, speed)", "Muda a velocidade de uma track.", [["key", "string", ""], ["speed", "number", ""]], null);
   F(G, "AdjustWeight", "entity.AdjustWeight(key, weight, fade?)", "Muda o peso.", [["key", "string", ""], ["weight", "number", ""], ["fade", "number?", ""]], null);
   F(G, "OnMarker", "local conn = entity.OnMarker(key, marker, callback)", "Conecta um callback a um marcador da track.",
-    [["key", "string", "Chave da track (o id, se não passou key)."], ["marker", "string", "Nome do marcador."], ["callback", "function", ""]], "<code>RBXScriptConnection?</code>.",
-    { ex: "self.Entity.OnMarker(tostring(id), \"End\", function() self.cleanUp() end)" });
+    [["key", "string", "Chave da track (o id, se não passou key)."], ["marker", "string", "Nome do marcador."], ["callback", "function", ""]], "<code>RBXScriptConnection?</code>.");
   F(G, "WaitForMarker", "entity.WaitForMarker(key, marker, timeout?)", "Espera o marcador (bloqueia a thread) ou o timeout.", [["key", "string", ""], ["marker", "string", ""], ["timeout", "number?", ""]], "<code>boolean</code> (o marcador chegou).");
   F(G, "GetMarkerSignal", "entity.GetMarkerSignal(key, marker)", "O sinal do marcador.", null, "<code>RBXScriptSignal?</code>.");
   F(G, "PlaySequence", "entity.PlaySequence(steps, index?, loop?)", "Toca uma sequência de animações em ordem, com loop opcional.",
@@ -355,7 +349,7 @@ ${T(["Config", "Padrão", "O quê"], [
   G = "api.Control";
   F(G, "Possess", "entity.Possess(controller, opts?)", "Transfere o controle desta entidade.",
     [["controller", "table", "<code>{ Player = p }</code> ou <code>{ AI = true, Brain = fn? }</code>."], ["opts", "table?", "<code>{ Policy?, PauseAI?, ReleaseOnDeath? }</code>."]], "<code>boolean</code>.",
-    { ex: "torre.Possess({ Player = player })\n-- ...\ntorre.Release()", see: ["receitas.possessao"] });
+    { see: ["receitas.possessao"] });
   F(G, "Release", "entity.Release()", "Devolve ao controlador nativo (o player volta ao corpo anterior da pilha).", null, "<code>boolean</code> (havia controle não nativo).");
   F(G, "Lock", "entity.Lock()", "Corta o controlador atual sem reatribuir (cutscene, QTE).", null, null);
   F(G, "Unlock", "entity.Unlock()", "Devolve exatamente o que o Lock cortou.", null, null);
