@@ -4,7 +4,7 @@
 
 Oct 15, 2026 · @Gabi
 
-> **Estado em 22/11/2026:** 0 abertos de 109 achados, placar **(0 crít, 0 alta, 0 méd, 0 baixa)**. F55 e F62 corrigidos em 22/11; F97 a F102 foram achados pelos testes duros e corrigidos no mesmo dia; F103 e F104 (agarrão atrasado e vento depois do dash, vistos pelo usuário no cliente) e as lacunas F105 a F108 (time, Combat sem personagem, cura, opções do hit) entraram na 3ª rodada. F109 (teleporte do AntiCheat no Dash durante a Ultimate) fechou a rodada. HP acima do máximo é escolha de design (espaço para sobrevida). F95 e F96 foram achados e corrigidos em 11/11. O F71 já estava corrigido no Studio e o F93 era falso positivo (código comentado). O resto foi corrigido no lote P0 (16/10), na Fase 1 do hardening (16/10) e no lote de 08/11. O texto abaixo é o retrato de 15/10.
+> **Estado em 22/11/2026:** 0 abertos de 112 achados, placar **(0 crít, 0 alta, 0 méd, 0 baixa)**. F55 e F62 corrigidos em 22/11; F97 a F102 foram achados pelos testes duros e corrigidos no mesmo dia; F103 e F104 (agarrão atrasado e vento depois do dash, vistos pelo usuário no cliente) e as lacunas F105 a F108 (time, Combat sem personagem, cura, opções do hit) entraram na 3ª rodada. F109 (teleporte do AntiCheat no Dash durante a Ultimate) fechou a rodada. F110 a F112 (SetHP/Revive e o Context por Breakpoint decidido em arquitetura) fecharam o que faltava do motor. HP acima do máximo é escolha de design (espaço para sobrevida). F95 e F96 foram achados e corrigidos em 11/11. O F71 já estava corrigido no Studio e o F93 era falso positivo (código comentado). O resto foi corrigido no lote P0 (16/10), na Fase 1 do hardening (16/10) e no lote de 08/11. O texto abaixo é o retrato de 15/10.
 
 ## Resumo executivo
 
