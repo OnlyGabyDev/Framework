@@ -386,6 +386,9 @@ OPÇÕES DO HIT (F108): self:Damage(alvo, n, { Traits = {...}, Effects = {...}, 
 (Types.DamageOptions). Traits/efeitos valem só para esse hit; Hit vira context.hit (ponto do impacto);
 Prescaled pula o DamageMult.
 
+SETHP/REVIVE (F110): SetHP(n) e Revive(n) definem o HP exato, sem corte no MaxHP (sobrevida é design); o
+teto fica com o SetMaxHP e o HealCap da cura.
+
 INSCRIÇÕES (Listen): Owner por entidade com StateTable.OwnerToken(entidade, "tag"), nunca string.
 
 FORÇAS: Soft e caminhada do NPC proporcionais à massa (Physics/Settings: Force_Mass_Scaling); MassScaling = false

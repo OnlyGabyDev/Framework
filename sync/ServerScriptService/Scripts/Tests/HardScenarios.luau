@@ -1046,4 +1046,20 @@ return function(env)
 			"O Dash perdeu a própria janela quando a do voo expirou (antes: voltava a 2 em 1,15 s e o AntiCheat corrigia)")
 		t.assert(at(1.6) == 2, "A janela não expirou depois de 0,35 s do fim do Dash")
 	end)
+
+	--=========================================================================
+	--  CONTEXT POR BREAKPOINT E HP (4ª rodada de 22/11)
+	--=========================================================================
+
+	run("F110 — SetHP e Revive definem o HP exato, sem corte no MaxHP", function(t)
+		local e = still(CFrame.new(0, 5, 0)) -- MaxHP 100
+		e.SetHP(150)
+		t.assert(e.GetHP() == 150 and e.GetMaxHP() == 100, "SetHP(150) com MaxHP 100 deixou " .. tostring(e.GetHP()))
+		e.SetHP(-5)
+		t.assert(not e.IsAlive() and e.GetHP() == 0, "SetHP negativo devia matar com HP 0")
+		t.assert(e.Revive(180) == true and e.GetHP() == 180, "Revive(180) deixou " .. tostring(e.GetHP()))
+		e.SetHP(0)
+		t.assert(e.Revive() == true and e.GetHP() == 100, "Revive sem valor devia voltar com o MaxHP")
+		cleanup(e)
+	end)
 end

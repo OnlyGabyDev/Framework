@@ -285,8 +285,8 @@ function HealthComponent:Revive(hpAmount : number?) : boolean
 	if not self.IsDead then return false end
 
 	self.IsDead = false
-	local maxHP = self:GetMaxHP()
-	self.HP = math.min(hpAmount or maxHP, maxHP)
+	-- Sem valor, volta com o MaxHP; com valor, exatamente ele (sem corte no MaxHP: F110)
+	self.HP = math.max(0, hpAmount or self:GetMaxHP())
 	self:_SyncClient()
 
 	local context = StateTable.BuildContext(nil, 0)
@@ -313,11 +313,15 @@ function HealthComponent:GetMaxHP()
 	return self.MaxHP
 end
 
+--[[
+Define o HP exato. NÃO corta no MaxHP (F110): HP acima do máximo é design (sobrevida), e o teto é
+papel do SetMaxHP e do HealCap da cura. Só não fica negativo; 0 ou menos mata.
+]]
 function HealthComponent:SetHP(value)
 	if self.IsDead then return end
 
 	local oldHP = self.HP
-	self.HP = math.clamp(value, 0, self:GetMaxHP())
+	self.HP = math.max(0, value)
 
 	if self.HP <= 0 then
 		self:Die(nil)
