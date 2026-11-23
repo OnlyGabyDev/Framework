@@ -1,12 +1,11 @@
 --!strict
 --[[
 MinionFactory: reduz o boilerplate de "invocar uma entidade descartável"
-SEM decidir por você quais componentes ela deve ter — você declara um
-Blueprint (Regra 2: reutilizável) numa pasta Blueprints/, a factory só monta
-o Model+DataManager.Create com base nele. Mesmo padrão de auto-scan que
-SkillDatabase/CharacterDatabase já usam, não invento convenção nova.
+SEM decidir por você quais componentes ela deve ter: você declara um
+Blueprint numa pasta Blueprints/ e a factory monta o Model + DataManager.Create
+com base nele (mesmo auto-scan do SkillDatabase/CharacterDatabase).
 NÃO substitui DataManager.Create: se seu caso não encaixa num Blueprint,
-chame DataManager.Create direto — sem bloqueio nenhum (Regra 3).
+chame DataManager.Create direto.
 ]]
 
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -44,7 +43,7 @@ end
 --[[
 @param blueprintName - nome do módulo em Blueprints/ (ou registrado via Register)
 @param cframe - onde spawnar
-@param parentEntity any? - se fornecido, faz Fork de TriggerSet (Sprint 10)
+@param parentEntity any? - se fornecido, o minion herda as reações dele (Fork do TriggerSet)
 @return EntityCore ou nil
 ]]
 function MinionFactory.Spawn(blueprintName: string, cframe: CFrame, parentEntity: any?): any?

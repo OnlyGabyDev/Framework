@@ -18,8 +18,7 @@ local CARRIER_NAME = "_DecoupledHitboxCarrier"
 --[[
 Monta o RaycastParams padrão de exclusão pra hitboxes desacopladas: exclui o
 Instance do caster (se fornecido) e qualquer extra pedido. ÚNICO ponto que
-monta esse filtro fora do HitboxWrapper (Regra 1 — não duplique "monta filtro
-de exclusão" em mais um lugar com pequenas divergências).
+monta esse filtro fora do HitboxWrapper: não duplique.
 ]]
 function HitboxSpawner.BuildDefaultFilter(casterEntity: any?, extraExclude: {Instance}?): RaycastParams
 	local params = RaycastParams.new()

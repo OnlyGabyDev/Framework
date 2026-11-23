@@ -108,8 +108,8 @@ function HitboxWrapper:_discoverHitboxes()
 end
 
 
--- Chave da sessão sem dona (StartHitbox chamado pela entidade, sem runner): o comportamento antigo,
--- com o acerto entregue a todos os owners
+-- Chave da sessão sem dona (StartHitbox chamado pela entidade, sem runner): o acerto vai
+-- para todos os owners
 local SHARED = table.freeze({ shared = true })
 
 function HitboxWrapper:_session(owner)
@@ -259,7 +259,7 @@ end
 
 
 --Callback do onHit: anti multi-hit por sessão; o acerto vai para a dona da sessão (sem dona:
---para todos os owners, o comportamento antigo)
+--para todos os owners)
 function HitboxWrapper:_handleHit(result: RaycastResult, segment, config: HitboxConfig, session, owner)
 	if not result then return end
 
@@ -298,7 +298,7 @@ function HitboxWrapper:_handleHit(result: RaycastResult, segment, config: Hitbox
 			end
 		end
 	elseif self.callback then
-		--Sessão compartilhada: executa o callback de todos os owners (o comportamento antigo)
+		--Sessão compartilhada: executa o callback de todos os owners
 		local success, err = pcall(self.callback, hitResult)
 		if not success then
 			warn("[HitboxWrapper] Erro no callback:", err)

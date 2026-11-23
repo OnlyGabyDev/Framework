@@ -138,7 +138,7 @@ end
 Sobrepõe o palpite do wrapper (Grounded/Jumping/Falling, só física bruta) com
 "Floating" quando algo está DELIBERADAMENTE suspendendo o eixo Y — uma Force
 Hard com IgnoreGravity/Axes.Y, ou GravityScale <= 0 via Attributes. Sem isso,
-uma entidade flutuando parada (velocidade vertical ~0) seria confundida com
+"acabou de começar a cair".
 "acabou de começar a cair", que é exatamente o furo reportado.
 Grounded sempre vence — flutuar não anula estar de pé em cima de algo.
 ]]

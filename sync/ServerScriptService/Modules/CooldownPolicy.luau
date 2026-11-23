@@ -1,6 +1,6 @@
 --[[
 CooldownPolicy: as regras de cooldown de skill. A skill declara no data; o motor executa. O
-motor executa. O CombatComponent guarda os dados (self.Cooldowns) e delega as contas para cá.
+CombatComponent guarda os dados (self.Cooldowns) e delega as contas para cá.
 Status não passam por aqui (o cooldown deles é o StatusCooldowns do StatusComponent).
 
 	data = {

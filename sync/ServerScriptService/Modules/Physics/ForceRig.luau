@@ -3,9 +3,8 @@
 	ForceRig
 	========
 	Camada física de baixo nível, compartilhada entre HumanoidMovement e
-	NPCMovement (EntityWrapper.luau). Existe pra resolver o problema de raiz
-	do sistema antigo: setar `root.AssemblyLinearVelocity` direto, uma vez por
-	Heartbeat, briga com o resto da simulação de física.
+	NPCMovement (EntityWrapper.luau). Não seta `root.AssemblyLinearVelocity`
+	direto a cada Heartbeat (isso briga com o resto da simulação de física).
 ]]
 
 local ForceRig = {}
