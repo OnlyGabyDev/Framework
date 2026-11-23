@@ -1,7 +1,6 @@
 --!strict
--- HitboxPresets: combinações prontas de Spawner + Behaviors, NOMEADAS. Regra 2
--- do framework: a skill só referencia Presets.X e passa overrides pontuais —
--- nunca monta spawner+behavior na mão dentro de uma skill.
+-- HitboxPresets: combinações prontas de Spawner + Behaviors, NOMEADAS. A skill só
+-- referencia Presets.X e passa overrides pontuais; não monta spawner+behavior na mão.
 
 local HitboxSpawner = require(script.Parent.HitboxSpawner)
 local Behaviors = require(script.Parent.HitboxBehaviors)

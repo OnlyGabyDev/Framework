@@ -24,10 +24,8 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 	accumulated = 0
 
-	-- Antes achatava aqui (Y=0) antes de enviar. Agora manda o vetor 3D
-	-- cheio — LookDirection (combate, plano) continua existindo, mas é
-	-- DERIVADO no servidor a partir deste vetor. Isso é o que permite Ults
-	-- de voo considerarem o pitch da câmera sem duplicar remote/rate-limit.
+	-- Manda o vetor 3D cheio. LookDirection (combate, plano) é DERIVADO no servidor a partir
+	-- dele; é o que permite Ults de voo considerarem o pitch da câmera sem outro remote.
 	local aim = camera.CFrame.LookVector
 
 	if (aim - lastSent).Magnitude > MIN_DELTA then

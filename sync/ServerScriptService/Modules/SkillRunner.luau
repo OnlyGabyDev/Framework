@@ -1,4 +1,4 @@
---=================Esse módulo controla o ciclo de vida das skills, TODAS as skills e modificadores são gerados com um SR base=================
+-- SkillRunner: ciclo de vida de uma ativação de skill ou status (Idle -> Casting -> Running -> Ended)
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScript = game:GetService("ServerScriptService")
@@ -47,10 +47,16 @@ local NOTHING_INHERITED = table.freeze({})
 
 
 --[[
-@param inherited - payload explícito do pai para este runner (Context.inherited, F111): copiado e
-	congelado aqui, o filho só lê. Status recebe pelo ApplyStatus(..., { Inherited = {...} })
+Cria o runner de uma ativação (skill ou status). Não inicia: chame :start().
+@param skillModule - { data, callbacks } da skill (SkillFactory)
+@param Entity - entidade dona (quem casta, ou o portador do status)
+@param name - nome da skill/status
+@param SRtype - StateTable.Enum.Types (Skill | Status)
+@param Lineage - nó pai na cadeia (nil = raiz)
+@param input - Intents.InputEvent que originou o cast
+@param inherited - payload explícito do pai (ctx.inherited), copiado e congelado
 ]]
-function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input,inherited) --Instancia o SkillRunner como um objeto responsável de criar a habilidade junto do EntityData para as skills utilizarem
+function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input,inherited)
 
 
 	--================VÁRIAVEIS(FACILITAÇÃO DE ACESSO)===================--
@@ -73,9 +79,9 @@ function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input,inherited)
 
 	-- Instancia a skill como uma classe isolada usando o módulo como __index
 	self.skill = setmetatable({}, { __index = skillModule })
-	self.Entity = Entity		 				 --Tabela de dados do player que usou a habilidade
-	self.skill.Runner = self                     --Opção A: Skill tem acesso ao Runner
-	self.skill.Entity = Entity                   --Opção A: Skill continua acessando Entity pelo self
+	self.Entity = Entity		 				 --Entidade dona do runner
+	self.skill.Runner = self                     --a skill acessa o runner por self.Runner
+	self.skill.Entity = Entity                   --e a entidade por self.Entity
 
 
 	--=====INICIALIZAÇÃO SR=====--
@@ -96,11 +102,10 @@ function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input,inherited)
 	if self.Entity then
 		
 		if Entity:HasComponent(Entity.ComponentKey.Animation) then
-			-- Animações do kit DONO da skill e, na falta, do kit de quem casta (F55): antes era só o
-			-- de quem casta, e o M1 da Schema roubado por outro personagem dava erro no onStart
+			-- Animações do kit dono da skill (data.kit) e, na falta, do kit de quem casta
 			local casterKit = Entity:HasComponent(Entity.ComponentKey.Combat) and Entity.GetChosenChar() or nil
 			self.charLib = self.lib.ForSkill(self.skill.data.kit, casterKit)
-			self.skill.charLib = self.charLib                               --Opção A
+			self.skill.charLib = self.charLib
 		end
 
 		if self.Entity:HasComponent(self.Entity.ComponentKey.Weapon) then
@@ -108,8 +113,8 @@ function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input,inherited)
 			self.hitPoint = self.Entity.GetHitOrigin() 							--Origem de hitboxes criadas em runtime pela arma
 			self.weapon = self.Entity.GetWeapon()						   	    --Arma sendo utilizada pelo player
 			
-			self.skill.hitPoint = self.hitPoint                                 --Opção A
-			self.skill.weapon = self.weapon                                     --Opção A
+			self.skill.hitPoint = self.hitPoint
+			self.skill.weapon = self.weapon
 		end
 	end
 
@@ -118,10 +123,10 @@ function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input,inherited)
 	self.callbacks = skillModule.callbacks
 	self.utils     = skillModule.utils or {}
 	
-	self.skill.statusTable = self.statusTable                                   --Opção A
-	self.skill.weaponHitboxModule = self.weaponHitboxModule                     --Opção A
+	self.skill.statusTable = self.statusTable
+	self.skill.weaponHitboxModule = self.weaponHitboxModule
 
-	-- Injeção de métodos do Runner na Skill (Opção A - Seamless)
+	-- Métodos do runner expostos na skill (self:Stop(), self:Damage()...)
 	self.skill.Stop = function(_, ...) return self:Stop(...) end
 	self.skill.TriggerAction = function(_, ...) return self:TriggerAction(...) end
 	self.skill.Recast = function(_, ...) return self:Recast(...) end
@@ -132,8 +137,7 @@ function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input,inherited)
 	self.skill.StopHitbox = function(_) return self:StopHitbox() end
 	self.skill.CommitCooldown = function(_) return self:CommitCooldown() end
 
-	-- Ownership automático (Regra 2): a skill registra limpezas/inscrições aqui em vez de
-	-- montar seu próprio "self.cleanUp" chamado à mão em onEnd E onCancel.
+	-- Limpezas (Own) e inscrições (Listen) da skill saem sozinhas no fim do runner
 	self._ownedCleanups = {}
 	self.skill.Own = function(_, cleanupFn) return self:Own(cleanupFn) end
 	self.skill.Listen = function(_, sub) return self:Listen(sub) end
@@ -149,7 +153,7 @@ function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input,inherited)
 		Entity = Entity,
 		name = name,
 		ParentLineage = parentLineage,
-		Runner = self, -- o filho acha o runner anterior pelo nó (Context.sourceRunner, F111)
+		Runner = self, -- o filho acha o runner anterior pelo nó (ctx.sourceRunner)
 	}
 	self.Lineage = self.statusTable.BuildHistory(lineageData)
 
@@ -164,10 +168,10 @@ end
 --================================================
 
 --[[
-Context por Breakpoint (Types.RunnerContext; design em .agents/rules/01, F111). history e inherited são
-congelados e calculados uma vez por runner: o onStep monta um contexto por frame.
-@param forListeners - true no evento que ESTE runner emite (OUT.onStart/onEnd): para quem escuta, o
-	runner imediatamente anterior é este. Nos callbacks do próprio runner, é o pai (quem o aplicou/criou)
+Monta o contexto do ciclo de vida (Types.RunnerContext). history e inherited são congelados e
+calculados uma vez por runner (o onStep monta um contexto por frame).
+@param forListeners - true no evento que este runner emite (OUT.onStart/onEnd): para quem escuta,
+	o runner anterior é este. Nos callbacks do próprio runner, é quem o aplicou/criou
 ]]
 function SkillRunner:BuildContext(forListeners: boolean?)
 	local lineage = self.Lineage
@@ -210,9 +214,7 @@ Registra e inicia o runner.
 @return false se o onStart falhou ou o motor recusou o início (o runner já foi encerrado e limpo) BOOLEAN
 ]]
 function SkillRunner:start(): boolean
-	-- Dependências declaradas da skill (F55): data.requires = { ComponentKey.X, ... }. Sem elas a
-	-- skill não começa, em vez de dar erro no meio do onStart (o M1 da Schema numa entidade sem
-	-- Animation)
+	-- data.requires: sem os componentes declarados a skill não começa (em vez de errar no onStart)
 	local missing = missingRequirement(self)
 	if missing then
 		return self:_RefuseStart("Requires:" .. tostring(self.skillName) .. ":" .. missing,
@@ -220,8 +222,7 @@ function SkillRunner:start(): boolean
 				.. tostring(self.Entity and self.Entity.ID) .. " não tem o componente")
 	end
 
-	-- Largura da cadeia assíncrona (F62): runners vivos ao mesmo tempo sob a mesma raiz da Lineage.
-	-- Uma árvore em que cada runner cria dois chegava a 1023 vivos sem limite nenhum
+	-- Largura da cadeia assíncrona: no máximo ChainLimits.maxLiveRunnersPerRoot vivos por raiz da Lineage
 	local root = self.Lineage and self.Lineage.Root
 	if root then
 		local live = root.LiveRunners or 0
@@ -241,9 +242,7 @@ function SkillRunner:start(): boolean
 	self.state = STATES.Casting --Estado de inicialização da skill
 
 
-	-- Só skills são "ativas" e donas da hitbox da arma. Um status homônimo de uma skill aparecia
-	-- em GetActiveSkills e o SkillHandler o tratava como a skill já ativa; e um status no
-	-- portador recebia o onHit de todo golpe da arma
+	-- Só skills entram em ActiveSkills e recebem os acertos da arma (status não)
 	if self.Entity and self.type == StateTable.Enum.Types.Skill then
 		if self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then
 			self.Entity.AddActiveSkill(self.skillName,self)
@@ -255,9 +254,7 @@ function SkillRunner:start(): boolean
 	end
 
 	
-	--Confere se existe onStart na skill, se sim, roda. Erro no onStart cancela o runner na
-	--hora (F14): antes o erro escapava do SkillHandler e o runner ficava registrado, com o
-	--que o onStart tivesse feito até ali.
+	-- Erro no onStart encerra o runner na hora (motivo error)
 	if not protect(self, "onStart", self._fire, self, "onStart", self:BuildContext()) then
 		self:Abort()
 		return false
@@ -312,8 +309,7 @@ function SkillRunner:_internalUpdate(dt)
 
 	--Se estiver running:
 	elseif self.state == STATES.Running then
-		-- Context só para quem tem onStep: antes todo runner alocava um por frame, inclusive os
-		-- sem onStep (3000 runners: frame médio de 25,7 ms) (F53)
+		-- Só monta contexto para quem tem onStep (custo por frame)
 		if self.skill.callbacks.onStep then
 			self:_fire("onStep", dt, self:BuildContext())
 		end
@@ -329,9 +325,8 @@ function SkillRunner:_internalUpdate(dt)
 end
 
 --[[
-Callbacks de evento pontual (onHit, onRecast, onRelease, onTrigger) com erro isolado (F94): o
-erro vira warn com traceback e a skill segue; antes o erro do onRecast/onRelease subia até o
-InputValidator. (O onStep, que erraria a cada frame, encerra a skill: SkillScheduler.)
+Callbacks de evento pontual (onHit, onRecast, onRelease, onTrigger): um erro vira warn com
+traceback e a skill segue. (Erro no onStep encerra a skill: SkillScheduler.)
 ]]
 function SkillRunner:_fireEvent(breakpoint, ...)
 	local ok, result = protect(self, breakpoint, self._fire, self, breakpoint, ...)
@@ -345,9 +340,11 @@ function SkillRunner:onHit(data)
 end
 
 
---[[Recast de runner. Runner encerrado não aceita recast: o SkillHandler já filtra os vivos,
-mas quem guardou a referência (stack de status, script de jogo) cairia no onRecast de uma
-skill morta]]
+--[[
+Recast do runner (o SkillHandler chama no toque seguinte). Runner encerrado recusa.
+@param checkOnly - true = só responde se a skill tem onRecast
+@param input - InputEvent do toque
+]]
 function SkillRunner:Recast(checkOnly : boolean?,input)
 	if self.state == STATES.Ended then return false end
 
@@ -380,10 +377,9 @@ function SkillRunner:Release(input)
 end
 
 --[[
-Trigger externo, usado especialmente mas não exclusivamente por blocks e shields de efeitos.
-Com onTrigger, ele decide. Sem onTrigger, vale o data.block declarado (StateTable.ResolveBlock,
-D14); sem nenhum dos dois, não bloqueia e avisa uma vez. Nada implícito.
-@param data - dados de quem deu trigger
+Trigger externo (bloqueios e escudos de efeito). Com onTrigger, ele decide; sem onTrigger, vale o
+data.block declarado (StateTable.ResolveBlock); sem nenhum dos dois, não bloqueia e avisa uma vez.
+@param context - HitContext de quem disparou
 ]]
 function SkillRunner:TriggerAction(context)
 	-- Escudo/block encerrado não reage. Durante o próprio teardown (onEnd, OUT.onEnd) o cache de
@@ -398,7 +394,6 @@ function SkillRunner:TriggerAction(context)
             return nil 
         end
     end
-											--Então cancela o trigger
 		if self.skill.callbacks.onTrigger then
     	    return self:_fireEvent("onTrigger", context, self:BuildContext())
     	end
@@ -407,9 +402,7 @@ function SkillRunner:TriggerAction(context)
 end
 
 
---[[Cancela a skill
-@param cancel - boolean, se a skill foi cancelada forçadamente de forma externa
-]]
+--[[ O runner já terminou? ]]
 function SkillRunner:IsEnded()
 	return self.state == STATES.Ended
 end
@@ -428,9 +421,7 @@ function SkillRunner:Own(cleanupFn: () -> ())
 end
 
 --[[
-Atalho pra Entity:Listen que já marca Owner = este runner: a inscrição é removida
-sozinha quando a skill terminar (UnsubscribeByOwner em endSkill), sem precisar de
-um "comboOwner" montado à mão pelo autor da skill.
+Atalho para Entity:Listen com Owner = este runner: a inscrição sai sozinha quando a skill termina.
 ]]
 function SkillRunner:Listen(sub: any)
 	sub.Owner = sub.Owner or self
@@ -441,10 +432,10 @@ function SkillRunner:Listen(sub: any)
 end
 
 --[[
-Aplica dano com ESTE runner como source. Existe pra acabar com a inconsistência de
-skills passando `self` (o proxy) em vez de `self.Runner` — o que fazia ShieldsFromType
-e outras checagens de trait nunca casarem (source.type não existia no proxy).
-@param opts - Types.DamageOptions? (traits e efeitos deste hit, ponto do impacto, Prescaled)
+Aplica dano com este runner como source (CombatComponent:ApplyDamage).
+@param targetEntity - EntityCore
+@param amount - dano base NUMBER
+@param opts - Types.DamageOptions? (traits e efeitos deste hit, ponto do impacto, Prescaled, Inherited)
 ]]
 function SkillRunner:Damage(targetEntity, amount, opts)
 	if not self.Entity or not self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then
@@ -455,10 +446,9 @@ function SkillRunner:Damage(targetEntity, amount, opts)
 end
 
 --[[
-Aplica um status com Source = este runner por padrão (a skill pode sobrescrever via
-opts.Source, ou opts.Target pra mirar outra entidade). O opts do chamador não é alterado: uma
-skill que reusa uma tabela constante (local OPTS = { Duration = 2 }) fazia o primeiro runner
-gravar nela o próprio Source, que passava a valer para todo cast seguinte.
+Aplica um status com Source = este runner. opts.Target escolhe outra entidade (padrão: a própria);
+o opts do chamador não é alterado.
+@param opts - { Duration?, ID?, Target?, Source?, Inherited? }
 ]]
 function SkillRunner:ApplyStatus(statusData, opts)
 	local statusOpts = table.clone(opts or {})
@@ -470,8 +460,6 @@ function SkillRunner:ApplyStatus(statusData, opts)
 		warn("[SkillRunner] ApplyStatus sem entidade alvo:", self.skillName)
 		return nil
 	end
-	-- Assinatura de opts. A posicional legada recebia `opts` no lugar do ID: o ID virava a
-	-- própria tabela e opts.ID era ignorado.
 	return target.ApplyStatus(statusData, statusOpts)
 end
 
@@ -480,9 +468,8 @@ function SkillRunner:Stop(cancel : boolean?)
 end
 
 --[[
-Encerra por erro: tenta o cancel normal e, se o onCancel recusar, encerra mesmo assim. Erro
-não aceita veto (onStart no start, onStep no SkillScheduler). Antes o erro no onStep de uma
-skill que recusava o cancel deixava o runner vivo, errando a cada frame (F78).
+Encerra por erro: tenta o cancel normal e, se o onCancel recusar, encerra mesmo assim (erro não
+aceita veto: onStart no start, onStep no SkillScheduler).
 ]]
 function SkillRunner:Abort()
 	self:endSkill(true, REASONS.Error)
@@ -490,7 +477,7 @@ function SkillRunner:Abort()
 end
 
 --[[
-Hitbox da arma DESTE runner (F79): liga, desliga e recebe os acertos sem afetar a de outra skill.
+Hitbox da arma deste runner: liga, desliga e recebe os acertos sem afetar a de outra skill.
 A skill chama self:StartHitbox(duração) / self:StopHitbox(); a do runner sai sozinha no fim.
 ]]
 function SkillRunner:StartHitbox(duration: number)
@@ -506,7 +493,6 @@ end
 --[[
 Segundos até o fim pela duração (runtimeDuration ou data.duration); nil se a skill não tem
 duração. Durante o castTime devolve a duração inteira (ela só começa a contar no Running).
-Usado para efeitos que devem acabar junto com a skill, como o grab da Ultimate (D9).
 ]]
 function SkillRunner:GetRemainingTime(): number?
 	local duration = self.skill.runtimeDuration or self.skill.data.duration
@@ -558,7 +544,7 @@ function SkillRunner:endSkill(cancel, reason)
 
 	self.state = STATES.Ended
 
-	-- Devolve a vaga na raiz da cadeia (F62) logo no fim: nada abaixo pode pular isto
+	-- Devolve a vaga na raiz da cadeia logo no fim: nada abaixo pode pular isto
 	if self._chainRoot then
 		self._chainRoot.LiveRunners -= 1
 		self._chainRoot = nil
@@ -573,9 +559,7 @@ function SkillRunner:endSkill(cancel, reason)
 	end
 	table.clear(self._ownedCleanups)
 
-	--Sequência de finalização padrão. onEnd SEMPRE roda (também depois do onCancel) e recebe
-	--ctx.reason (F54). Um erro nele não pode pular a limpeza abaixo: era o "runner fantasma"
-	--do F13, que ficava em ActiveSkills e recebia o recast do próximo toque.
+	-- onEnd sempre roda (também depois do onCancel) e recebe ctx.reason; um erro nele não pula a limpeza abaixo
 	protect(self, "onEnd", self._fire, self, "onEnd", endContext(self, reason))
 
 	-- Cooldown do fim (start = End) e devolução por motivo (refund). Só runners de cast
@@ -587,17 +571,15 @@ function SkillRunner:endSkill(cancel, reason)
 		if self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then
 			self.Entity.RemoveActiveSkill(self.skillName, self)
 		end
-		-- Simétrico ao start: com Weapon e sem Combat o runner ficava dono da hitbox para sempre
+		-- Simétrico ao start (vale também sem Combat)
 		if self.Entity:HasComponent(self.Entity.ComponentKey.Weapon) then
 			self.Entity.RemoveHitboxOwner(self) --Limpa a hitbox
 		end
 	end
 
 	if self.Entity and self.Entity:HasComponent(self.Entity.ComponentKey.Combat) then
-		-- A trava de ação deste runner sai com ele (só remove se for dele; idempotente). Uma skill
-		-- que esquecesse o RemoveActionState, ou desse erro antes dele, deixava o ActionState
-		-- apontando para um runner morto, e o TrySelfCancel recusava toda skill nova da entidade.
-		-- Antes do OUT.onEnd: um listener de fim pode castar outra skill
+		-- A trava de ação deste runner sai com ele (só se for dele), antes do OUT.onEnd: um listener
+		-- de fim pode castar outra skill
 		self.Entity.RemoveActionState(self)
 	end
 

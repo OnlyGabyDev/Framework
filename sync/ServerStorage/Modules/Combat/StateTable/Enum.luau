@@ -28,8 +28,8 @@ enum.Traits = {
         DOT = "DamageOverTime",         --Dot
         EffectShield = "EffectShield",  --Escudo de efeito (ignora pre entrada)
         Stackable = "stackable",        --Status pode stackar.
-        Melee = "Melee",                --Dono único da trait usada por M1/Dash (era string solta em 2 arquivos)
-        Ultimate = "Ultimate",          --Substitui o campo ad-hoc `Tags = {"Ultimate"}` de Ultimate.luau
+        Melee = "Melee",                --Golpe corpo a corpo (M1, Dash)
+        Ultimate = "Ultimate",          --Skill de ultimate
 
         
         --BLOCKS
@@ -39,10 +39,10 @@ enum.Traits = {
 
         --INTERAÇÕES
         TrueHit = "TrueHit",            --Ignora iFrame
-        TrueDamage = "TrueDamage",      --Ignora as proteções de stat (Defense, Armor: D11)
+        TrueDamage = "TrueDamage",      --Ignora as proteções de stat (Defense, Armor)
         Uninterruptible = "Uninterruptible", --A skill não é cancelada por estado com a tag interrupt
-        SoftCancel = "LightCancel",     --Cancelamento fraco (TODO)
-        HeavyCancel = "HeavyCancel",    --Cancelamento forte (TODO)
+        SoftCancel = "LightCancel",     --Cancelamento fraco (reservado)
+        HeavyCancel = "HeavyCancel",    --Cancelamento forte (reservado)
     }
 
 
@@ -55,8 +55,8 @@ enum.Breakpoints = {
         OnDamage = "OnDamage",   -- canal OUT (atacante), disparado depois do hit já ter acontecido
         PreDamage = "PreDamage", -- canal IN (alvo), ANTES do HP mudar — ponto de extensão pra cancelar/mutar
         PostDamage = "PostDamage", -- canal IN (alvo), DEPOIS do HP mudar — reação do lado de quem apanhou
-        PreApplyStatus = "PreApplyStatus", -- canal OUT (dono do efeito), ANTES de um status entrar: checagem
-                                           -- pré-output (F112). Pode cancelar e injetar context.inherited
+                PreApplyStatus = "PreApplyStatus", -- canal OUT (dono do efeito), antes de um status entrar:
+                                                   -- pode cancelar e injetar context.inherited
         OnDeath = "OnDeath",
         OnRevive = "OnRevive",
         OnInterrupt = "OnInterrupt", -- canal IN: entrou um estado com a tag interrupt (o Combat cancela as skills)
@@ -68,7 +68,7 @@ enum.Breakpoints = {
         onRelease = "onRelease",
         onEnd = "onEnd",
         
-        OnForceIncoming = "OnForceIncoming" -- Preparação futura
+        OnForceIncoming = "OnForceIncoming" -- reservado
     }
 
 enum.Roles = {
@@ -87,11 +87,11 @@ enum.EndReasons = {
     Stop = "stop",          --A própria skill se encerrou sem cancelar (Stop(false))
     Error = "error",        --Erro num callback (onStart/onStep): o motor encerrou o runner
     Fizzle = "fizzle",      --A skill desistiu do cast (self:Fizzle()): o cast não aconteceu
-    Refused = "refused",    --O motor não deixou o runner começar (ChainLimits): nenhum callback rodou
+    Refused = "refused",    --O motor não deixou o runner começar (requires, ChainLimits): nenhum callback rodou
     Interrupted = "interrupted", --Cancelada por um estado com a tag interrupt (Stun)
 }
 
---==== EFEITOS ON-HIT (D6, F41) ====--
+--==== EFEITOS ON-HIT ====--
 -- Quando os efeitos de um hit (context.effects) são aplicados. Padrão do motor declarado aqui; a
 -- skill sobrescreve em data.effectPolicy = { onBlocked = ..., onZeroDamage = ... }, e cada efeito
 -- pode sobrescrever se declarado como { status = X, onBlocked = ..., onZeroDamage = ... }.
@@ -100,7 +100,7 @@ enum.EffectDefaults = table.freeze({
     onZeroDamage = true,  --Hit de 0 de dano (slow puro, marca) aplica os efeitos
 })
 
---==== CAMADAS DE LOADOUT (D5, F16) ====--
+--==== CAMADAS DE LOADOUT ====--
 -- O loadout efetivo é a mesclagem das camadas, da Base para cima (a de cima vence no slot). O jogo
 -- pode criar camadas próprias com qualquer nome; estas são as que o motor usa.
 enum.LoadoutLayers = table.freeze({
@@ -108,7 +108,7 @@ enum.LoadoutLayers = table.freeze({
     WeaponMode = "WeaponMode",  --Modo da arma (WeaponTransform)
 })
 
---==== COOLDOWN DE SKILL (D13; regras em ServerScriptService.Modules.CooldownPolicy) ====--
+--==== COOLDOWN DE SKILL (regras em ServerScriptService.Modules.CooldownPolicy) ====--
 enum.CooldownStart = table.freeze({
     Cast = "Cast",          --Começa na ativação, antes do onStart
     End = "End",            --Começa no fim do runner
@@ -131,7 +131,7 @@ enum.CooldownDefaults = table.freeze({
                                --por skill em cooldownPolicy.maxReduction, 0..1; 1 = sem teto)
 })
 
---==== BLOQUEIO (D14) ====--
+--==== BLOQUEIO ====--
 -- Quem tem a tag block declara o que faz: data.block = { mode = BlockModes.X, value = n? }.
 -- Sem block e sem onTrigger, NÃO bloqueia (avisa uma vez). onTrigger, quando existe, decide.
 enum.BlockModes = table.freeze({
@@ -186,7 +186,7 @@ enum.Types = {
 
 --Modificadores de atributos
 enum.ModifierType = {
-    Flat = "Flat",                      -- Soma flat
+    Flat = "Flat",          -- Soma flat
     AddPercent = "AddPercent",          -- Stack de somas percentuais (percent += 0.2,0.5)
     MultPercent = "MultPercent",        -- Multiplicação no final da fórmula (Total * 0.5)
     Override = "Override",              -- Substitui o valor por inteiro
@@ -217,16 +217,14 @@ enum.StatDefaults = table.freeze({
     Armor = 0,
 })
 
--- Limites dos stats numéricos (F100), aplicados pelo AttributesComponent:GetStat ao valor final,
--- tenha ele modificador ou não. Stat sem declaração usa StatLimitDefault (não fica negativo).
--- Antes o piso 0 só valia quando havia modificador: Defense −50 na base amplificava o dano, a
--- mesma −50 vinda de um debuff era cortada para 0. Declare aqui o stat que pode ficar negativo.
+-- Limites dos stats numéricos, aplicados pelo AttributesComponent:GetStat ao valor final (com ou
+-- sem modificador). Stat sem declaração usa StatLimitDefault (não fica negativo).
 enum.StatLimitDefault = table.freeze({ min = 0, max = math.huge })
 enum.StatLimits = table.freeze({
-    Defense = table.freeze({ min = -math.huge, max = math.huge }), --negativa amplifica (D1)
+    Defense = table.freeze({ min = -math.huge, max = math.huge }), --negativa amplifica o dano
 })
 
---==== FÓRMULA DE DANO (D11, F43) ====--
+--==== FÓRMULA DE DANO ====--
 -- Proteções do ALVO aplicadas em ordem, cada uma ligada a um stat (o jogo troca, reordena ou
 -- acrescenta). mode: Multiplicative = dano × 100 / (100 + stat) (stat negativo amplifica:
 -- dano × (2 − 100 / (100 − stat))); Flat = dano − stat. ignoredBy = traits que furam a proteção.
@@ -248,21 +246,20 @@ enum.DamageMitigation = table.freeze({
 -- dono, com a mesma chave; cada componente resolve UMA vez no new() (StateTable.ResolveDeathPolicy),
 -- então uma regra desligada custa zero.
 enum.DeathDefaults = table.freeze({
-    CancelSkillsOnDeath = true, -- CombatComponent: a morte cancela as skills ativas (F20)
-    RefuseStatusOnDeath = true, -- StatusComponent: morto não recebe status novo (F39); data.allowOnDead fura por status
-    RefuseCastOnDeath = true, -- CombatComponent: morto não inicia cast novo (F75)
+    CancelSkillsOnDeath = true, -- CombatComponent: a morte cancela as skills ativas
+    RefuseStatusOnDeath = true, -- StatusComponent: morto não recebe status novo; data.allowOnDead fura por status
+    RefuseCastOnDeath = true, -- CombatComponent: morto não inicia cast novo
 })
 
---==== CURA (F107) ====--
--- HP acima do MaxHP é escolha de design (sobrevida): o motor não corta o HP. O Heal só não leva o
--- HP além de HealCap × MaxHP, e NUNCA reduz (antes, com o HP acima do teto, a cura o cortava).
--- Override por entidade (config do Health: HealCap) e por cura (Heal(n, { Cap = ... })).
--- math.huge = sem teto (toda cura vira sobrevida).
+--==== CURA ====--
+-- HP acima do MaxHP é permitido (sobrevida). O Heal não leva o HP além de HealCap × MaxHP e nunca
+-- o reduz. Override por entidade (config do Health: HealCap) e por cura (Heal(n, { Cap = ... })).
+-- math.huge = sem teto.
 enum.HealthDefaults = table.freeze({
     HealCap = 1,
 })
 
---==== ALVOS E AFILIAÇÃO (F105) ====--
+--==== ALVOS E AFILIAÇÃO ====--
 -- Relação entre quem age e quem é atingido. Sem AffiliationComponent dos dois lados = Neutral.
 enum.Relations = table.freeze({
     Self = "Self",          --a própria entidade
@@ -270,9 +267,8 @@ enum.Relations = table.freeze({
     Enemy = "Enemy",        --times diferentes
     Neutral = "Neutral",    --um dos dois sem time (dummy, ambiente)
 })
--- Quem uma skill afeta por padrão, quando a acerta pela hitbox/zona (o mesmo de antes do F105:
--- todo mundo menos ela mesma). A skill sobrescreve em data.affects = { Ally = true, ... }.
--- Damage/ApplyStatus chamados direto pela skill NÃO passam por aqui: a skill decidiu o alvo.
+-- Quem uma skill afeta por padrão quando acerta pela hitbox/zona. A skill sobrescreve em
+-- data.affects = { Ally = true, ... }. Damage/ApplyStatus chamados direto não passam por aqui.
 enum.AffectsDefaults = table.freeze({
     Self = false,
     Ally = false,
@@ -280,10 +276,9 @@ enum.AffectsDefaults = table.freeze({
     Neutral = true,
 })
 
---==== PERSONAGEM (F106) ====--
--- Personagem do CombatComponent quando o config não diz (dado do JOGO: troque aqui). O player
--- nasce sem config, então é este. ChosenChar = false no config = entidade sem personagem (kit
--- montado em runtime com EquipSkill/ApplyLoadout, sem aviso e sem loadout do banco).
+--==== PERSONAGEM ====--
+-- Personagem do CombatComponent quando o config não diz (dado do jogo). ChosenChar = false no config
+-- = entidade sem personagem (kit montado em runtime, sem loadout do banco).
 enum.CombatDefaults = table.freeze({
     ChosenChar = "Schema",
     Mode = "Base",
@@ -294,14 +289,12 @@ enum.CombatDefaults = table.freeze({
 -- Ver StateTable.RunInChain.
 enum.MAX_RECURSION = 50
 
---==== LIMITES DE CADEIA (F62; dono: StateTable/Helper RunInChain e SkillRunner:start) ====--
--- SÍNCRONA (dano -> morte -> dano... na mesma pilha): passou de MAX_RECURSION, a ação vai para uma
--- fila e roda no próximo frame, numa pilha nova, em vez de ser descartada. Ação adiada que adia
--- outra soma uma geração; acima de maxDeferrals a ação é recusada (e avisa). É isso que para o
--- ping-pong infinito de dois reflexos, sem cortar a cadeia longa e finita (80 alvos em linha).
--- ASSÍNCRONA (runner que cria runner): o perigo é a LARGURA, não a profundidade. Uma cadeia linear
--- é um laço legítimo (status que se renova sozinho) e não tem limite; uma árvore que dobra a cada
--- geração tem: runners vivos ao mesmo tempo sob a mesma raiz da Lineage.
+--==== LIMITES DE CADEIA (StateTable/Helper RunInChain e SkillRunner:start) ====--
+-- Síncrona (dano -> morte -> dano na mesma pilha): acima de MAX_RECURSION a ação vai para uma fila
+-- e roda no próximo frame, numa pilha nova. Ação adiada que adia outra soma uma geração; acima de
+-- maxDeferrals é recusada (para o laço infinito, sem cortar a cadeia longa e finita).
+-- Assíncrona (runner que cria runner): o limite é a largura, runners vivos sob a mesma raiz da
+-- Lineage. A cadeia linear (status que se renova) não tem limite.
 enum.ChainOutcomes = table.freeze({
     Deferred = "Deferred",          --a ação foi para a fila e roda no próximo frame (sem retorno)
     MaxRecursion = "MaxRecursion",  --a ação foi recusada (limite de gerações, ou sem fila)
@@ -309,7 +302,7 @@ enum.ChainOutcomes = table.freeze({
 })
 
 enum.ChainLimits = table.freeze({
-    deferAtMaxDepth = true,       --false = acima de MAX_RECURSION recusa na hora (o comportamento antigo)
+    deferAtMaxDepth = true,       --false = acima de MAX_RECURSION recusa na hora
     maxDeferrals = 20,            --gerações de adiamento por cadeia: 20 × 50 = ~1000 ações em linha
     deferredPerFrame = 256,       --orçamento da fila por frame; o que sobra espera o próximo
     maxLiveRunnersPerRoot = 256,  --runners vivos ao mesmo tempo sob a mesma raiz da Lineage

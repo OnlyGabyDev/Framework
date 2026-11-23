@@ -42,13 +42,12 @@ function CharacterComponent:SetEntity(Entity) : boolean
 	if typeof(Entity) == "table"  then
 		model = Entity.Model
 		humanoid = model.Humanoid
-		-- Sem HRP usa a PrimaryPart; antes caía na própria tabela do player como root (F63)
+		-- Sem HRP usa a PrimaryPart
 		root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
 	else
 		model = Entity
 		root = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
-		-- NPC com Humanoid anda pelo Humanoid (D8, F31). Antes o Humanoid de qualquer model que não
-		-- fosse player era ignorado, e o rig andava pelo ForceRig a ~1,6 stud/s
+		-- NPC com Humanoid anda pelo Humanoid; sem Humanoid, pelo ForceRig
 		humanoid = model:FindFirstChildOfClass("Humanoid")
 	end
 

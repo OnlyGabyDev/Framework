@@ -48,16 +48,15 @@ function MovementController.Unregister(comp)
 end
 
 --[[
-Orçamento padrão de uma Force Soft para esta entidade (D7): aceleração × massa, ou o número
-fixo quando a escala por massa está desligada (Settings ou MassScaling = false na entidade)
+Orçamento padrão de uma Force Soft para esta entidade: aceleração × massa, ou o número fixo quando
+a escala por massa está desligada (Settings ou MassScaling = false na entidade)
 ]]
 local function softDefaultFor(comp, entity)
 	if not Settings.Force_Mass_Scaling or comp.MassScaling == false then
 		return Settings.Soft_Force_Strength
 	end
 	local root = entity.GetRoot()
-	-- O wrapper declara a aceleração que vence o próprio controlador (o de Humanoid declara mais,
-	-- F32); o controller não precisa saber se há Humanoid
+	-- O wrapper declara a aceleração que vence o próprio controlador (o de Humanoid declara mais)
 	local acceleration = comp.MovementWrapper.SoftForceAcceleration or Settings.Soft_Force_Acceleration
 	return root and acceleration * root.AssemblyMass or Settings.Soft_Force_Strength
 end
@@ -123,9 +122,8 @@ function MovementController.ProcessEntity(comp, dt)
 	local faceRequest: Vector3? = nil
 	local faceResponsiveness: number? = nil
 
-	-- canDisplace = false barra só as forças EXTERNAS (knockback, vento, grab de outro). As da
-	-- própria entidade (dash) seguem valendo; antes o bloco inteiro era pulado (F47). Externa =
-	-- data.External, ou, sem ele, RequiresControl == false (a convenção da doc das Forces)
+	-- canDisplace = false barra só as forças externas (knockback, vento, grab de outro); as da própria
+	-- entidade (dash) seguem valendo. Externa = data.External, ou, sem ele, RequiresControl == false
 	do
 		-- Ordem determinística por criação (ID = "F_<contador>"): empate de Priority
 		-- entre duas Forces Hard sempre resolve pra mais recente, nunca pela ordem
@@ -192,9 +190,7 @@ function MovementController.ProcessEntity(comp, dt)
 					local currentPosition = ownRoot and ownRoot.Position or desiredPosition
 					local toDesired = desiredPosition - currentPosition
 
-					-- Feed-forward (F19): anda com a velocidade do líder e corrige só o erro. Antes a
-					-- velocidade era só a correção, limitada ao FollowMaxSpeed: com o líder na mesma
-					-- velocidade do limite o seguidor ficava 10 a 17 studs para trás
+					-- Feed-forward: anda com a velocidade do líder e corrige só o erro
 					local correction = toDesired * (data.FollowResponsiveness or 10)
 					if data.FollowMaxSpeed and correction.Magnitude > data.FollowMaxSpeed then
 						correction = correction.Unit * data.FollowMaxSpeed
@@ -296,11 +292,9 @@ function MovementController.ProcessEntity(comp, dt)
 		end
 	end
 
-	-- Força Soft SOMA com a caminhada (D6, F46): o alvo do eixo é a caminhada pretendida mais a
-	-- soma das Soft. Antes o alvo era só a soma, e quem estava no vento perdia a locomoção no
-	-- eixo (andar contra a esteira era impossível). Eixo de Hard continua absoluto.
-	-- O orçamento Soft do eixo é o maior MaxForce entre as Soft que o reivindicam (F76): antes
-	-- era sempre Soft_Force_Strength, e o MaxForce pedido pela Force nunca valia.
+	-- Força Soft soma com a caminhada: o alvo do eixo é a caminhada pretendida mais a soma das Soft.
+	-- Eixo de Hard continua absoluto. O orçamento Soft do eixo é o maior MaxForce entre as Soft que o
+	-- reivindicam.
 	local walk = Vector3.new(comp.Direction.X, 0, comp.Direction.Z) * walkSpeed
 	for _, axis in AXES do
 		if not hardClaimed[axis] and softClaimed[axis] then

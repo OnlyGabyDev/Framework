@@ -31,10 +31,10 @@ local views = {} -- [dono|quem casta] = vista
 local NONE = "\0" -- chave de cache para kit ausente (nome de kit nunca tem \0)
 
 --[[
-Biblioteca que uma skill enxerga em self.charLib (F55): o conjunto (M1, S1...) vem do kit DONO da
-skill (data.kit, carimbado pelo CombatComponent a partir da pasta no SkillDatabase) e, na falta,
-do kit de quem casta. Antes era só o de quem casta: o M1 da Schema roubado por outro personagem
-lia charLib.M1 = nil e dava erro. Uma vista por par (dono, quem casta), cacheada: nenhum runner aloca.
+Biblioteca que uma skill enxerga em self.charLib: o conjunto (M1, S1...) vem do kit DONO da skill
+(data.kit, carimbado pelo CombatComponent a partir da pasta no SkillDatabase) e, na falta, do kit
+de quem casta. Assim uma skill roubada por outro personagem segue com as animações dela. Uma vista
+por par (dono, quem casta), cacheada: nenhum runner aloca.
 @param skillKit - kit dono da skill (data.kit) STRING?
 @param casterKit - personagem de quem casta (GetChosenChar) STRING?
 @return vista só de leitura TABLE (pode não ter o conjunto pedido: a skill confere ou declara requires)

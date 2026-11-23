@@ -50,7 +50,7 @@ function AreaEffect:OnStay(cb)  table.insert(self.CallbacksStay, cb);  return se
 function AreaEffect:OnExit(cb)  table.insert(self.CallbacksExit, cb);  return self end
 
 --[[
-Só as entidades em que filter(entity) é true entram na zona (F105). Para zona de skill, use
+Só as entidades em que filter(entity) é true entram na zona. Para zona de skill, use
 StateTable.AffectsFilter(runner): a zona respeita o data.affects da skill (aliado de fora).
 ]]
 function AreaEffect:SetFilter(filter: ((any) -> boolean)?)
@@ -76,8 +76,8 @@ function AreaEffect:_Query(): {any} -- devolve lista de EntityCore atualmente de
 
     -- Corpo simulado por um cliente (player, ou o que ele possui): o servidor o vê ~0,35 s
     -- atrasado (NetworkView). Para ele, vale onde o corpo ESTÁ: a zona testa as peças dele
-    -- deslocadas pelo que ele andou nesse atraso. Antes a zona via o player sair 0,35 s depois de
-    -- ele sair de verdade, e o vento seguia empurrando no cliente (F104). Corpo do servidor: igual
+    -- deslocadas pelo que ele andou nesse atraso (senão a saída da zona chega tarde no cliente).
+    -- Corpo do servidor: as peças como estão
     local checked = {}
     for _, part in ipairs(self:_PartsIn(cframe, Settings.Zone_Prediction_Margin, self.OverlapParams)) do
         local entity = DataManager.GetEntityFromInstance(part)
@@ -131,8 +131,7 @@ end
 function AreaEffect:Stop()
     self.Active = false
     if self._conn then self._conn:Disconnect(); self._conn = nil end
-    -- Quem estava dentro sai: antes o Stop só limpava a lista, e o efeito aplicado no OnEnter
-    -- (ex.: slow) ficava preso para sempre (F44)
+    -- Quem estava dentro sai pelo OnExit: o efeito aplicado no OnEnter (ex.: slow) é desfeito
     local inside = self.Inside
     self.Inside = {}
     for entity in pairs(inside) do

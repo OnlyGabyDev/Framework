@@ -52,10 +52,8 @@ function HitboxWrapper.new(Entity, excludeSelf: boolean?)
 	self.Entity = Entity
 	
 	self.weapon = Entity.GetWeapon()
-	-- Uma sessão por dona (F79, D10): cada skill liga, desliga e recebe os acertos da SUA hitbox.
+	-- Uma sessão por dona: cada skill liga, desliga e recebe os acertos da SUA hitbox.
 	-- [owner | SHARED] = { active = { [nome] = hitbox }, hitTargets = { [ID] = true } }
-	-- Antes a hitbox era uma só: a 2ª skill tinha o StartHitbox recusado, o StopHitbox da limpeza
-	-- do M1 desligava a de quem estivesse usando, e todo acerto ia para o onHit de todas
 	self.sessions = {}
 	self.hitboxConfigs = {}
 	
@@ -270,9 +268,9 @@ function HitboxWrapper:_handleHit(result: RaycastResult, segment, config: Hitbox
 	local targetEntity = self.DataManager.GetEntityFromInstance(result.Instance)
 	if not targetEntity then return end
 
-	-- Quem a skill dona afeta (data.affects sobre Enum.AffectsDefaults, F105): aliado não é acertado
-	-- por padrão. Antes da marcação do anti multi-hit, para o aliado não gastar o acerto. Sessão sem
-	-- dona (compartilhada, o comportamento antigo): acerta todos
+	-- Quem a skill dona afeta (data.affects sobre Enum.AffectsDefaults): aliado não é acertado
+	-- por padrão. Vem antes da marcação do anti multi-hit, para o aliado não gastar o acerto.
+	-- Sessão sem dona (compartilhada): acerta todos
 	if owner ~= nil and not StateTable.CanAffect(owner, targetEntity) then return end
 
 	-- Anti multi-hit
@@ -416,7 +414,7 @@ local ExposeAPI = {
 }
 
 return {
-	_class = HitboxWrapper, -- interno, para os testes (F79)
+	_class = HitboxWrapper, -- interno, para os testes
 	new = HitboxWrapper.new,
 	ExposeAPI = ExposeAPI,
 	IHitbox = IHitbox,

@@ -12,13 +12,10 @@ local MIN_INPUT_INTERVAL = 0.015
 local RemoteEvents = ReplicatedStorage.RemoteEvents
 local ControlStateChanged = RemoteEvents:WaitForChild("ControlStateChanged")
 
--- Sempre o estado COMPLETO numa mensagem só (F22): antes cada setter mandava a sua, e o
--- suspendNative=true do Possess era sobrescrito pela mensagem seguinte com false.
--- Com Lock vai o ID ROTEADO (o que volta no Unlock): o cliente trata nil como "voltar ao próprio
--- corpo" e um Lock durante a possessão levava a câmera de volta ao corpo nativo (F83). O corte
--- do input é do servidor (GetEntityID = nil); o cliente só usa o ID para a câmera.
--- 4º valor (F57): o model do corpo roteado. O cliente procurava o model pelo EntityID nos filhos
--- diretos do workspace e, com StreamingEnabled, não achava o corpo ainda não replicado
+-- Manda sempre o estado completo numa mensagem só. Com Lock vai o ID roteado (o que volta no
+-- Unlock): o cliente trata nil como "voltar ao próprio corpo". O corte do input é do servidor
+-- (GetEntityID = nil); o cliente só usa o ID para a câmera. O 4º valor é o model do corpo roteado
+-- (com StreamingEnabled, o cliente pode ainda não ter o corpo para achar pelo ID).
 local function controlStatePayload(tracked)
 	local routed = if tracked.Locked then tracked.PreLockID else tracked.ID
 	local core = routed and DataManager.Get(routed)
@@ -42,25 +39,24 @@ function AntiCheat.Init()
 	end
 end
 
---=====VALIDAÇÃO DE MOVIMENTO (F05)=====--
+--=====VALIDAÇÃO DE MOVIMENTO=====--
 --[[
-O corpo nativo do player é simulado pelo cliente (modelo B do F05). A cada Heartbeat o servidor
-compara o deslocamento desde a última posição aceita com o que dava para andar: WalkSpeed do
-SERVIDOR (o cliente muda o dele, mas isso não replica), Forces ativas e chão móvel. O que passa
-disso vira correção: o corpo volta à última posição aceita.
+O corpo nativo do player é simulado pelo cliente. A cada Heartbeat o servidor compara o
+deslocamento desde a última posição aceita com o que dava para andar: WalkSpeed do servidor (o do
+cliente não replica), Forces ativas e chão móvel. O que passa disso vira correção: o corpo volta à
+última posição aceita.
 
 Crédito (token bucket): enche na velocidade permitida, até Movement_Burst_Seconds dela, e é gasto
 pelo movimento aceito. A dívida (até Movement_Excess_Limit) não é perdoada na correção, então na
 média ninguém passa da velocidade permitida; o máximo ganho de uma vez é crédito + excesso.
 
 Movimento feito pelo servidor não vira correção: no servidor, o CFrame-changed da raiz só dispara
-para escrita de script. A física do cliente, inclusive um CFrame forçado por exploit, não dispara
-(medido em 16/10). Cada escrita abre a janela de confiança (Movement_Trust_Seconds + atraso de rede
-do player); a correção do próprio validador é descontada (SelfWrites).
+para escrita de script (a física do cliente, inclusive um CFrame forçado por exploit, não dispara).
+Cada escrita abre a janela de confiança (Movement_Trust_Seconds + atraso de rede do player); a
+correção do próprio validador é descontada (SelfWrites).
 
-Fora de escopo (F05): noclip (CheckNoClip), subida contínua até a velocidade de pulo (voo),
-compensação de latência, empurrão físico fora das Forces (colisão, Explosion) e veículos (com o
-player sentado o corpo não é validado).
+Fora de escopo: noclip, subida contínua até a velocidade de pulo (voo), compensação de latência,
+empurrão físico fora das Forces (colisão, Explosion) e veículos (player sentado não é validado).
 ]]
 
 --[[
@@ -138,14 +134,11 @@ local function rebase(move)
 end
 
 --[[
-Velocidade permitida com memória curta: o MAIOR valor dos últimos `window` s. Uma Force que acabou
+Velocidade permitida com memória curta: o maior valor dos últimos `window` s. Uma Force que acabou
 no servidor segue valendo pela janela de latência, porque o servidor ainda vê o cliente andando com
-ela. Fila monotônica: cada entrada vale até untilTime; a de trás que o valor novo domina sai (expira
-antes e vale menos), então a da frente é sempre o máximo.
-Antes guardava só o maior valor e, quando ele expirava, voltava ao valor de AGORA: uma Force menor
-que rodou à sombra da maior perdia a própria janela. O Dash no meio da Ultimate (80 sob os 90 do
-voo) terminava junto com a janela do voo, o servidor ainda via o Dash (0,35 s atrasado) e corrigia:
-teleporte de 16 studs com a câmera junto (F109).
+ela; cada Force mantém a própria janela (uma menor que rodou sob uma maior não perde a dela).
+Fila monotônica: cada entrada vale até untilTime; a de trás que o valor novo domina sai, então a da
+frente é sempre o máximo.
 ]]
 local function windowMax(queue, value: number, now: number, window: number): number
 	while #queue > 0 and queue[#queue].value <= value do
@@ -226,7 +219,7 @@ local function validateMovement(player: Player, tracked, dt: number, now: number
 	local jump = tracked.Locked and 0 or jumpSpeed(humanoid)
 	local forceH, forceV = 0, 0
 	local entity = move.Entity
-	-- Dependência opcional do MovementComponent (regra 16): sem ele, nenhuma Force soma
+	-- Dependência opcional do MovementComponent: sem ele, nenhuma Force soma
 	if entity and entity.Active and entity:HasComponent(entity.ComponentKey.Movement) then
 		forceH, forceV = entity.GetForceSpeedBudget()
 	end
@@ -268,8 +261,7 @@ function AntiCheat.Register(Player)
 	local previous = TrackedPlayers[Player]
 	if previous then unbindMovement(previous) end
 
-	-- Um Lock (cutscene) sobrevive ao respawn: o corpo novo fica travado e é ele que volta no
-	-- Unlock. Antes o Register recriava tudo com Locked = false (F82)
+	-- Um Lock (cutscene) sobrevive ao respawn: o corpo novo fica travado e é ele que volta no Unlock
 	local locked = previous ~= nil and previous.Locked == true
 
 	TrackedPlayers[Player] = {
@@ -329,12 +321,9 @@ function AntiCheat.SetNativeControlSuspended(Player, suspended)
 end
 
 --[[
-Redireciona pra qual entidade o input desse player vai. Se o player estiver
-Locked, NÃO deixa vazar input agora — só atualiza o que será restaurado no
-Unlock. Sem essa checagem, um Possess acidental durante um Lock (cutscene)
-furaria o corte.
-@param suspendNative - opcional: atualiza junto, na MESMA mensagem, se o cliente
-	desliga o WASD nativo (nil mantém o estado atual)
+Redireciona para qual entidade o input deste player vai. Com Lock ativo, só atualiza o que volta
+no Unlock (um Possess durante uma cutscene não fura o corte).
+@param suspendNative - opcional: na mesma mensagem, se o cliente desliga o WASD nativo (nil mantém)
 ]]
 function AntiCheat.SetControlledEntity(Player, entityID, suspendNative)
 	local tracked = TrackedPlayers[Player]
@@ -381,7 +370,7 @@ function AntiCheat.UnlockPlayerInput(Player)
 end
 
 --[[ O que o servidor manda ao cliente no ControlStateChanged: isLocked, entityID, suspendNative.
-Interno, exposto para os testes (F83). ]]
+Interno, exposto para os testes. ]]
 function AntiCheat._ControlStatePayload(Player)
 	local tracked = TrackedPlayers[Player]
 	if not tracked then return nil end
@@ -418,7 +407,7 @@ end
 
 AntiCheat.Init()
 
--- Interno, exposto para o teste do F109 (janela de máximo da velocidade permitida)
+-- Interno, exposto para teste (janela de máximo da velocidade permitida)
 AntiCheat._WindowMax = windowMax
 
 return AntiCheat

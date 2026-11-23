@@ -2,6 +2,10 @@
 
 ====================DOCUMENTAÇÃO==============================
 
+A documentação completa do framework (API por componente, enums, receitas e exemplos) está em
+docs/index.html, na raiz do repositório (fora do sync/: abre no navegador, sem servidor). Este
+arquivo guarda as notas originais do projeto; se algo divergir, vale a documentação web.
+
 
 
 ---ESTRUTURA:---
@@ -100,7 +104,7 @@
 	 	self:ApplyStatus(Status, { Target = alvo, Duration = 2 })
 	 end
 	 
-	 Efeitos que acompanham o hit vão em data.effects da skill (ver "Sistemas de 08/11" no fim deste DOC).
+	 Efeitos que acompanham o hit vão em data.effects da skill (ver "Efeitos on-hit" em docs/index.html).
   
   
   
@@ -300,7 +304,7 @@ tags: dados binarios que podem ter bypasses como CanMove, CanCast, Block, iFrame
 
 =======================IMPORTANTE!========================
 
-Cadeias (dano -> status -> dano, reflexo de parry, explosão em cadeia) têm limite no motor (F62),
+Cadeias (dano -> status -> dano, reflexo de parry, explosão em cadeia) têm limite no motor,
 declarado em StateTable.Enum.ChainLimits:
 1 - Na mesma pilha, acima de MAX_RECURSION (50) níveis, a ação vai para uma fila e roda no próximo
 frame (TakeDamage devolve false, "Deferred"; ApplyStatus devolve nil). A cadeia longa e finita
@@ -317,98 +321,9 @@ SECONDARY TYPE são tabelas de tipos pra permitir modificações de tipo em runT
 
 qualquer modificação futura de tags que alterem comportamento, como uma nova trait de "instaCast" que ignora silence, devem ser checadas no CanContinue do CombatComponent
 
-=======================SISTEMAS DE 08/11/2026========================
-Cada sistema tem um dono único (regra 17): leia o cabeçalho do arquivo indicado antes de usar.
-
-COOLDOWN (ServerScriptService.Modules.CooldownPolicy): a skill declara cooldown e, opcional,
-cooldownPolicy = { start = Cast|End|Manual, recast = Blocked|Restart|Free|segundos, refund = {motivo = 0..1},
-charges = n, ignoreReduction = bool, maxReduction = 0..1 }. Skill com onRecast precisa declarar recast.
-Na skill: self:Fizzle() (desiste, devolve o cooldown), self:CommitCooldown() (start = Manual).
-Redução: stat CooldownReduction. Herança (skill roubada): CooldownPolicy.Transfer(de, para, nome, "Copy"|"Move").
-
-BLOQUEIO (StateTable.ResolveBlock): quem tem a tag block declara data.block = { mode = Full|Flat|Percent|Custom,
-value = n }. Sem block e sem onTrigger não bloqueia (e avisa). Custom exige onTrigger.
-
-EFEITOS ON-HIT (StateTable.ResolveEffect): data.effects = { status, { status = X, onBlocked = bool, onZeroDamage = bool } }.
-Padrão em Enum.EffectDefaults (bloqueado não aplica; 0 de dano aplica); a skill sobrescreve em data.effectPolicy.
-
-DANO (StateTable.MitigateDamage): DamageMult do atacante, depois as proteções do alvo em Enum.DamageMitigation
-(Defense multiplicativa, Armor subtrativa). A trait TrueDamage fura.
-
-LOADOUT (CombatComponent): camadas. ApplyLoadout(dados, camada?) troca só a camada (padrão Base);
-Slots[slot] = false esvazia; RemoveLoadoutLayer(camada). O modo da arma usa a camada WeaponMode.
-
-HITBOX DA ARMA: cada skill usa a sua: self:StartHitbox(duração) / self:StopHitbox(); o acerto vai só para ela.
-
-SKILL PORTÁVEL (F55): data.kit = kit dono da skill (o CombatComponent carimba a pasta do SkillDatabase,
-ex. "Schema"; skill feita em código pode declarar). self.charLib lê o conjunto de animações do kit dono
-e, na falta, do kit de quem casta (AnimationLib.ForSkill): o M1 da Schema roubado toca as animações da
-Schema em qualquer corpo. data.requires = { ComponentKey.Animation, ... } (ServerScriptService.EntityData.
-ComponentsExport): sem esses componentes o runner é recusado antes de qualquer callback (aviso uma vez,
-cooldown devolvido pelo motivo refused), em vez de errar no meio do onStart.
-
-CRÉDITO DE MORTE (StateTable.EffectOwner): o OUT.OnDeath vai para o DONO do que matou. Um status (DOT,
-reflexo) roda no portador, mas o dono é quem o aplicou (sobe runner.Source até a skill). A morte por
-Bleed credita quem aplicou o Bleed, não a vítima.
-
-OUT.OnDamage (D3, F101): emitido pelo HealthComponent no dono do dano (context.ownerEntity) em TODO dano,
-direto (skill) e indireto (DOT, reflexo, área de status), com as traits do efeito no contexto. Quem não
-quer DOT filtra: Listen({ Role = OUT, Breakpoint = OnDamage, Query = { None = { Traits.DOT } } }).
-context.sourceEntity segue sendo onde o runner de origem roda (num DOT, a própria vítima).
-
-EVENTOS DO HEALTH (F99): Events = { onDamage, onHeal, onDeath, onRevive } no config são do lado de quem
-apanha; onDamage é o IN.PostDamage.
-
-LIMITES DE STAT (F100): Enum.StatLimits (padrão Enum.StatLimitDefault: mínimo 0) vale para o valor final
-do GetStat, com ou sem modificador. Defense pode ficar negativa (amplifica, D1).
-
-AGARRÃO RÍGIDO (F103): entity.AttachTo(peçaDoLíder, offsetCFrame) devolve release(). O corpo vira parte do
-assembly do líder (WeldConstraint) e anda com ele sem atraso, também quando o líder é um player; Forces e
-caminhada do preso ficam suspensas, o Humanoid em PlatformStand e as peças sem massa. Detach()/GetAttachment().
-FollowTarget (Force) persegue com elasticidade; AttachTo carrega. A Ultimate da Schema usa AttachTo.
-
-CORPO DE CLIENTE (F104): o servidor vê o corpo do player ~0,35 s atrasado (Physics/NetworkView, Settings.
-Client_View_Lag). Decisão de posição do servidor sobre corpo de cliente usa NetworkView.PredictedShift(root);
-o AreaEffect já faz isso (a zona solta o vento quando o player sai de verdade).
-
-ALVO E TIME (F105): componente Affiliation { Team = ... }. StateTable.Relation(a, b) = Self/Ally/Enemy/Neutral;
-a hitbox da arma só entrega à skill os alvos que data.affects permite (padrão Enum.AffectsDefaults: inimigo e
-neutro). Zona de skill: area:SetFilter(StateTable.AffectsFilter(runner)). Damage/ApplyStatus direto não filtram.
-
-SEM PERSONAGEM (F106): Combat = { ChosenChar = false } cria a entidade sem personagem (sem loadout do banco e sem
-aviso); o padrão do jogo é Enum.CombatDefaults.ChosenChar.
-
-CURA (F107): Heal(n, { Source = runner, Traits = {...}, Cap = n }). Teto = Cap (ou HealCap da entidade, ou
-Enum.HealthDefaults.HealCap) × MaxHP; a cura nunca reduz o HP (HP acima do máximo é design: sobrevida). Com
-Source, o dono recebe OUT.OnHeal (ctx.actualHeal).
-
-OPÇÕES DO HIT (F108): self:Damage(alvo, n, { Traits = {...}, Effects = {...}, Hit = hitResult, Prescaled = true })
-(Types.DamageOptions). Traits/efeitos valem só para esse hit; Hit vira context.hit (ponto do impacto);
-Prescaled pula o DamageMult.
-
-CONTEXT POR BREAKPOINT (F111, design de .agents/rules/01; formato em Combat/Types RunnerContext): todo
-callback recebe ctx = { depth, history (nomes raiz -> atual), rootOrigin, sourceRunner (o runner anterior:
-quem aplicou/criou; nil no cast por input), input, inherited }. inherited é o payload EXPLÍCITO do pai, só
-leitura: self:ApplyStatus(status, { Inherited = { mult = 3 } }) entrega ctx.inherited.mult ao status;
-self:Damage(alvo, n, { Inherited = {...} }) entrega aos status on-hit desse hit; SkillRunner.new(..., inherited)
-para skill criada por skill. Nada herda sozinho: o neto só recebe o que o filho passar.
-
-CHECAGEM PRÉ-OUTPUT (F112): antes de um status entrar, o dono do efeito recebe OUT.PreApplyStatus (contexto
-com traits do status, targetEntity, incomingStatus e inherited mutável). O listener filtra por Query de traits,
-injeta em ctx.inherited ou cancela (ctx.cancelled = true). Para dano, o mesmo papel é do OUT.onHit (o
-inherited dele segue para os status on-hit). Sem ouvinte, custo zero.
-
-SETHP/REVIVE (F110): SetHP(n) e Revive(n) definem o HP exato, sem corte no MaxHP (sobrevida é design); o
-teto fica com o SetMaxHP e o HealCap da cura.
-
-INSCRIÇÕES (Listen): Owner por entidade com StateTable.OwnerToken(entidade, "tag"), nunca string.
-
-FORÇAS: Soft e caminhada do NPC proporcionais à massa (Physics/Settings: Force_Mass_Scaling); MassScaling = false
-no config do Movement desliga por entidade. FollowTarget com feed-forward (MovementComponent, formato da Force).
-
-LOG: require(ReplicatedStorage.Logger).Channel("Canal").Debug/Info/Warn/Error/WarnOnce; nível em
-ReplicatedStorage.Config.LogConfig.
-
-TESTES: Tests/IntegrationTests roda no Play (resultado em workspace:GetAttribute("FW_TestSummary"));
-Tests/StaticChecks roda no modo Edit: require(Tests.StaticChecks)().
+=======================SISTEMAS DO MOTOR========================
+Cooldown, bloqueio, efeitos on-hit, dano, loadout, hitbox por skill, skill portátil, crédito de morte,
+OnDamage, limites de stat, agarrão (AttachTo), NetworkView, afiliação, cura, opções do hit, Context por
+Breakpoint, checagem pré-output, interrupção, entidade de dado, eventos globais e alvo no input estão
+documentados em docs/index.html (raiz do repositório), com sintaxe, argumentos e exemplos.
 ]]

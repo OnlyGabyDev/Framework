@@ -16,9 +16,8 @@ WeaponComponent.__index = WeaponComponent
 local warnedDuplicates = {} -- [pasta da arma] = true: o aviso de duplicata sai uma vez por servidor
 
 --[[
-Pasta da arma pelo nome. Nome duplicado (inclusive só na capitalização) é bug pela regra 19:
-avisa e usa a pasta COMPLETA (com o model). Antes o FindFirstChild escolhia pela ordem, e na
-pasta legada (sem model) o Clone dava erro (F18).
+Pasta da arma pelo nome. Nome duplicado (inclusive só na capitalização) é erro: avisa e usa a
+pasta completa (com o model).
 ]]
 local function findWeaponFolder(weaponsFolder: Instance, weaponName: string): Instance?
 	local lowered = string.lower(weaponName)
@@ -52,10 +51,9 @@ local function findWeaponFolder(weaponsFolder: Instance, weaponName: string): In
 end
 
 --[[
-Pasta da arma (F102): primeiro no kit preferido (o pedido no EquipWeapon, ou o personagem de quem
-equipa) e, se ele não tiver a arma, no ÚNICO kit que tiver uma com esse nome. Antes a arma só era
-achada em Assets.Weapons.<personagem>: um corpo de outro kit não equipava o Martelo da Schema, e o M1
-roubado nunca rodava. Nome em mais de um kit é ambíguo: não escolhe, avisa e pede o kit.
+Pasta da arma: primeiro no kit preferido (o pedido no EquipWeapon, ou o personagem de quem equipa);
+se ele não tiver a arma, no único kit que tiver uma com esse nome. Nome em mais de um kit é ambíguo:
+não escolhe, avisa e pede o kit.
 @param weaponName - nome da arma STRING
 @param preferredKit - kit onde procurar primeiro STRING?
 @param strict - true = só no preferredKit (kit pedido explicitamente) BOOLEAN?
@@ -129,8 +127,8 @@ function WeaponComponent:EquipWeapon(weaponName : string, kit : string?) : boole
 
 	local weaponModel, weaponFolder
 
-	-- Modelo informado por config (entidade sem personagem); senão, a pasta da arma pelo kit (F102).
-	-- O personagem (Combat, dependência opcional: regra 16) só diz em que kit procurar primeiro
+	-- Modelo informado por config (entidade sem personagem); senão, a pasta da arma pelo kit. O
+	-- personagem (Combat, dependência opcional) só diz em que kit procurar primeiro
 	local hasCombat = self.Entity:HasComponent(self.Entity.ComponentKey.Combat)
 	if self.WeaponModel and not hasCombat and not kit then
 		weaponModel = self.WeaponModel
@@ -241,8 +239,7 @@ function WeaponComponent:_AttachAllPoints(weaponClone, attachPoints)
 		local charAttach = self.Entity.Instance:FindFirstChild(attachName)
 		local handle = weaponClone:FindFirstChild(key == "primary" and "Handle" or ("Handle_" .. key))
 
-		-- Ponto secundário exige a sua peça (Handle_<key>). Antes caía no mesmo Handle do
-		-- primário: dois Motor6D na mesma peça, e a arma flutuava trocando de lado (F17)
+		-- Ponto secundário exige a sua peça (Handle_<key>): dois Motor6D na mesma peça brigam
 		if not handle and key ~= "primary" then
 			warn(string.format("[WeaponComponent] %s sem Handle_%s: o ponto '%s' fica sem arma",
 				weaponClone.Name, key, tostring(attachName)))
@@ -273,8 +270,7 @@ end
 function WeaponComponent:_GetWeaponData(): {}?
 	if self.WeaponData then return self.WeaponData end
 	
-	-- A pasta que o EquipWeapon resolveu (F102): antes a busca era refeita aqui pelo personagem, e a
-	-- arma de outro kit ficava sem WeaponData (sem modos)
+	-- A pasta que o EquipWeapon resolveu
 	local weaponFolder = self.WeaponFolder
 	if not weaponFolder then return nil end
 	
@@ -390,7 +386,7 @@ function WeaponComponent:StartHitbox(...)
 	return self.Hitbox and self.Hitbox:StartHitbox(...)
 end
 
--- owner = o runner (cada skill tem a sua hitbox, F79); sem owner, a sessão compartilhada
+-- owner = o runner (cada skill tem a sua hitbox); sem owner, a sessão compartilhada
 function WeaponComponent:StopHitbox(owner)
 	if self.Hitbox then
 		self.Hitbox:StopHitbox(owner)
@@ -505,5 +501,5 @@ local ExposeAPI = {
 return {
 	new = WeaponComponent.new,
 	ExposeAPI = ExposeAPI,
-	_findWeaponFolder = findWeaponFolder, -- interno, exposto para os testes (F18)
+	_findWeaponFolder = findWeaponFolder, -- interno, exposto para os testes
 }

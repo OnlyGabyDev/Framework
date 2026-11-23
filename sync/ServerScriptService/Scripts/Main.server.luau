@@ -34,10 +34,8 @@ local function onPlayerAdded(player)
 		}, PlayerComponents)
 		AntiCheat.Register(player)
 
-		-- F02: respawn durante possessão solta tudo DEPOIS que o corpo novo existe. O input
-		-- volta pro corpo nativo (mesmo ID), então ele precisa estar registrado; antes o
-		-- Release vinha primeiro, dava erro no SetNetworkOwner do corpo antigo (já fora do
-		-- workspace) e o Create nunca rodava: o player ficava sem entidade.
+		-- Respawn durante possessão solta tudo DEPOIS que o corpo novo existe: o input volta pro
+		-- corpo nativo (mesmo ID), então ele precisa estar registrado
 		ControlComponent.ReleasePlayer(player)
 	end
 

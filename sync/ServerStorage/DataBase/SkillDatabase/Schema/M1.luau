@@ -6,14 +6,14 @@ local Skill = {
 
 	data = {
 		cooldown = 1,
-		-- O 2º golpe espera o cooldown do 1º e o reinicia: é isso que dá o ritmo do combo (D13)
+		-- O 2º golpe espera o cooldown do 1º e o reinicia: é isso que dá o ritmo do combo
 		cooldownPolicy = { recast = StateTable.Enum.RecastPolicy.Restart },
 		duration = 5,
 		castTime = 0,
 		tags = {[StateTable.Enum.Tags.block] = true},
 		traits = { StateTable.Enum.Traits.Melee },
 		-- Sem animação (os marcadores dela encerram o golpe) ou sem arma (a hitbox) o M1 não existe:
-		-- numa entidade sem eles o motor recusa o cast, em vez de errar no onStart (F55)
+		-- numa entidade sem eles o motor recusa o cast, em vez de errar no onStart
 		requires = { ComponentKey.Animation, ComponentKey.Weapon },
 	},
 
@@ -33,7 +33,7 @@ local Skill = {
 			self.track = self.Entity.PlayAnimation(self.M1Start)
 			if self.track then self.track.Looped = false end -- nil sem Animator no rig
 			
-			self:StartHitbox(self.data.duration) -- a hitbox deste M1, não a da arma inteira (F79)
+			self:StartHitbox(self.data.duration) -- a hitbox deste M1, não a da arma inteira
 
 			self.cleanUp = function()
 				if self.stateID then
@@ -87,7 +87,7 @@ local Skill = {
 			end
 		end,
 
-		-- onEnd roda em qualquer fim, inclusive depois do onCancel (F54): uma limpeza só
+		-- onEnd roda em qualquer fim, inclusive depois do onCancel: uma limpeza só
 		onEnd = function(self)
 			if self.cleanUp then self.cleanUp() end
 		end,

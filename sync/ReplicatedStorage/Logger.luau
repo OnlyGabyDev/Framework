@@ -1,5 +1,5 @@
 --[[
-	Logger — saída padronizada do framework (F64, regra 18). Cada módulo pede um canal e escreve
+	Logger: saída padronizada do framework. Cada módulo pede um canal e escreve
 	por nível; o que aparece é decidido em ReplicatedStorage.Config.LogConfig (dado do jogo).
 
 		local Log = require(ReplicatedStorage.Logger).Channel("DataManager")

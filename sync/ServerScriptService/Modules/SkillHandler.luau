@@ -24,7 +24,7 @@ function SkillHandler.HandleMovementInput(ID, dir)
 	local n = flat.Magnitude > 0.01 and flat.Unit or Vector3.zero
 
 	-- Corpo sem Movement (ex.: torre possuída) ignora o próprio eixo em vez de cair no stub e
-	-- gerar um warn por RequestDir (F58); os corpos linkados continuam recebendo
+	-- gerar um warn por RequestDir; os corpos linkados continuam recebendo
 	if entityCore:HasComponent(entityCore.ComponentKey.Movement) then
 		entityCore.SetDirection(n)
 	end
@@ -96,9 +96,8 @@ local function track(entityCore, event, runner)
 end
 
 --[[
-Runners vivos da skill. Um runner Ended que ainda esteja listado (limpeza que falhou no
-passado) sai do registro aqui em vez de receber recast: era o "runner fantasma" do F13, que
-fazia o próximo toque cair no onRecast de uma skill morta.
+Runners vivos da skill. Um runner Ended que ainda esteja listado (limpeza que falhou) sai do
+registro aqui em vez de receber recast: senão o próximo toque cairia no onRecast de uma skill morta.
 ]]
 local function liveRunners(entityCore, skillName)
 	local live = {}
@@ -132,7 +131,7 @@ local function activate(entityCore, event)
 		if maxInstances == 1 then
 			local runner = activeRunners[1]
 			-- Tenta recast primeiro (runner permanece vivo, sem Stop). Se o recast espera ou
-			-- reinicia o cooldown é a política declarada da skill (cooldownPolicy.recast, D13)
+			-- reinicia o cooldown é a política declarada da skill (cooldownPolicy.recast)
 			if runner:Recast(true) then
 				if not CooldownPolicy.CanRecast(entityCore, runner) then return false end
 				runner:Recast(nil, event)
@@ -161,9 +160,8 @@ local function activate(entityCore, event)
 	--Se obtiver retorno false (estado encontrado mas não é Self), sai do código
 	if not entityCore.TrySelfCancel() then return false end
 
-	--inicializa o runner da skill. Cast por input é a raiz da cadeia: sem Lineage pai, o próprio
-	--runner vira a raiz (Depth 1, Origin = quem castou). Antes um nó raiz montado aqui com campos
-	--que o BuildHistory não lê deixava Root.Origin nil e Depth começando em 2
+	-- Inicializa o runner da skill. Cast por input é a raiz da cadeia: sem Lineage pai, o próprio
+	-- runner vira a raiz (Depth 1, Origin = quem castou)
 	local runner = SkillRunner.new(
 		skill,
 		entityCore,
@@ -176,7 +174,7 @@ local function activate(entityCore, event)
 
 	-- O cooldown começa (ou não) conforme a política declarada, ANTES do onStart: uma cadeia
 	-- que tente castar a mesma skill dentro do onStart já encontra o cooldown. onStart com erro
-	-- encerra o runner com o motivo error, e o refund padrão devolve o cooldown (F14, D13)
+	-- encerra o runner com o motivo error, e o refund padrão devolve o cooldown
 	CooldownPolicy.OnActivate(entityCore, runner)
 	if not runner:start() then
 		return false
@@ -198,7 +196,7 @@ a skill recebe a origem.
 @return sucesso BOOLEAN, skillName STRING?, cooldown NUMBER? (skillName/cooldown só em Activate)
 ]]
 function SkillHandler.HandleIntent(ID, event)
-	if type(event) ~= "table" then return false end -- F49: HandleIntent(id, nil) dava erro
+	if type(event) ~= "table" then return false end -- evento inválido (nil) é recusado sem erro
 	local entityCore = DataManager.Get(ID) 	--Salva o EntityCore da entidade que chamou a função
 	if not entityCore then return false end
 

@@ -48,7 +48,7 @@ local function build(Entity, kind: string?, components, configs, parentEntity)
 	end
 	local core = EntityCore.new(Model, entityType, id, Player)
 
-	-- Herança de reações (regra 4): o filho nasce com o Fork do TriggerSet do pai
+	-- Herança de reações: o filho nasce com o Fork do TriggerSet do pai
 	if parentEntity and parentEntity._triggerSet then
 		core._triggerSet = parentEntity._triggerSet:Fork()
 	end
@@ -120,8 +120,8 @@ function DataManager.Get(Entity)
 
 	local id 
 
-	-- Entrada inválida (nil, número, tabela) devolve nil com warn em vez de erro: uma IA com
-	-- bug chamando Get(nil) derrubava o próprio loop (F49)
+	-- Entrada inválida (nil, número, tabela) devolve nil com warn em vez de erro (uma IA com bug
+	-- chamando Get(nil) não derruba o próprio loop)
 	if typeof(Entity) == "Instance" then
 		id = Entity:GetAttribute("EntityID")
 	elseif typeof(Entity) == "string" then
@@ -214,7 +214,7 @@ function DataManager.CreateID(Entity)
 		   while entityMap.NPCs[id] do
 			   id = "Entity_" .. tostring(math.random(100000,999999))
 		   end
-		-- Tipo do enum único (F38): antes gravava "Entity", e IsNPC() era sempre falso
+		-- Tipo do enum único (EntityCore.EntityTypes)
 		return id, EntityCore.EntityTypes.NPC
 	end
 end

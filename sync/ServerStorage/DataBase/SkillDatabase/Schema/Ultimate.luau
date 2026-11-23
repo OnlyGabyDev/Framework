@@ -29,7 +29,7 @@ local Skill = {
 
 			self.Entity.SetActionState(statsTable.ActionStates.Self.selfCast, self)
 
-			self:StartHitbox(self.data.duration) -- hitbox desta skill (F79)
+			self:StartHitbox(self.data.duration) -- hitbox desta skill
 
 			self.forceID = self.Entity.AddForce({
 				Type = "UltFlight",
@@ -63,22 +63,21 @@ local Skill = {
 			self.grabbed = self.grabbed or {}
 			if not targetEntity or self.grabbed[targetEntity] then return end
 
-			-- Offset por alvo (F19): 0, +3, -3, +6, -6... para os lados, em vez de todos no mesmo ponto
+			-- Offset por alvo: 0, +3, -3, +6, -6... para os lados, em vez de todos no mesmo ponto
 			local index = (self.grabCount or 0) + 1
 			self.grabCount = index
 			local side = if index % 2 == 0 then 1 else -1
 			local lateral = side * math.floor(index / 2) * (self.data.GrabSpacing or 3)
 			local offset = (self.data.GrabOffset or Vector3.new(0, 0, -4)) + Vector3.new(lateral, 0, 0)
 
-			-- Agarrão rígido (F103): o alvo vira parte do assembly do caster e anda com ele sem atraso,
-			-- também quando o caster é um player. A Force com FollowTarget era calculada no servidor
-			-- com a posição atrasada do player, e o agarrado aparecia para trás. Dura o restante da
-			-- skill (D9): o Own abaixo solta no fim
+			-- Agarrão rígido (AttachTo): o alvo vira parte do assembly do caster e anda com ele sem atraso,
+			-- também quando o caster é um player (uma Force com FollowTarget usaria a posição atrasada dele).
+			-- Dura o restante da skill: o Own abaixo solta no fim
 			local release = targetEntity.AttachTo(self.Entity.GetRoot(), CFrame.new(offset))
 			if not release then return end
 			self.grabbed[targetEntity] = true
 
-			-- Agarrados não colidem entre si nem com o caster (F19); o grupo volta no fim do grab
+			-- Agarrados não colidem entre si nem com o caster; o grupo volta no fim do grab
 			local restoreTarget = CollisionGroups.Assign(targetEntity.Instance, CollisionGroups.Grabbed)
 			if not self.restoreCaster then
 				self.restoreCaster = CollisionGroups.Assign(self.Entity.Instance, CollisionGroups.Grabber)
@@ -91,7 +90,7 @@ local Skill = {
 			end)
 		end,
 
-		-- Uma limpeza só, para qualquer fim (cancel, morte, duração ou fim do voo): F54
+		-- Uma limpeza só, para qualquer fim (cancel, morte, duração ou fim do voo)
 		onEnd = function(self)
 			if self.forceID then
 				self.Entity.RemoveForce(self.forceID)

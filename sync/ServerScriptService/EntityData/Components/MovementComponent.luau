@@ -33,17 +33,16 @@
 		FollowOffset: Vector3?,       -- offset do alvo (padrão zero)
 		FollowOffsetIsLocal: boolean?,-- true = offset no espaço da peça (gira junto)
 		FollowResponsiveness: number?,-- ganho da correção de posição (padrão 10)
-		FollowMaxSpeed: number?,      -- limite da CORREÇÃO, além da velocidade do líder (F19)
+		FollowMaxSpeed: number?,      -- limite da correção, além da velocidade do líder
 		FollowFeedForward: boolean?,  -- default true: soma a velocidade do líder (sem atraso)
 		External: boolean?,           -- default = (RequiresControl == false). Externa é barrada por
-		                              -- canDisplace = false; a própria (dash) não (F47).
+		                              -- canDisplace = false; a própria (dash) não.
 		Duration: number,
 		Speed: number | (elapsed: number, duration: number) -> number,
 		Direction: Vector3 | (elapsed: number, duration: number, ctx) -> Vector3,
 		          -- ctx = { Entity = <EntityCore>, MovementComponent = <self> }
-		          -- Usar função aqui é o que permite dashes "estilo ult do Sion":
-		          -- reavalie a direção lendo ctx.MovementComponent.LookDirection
-		          -- (ver LookDirectionBroadcaster.client.luau) a cada frame.
+		          -- Função reavaliada a cada frame permite dash com direção pela câmera:
+		          -- leia ctx.MovementComponent.LookDirection (LookDirectionBroadcaster).
 		TurnRate: number?,            -- radianos/seg. Suaviza mudança de Direction ao invés de aplicar instantâneo.
 		MaxForce: number?,            -- override de "quão inquebrável". Default: Settings.Hard/Soft_Force_Strength.
 		FaceDirection: boolean?,      -- default = Hard. Gira o personagem pra encarar a direção.
@@ -78,8 +77,8 @@ function MovementComponent.new(entity, config)
 	-- compõe corretamente com o sistema de Forces abaixo.
 
 	-- Forças externas e Filtros
-	-- D7: forças proporcionais à massa (Settings.Force_Mass_Scaling); false = números fixos
-	-- para esta entidade (chefe "pesado" de propósito)
+	-- Forças proporcionais à massa (Settings.Force_Mass_Scaling); false = números fixos para esta
+	-- entidade (chefe "pesado" de propósito)
 	self.MassScaling = config and config.MassScaling
 	self.ActiveForces = {}
 	self.ForcesByKey = {} -- [Key] = forceId da Force ativa com essa Key (ver AddForce)
@@ -102,8 +101,7 @@ function MovementComponent:SetJumpForce(value)
 	end
 end
 
--- Regra 16: dependência OPCIONAL de Attributes, declarada aqui num único ponto.
--- Sem Attributes, usa StatDefaults (sem chamar o stub, que dava warn por frame).
+-- Dependência opcional de Attributes: sem ele, StatDefaults
 local function statOrDefault(self, stat)
 	local entity = self.Entity
 	local default = StateTable.Enum.StatDefaults[stat]
@@ -171,8 +169,7 @@ end
 function MovementComponent:SetMovement()
 	if self.MovementWrapper then return false end
 
-	-- Sem Character não há corpo para mover: antes o wrapper nil derrubava o DataManager.Create
-	-- no meio e a entidade ficava meio registrada (F36)
+	-- Sem Character não há corpo para mover
 	if not self.Entity:HasComponent(self.Entity.ComponentKey.Character) then
 		warn("[MovementComponent] Entidade sem CharacterComponent; Movement desativado:", self.Entity.ID)
 		return false
@@ -185,8 +182,7 @@ function MovementComponent:SetMovement()
 		return false
 	end
 
-	-- NPC: a física é do servidor (regra 10). Sem isso o auto-ownership dava a simulação do NPC
-	-- ao cliente mais próximo (F34). Possessão troca o dono depois, pelo ControlComponent
+	-- NPC: a física é do servidor (a possessão troca o dono depois, pelo ControlComponent)
 	if self.Entity.Player == nil then
 		local root = self.Entity.GetRoot and self.Entity.GetRoot()
 		if root and root:IsA("BasePart") and root:CanSetNetworkOwnership() then
@@ -197,10 +193,10 @@ function MovementComponent:SetMovement()
 	-- Criamos o wrapper de movimentação.
 	self.MovementWrapper = EntityWrapper.CreateMovement(wrapper, {
 		DrivesInput = self.Entity.Player == nil,
-		MassScaling = self.MassScaling, -- D7: false = forças e caminhada em números fixos
+		MassScaling = self.MassScaling, -- false = forças e caminhada em números fixos
 	})
 
-	-- Regra 16: Dependência Opcional Explícita
+	-- Dependência opcional de Status (tags canMove/canDisplace)
 	if not self.Entity:HasComponent(self.Entity.ComponentKey.Status) then
 		Log.Debug("entidade sem StatusComponent: tags canMove/canDisplace ignoradas:", self.Entity.ID)
 	end
@@ -230,15 +226,14 @@ local function setNetworkOwner(part: BasePart, owner: Player?, auto: boolean?)
 end
 
 --[[
-Prende esta entidade a uma peça de outro corpo (agarrão rígido, F103): um WeldConstraint põe o
-corpo no assembly do líder, e ele passa a ser simulado por quem simula o líder. É o que tira o
-atraso do agarrão de um player: a Force com FollowTarget é calculada no SERVIDOR com a posição que
-ele vê do líder, ~0,35 s atrasada quando o líder é do cliente, e o agarrado aparecia para trás.
-Use FollowTarget para perseguir (tether elástico) e AttachTo para carregar.
+Prende esta entidade a uma peça de outro corpo (agarrão rígido): um WeldConstraint põe o corpo no
+assembly do líder, que passa a simulá-lo. Não tem atraso nem quando o líder é um player (a Force
+com FollowTarget é calculada no servidor com a posição atrasada do líder). Use FollowTarget para
+perseguir (tether elástico) e AttachTo para carregar.
 
-Enquanto preso: as Forces e a caminhada desta entidade ficam suspensas (o MovementController a
-pula), o Humanoid fica em PlatformStand e as peças, sem massa (não pesam no líder). O dono de rede
-do assembly passa a ser o do líder. Se o líder sumir, o weld quebra e a entidade se solta sozinha.
+Enquanto preso: as Forces e a caminhada desta entidade ficam suspensas, o Humanoid em PlatformStand
+e as peças sem massa (não pesam no líder). O dono de rede do assembly é o do líder. Se o líder
+sumir, o weld quebra e a entidade se solta sozinha.
 @param leaderPart - peça do líder (ex.: líder.GetRoot()) BasePart
 @param offset - CFrame do root desta entidade no espaço da peça do líder (padrão: onde está agora)
 @param opts - { Massless: boolean? } (padrão true)
@@ -381,8 +376,7 @@ function MovementComponent:AddForce(forceData)
 		end
 	end
 
-	-- Force com Key já ativa: renova a mesma (F29). Sem isso, quem reaplica a força a cada
-	-- poll (AreaEffect a 10 Hz com Duration 0.5) empilhava até 5 cópias, e as Soft se somam.
+	-- Force com Key já ativa: renova a mesma (força reaplicada em loop não empilha)
 	local key = forceData.Key
 	local existingId = key and self.ForcesByKey[key]
 	local existing = existingId and self.ActiveForces[existingId]
@@ -450,9 +444,8 @@ function MovementComponent:ClearForces()
 end
 
 --[[
-Quanto as Forces ativas deslocam a entidade além da caminhada: soma do módulo da velocidade
-que o MovementController aplicou a cada uma no último passo. Existe para quem precisa desse
-teto sem ler ActiveForces por fora (regra 17), como a validação de movimento do GlobalAntiCheat.
+Quanto as Forces ativas deslocam a entidade além da caminhada: soma do módulo da velocidade que o
+MovementController aplicou a cada uma no último passo (usado pela validação de movimento).
 @return horizontal (XZ), vertical (Y) em studs/s
 ]]
 function MovementComponent:GetForceSpeedBudget(): (number, number)

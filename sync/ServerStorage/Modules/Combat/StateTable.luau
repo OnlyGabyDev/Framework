@@ -67,7 +67,7 @@ function StateTable.BuildHistory(data)
 	return Helper.BuildHistory(data)
 end
 
--- Forwarding helpers (LOTE 1)
+-- Atalhos para o Helper
 function StateTable.HasTrait(meta, trait)
 	return Helper.HasTrait(meta, trait)
 end

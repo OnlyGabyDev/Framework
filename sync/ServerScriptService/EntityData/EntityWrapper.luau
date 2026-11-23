@@ -20,11 +20,8 @@ function ICharacter:SetHumanoid() end
 function ICharacter:GetHumanoid() end
 
 --[[
-IMovement - Interface de dados de movimentação
-
-Regra 17 (dono único do shape): esse é o contrato que TODO wrapper de
-movimentação (Humanoid ou NPC) precisa cumprir. O MovementController só fala
-com essa interface — nunca deve saber se está lidando com um Humanoid ou não.
+IMovement: o contrato que todo wrapper de movimentação (Humanoid ou NPC) cumpre. O
+MovementController só fala com esta interface, sem saber se há Humanoid.
 ]]
 
 local IMovement = {}
@@ -133,13 +130,10 @@ function HumanoidMovement.new(characterWrapper)
 	self._character = characterWrapper
 
 	local root = characterWrapper:GetRoot()
-	-- O rig nasce mesmo com a raiz ancorada: ancorada ela não se move, mas ao ser solta
-	-- (SetFrozen(false), script do jogo) as forças passam a valer. Antes a entidade criada
-	-- ancorada ficava imóvel para sempre, em silêncio (F50)
+	-- O rig nasce mesmo com a raiz ancorada: ao ser solta (SetFrozen(false)) as forças passam a valer
 	self._rig = root and ForceRig.new(root) or nil
-	-- O controlador do Humanoid segura a velocidade na da caminhada: a Soft padrão de um corpo
-	-- sem Humanoid (Soft_Force_Acceleration) não o move (F32). O MovementController lê este
-	-- campo sem saber se há Humanoid
+	-- O controlador do Humanoid segura a velocidade na da caminhada: o wrapper declara uma aceleração
+	-- Soft maior (o MovementController lê o campo sem saber se há Humanoid)
 	self.SoftForceAcceleration = Settings.Humanoid_Soft_Force_Acceleration
 
 	return self
@@ -241,8 +235,7 @@ end
 local NPCMovement = {}
 NPCMovement.__index = NPCMovement
 
--- Força de caminhada do NPC sem Humanoid (D7, F31): aceleração × massa, ou o número fixo com
--- MassScaling = false. Antes era sempre 2000: o chefe 5×7×4 não saía do lugar
+-- Força de caminhada do NPC sem Humanoid: aceleração × massa, ou o número fixo com MassScaling = false
 local function walkForceOf(self, root)
 	if not Settings.Force_Mass_Scaling or self.MassScaling == false or not root then
 		return Settings.NPC_Walk_Force
@@ -255,7 +248,7 @@ function NPCMovement.new(characterWrapper)
 	self._character = characterWrapper
 
 	local root = characterWrapper:GetRoot()
-	self._rig = root and ForceRig.new(root) or nil -- também com a raiz ancorada (F50)
+	self._rig = root and ForceRig.new(root) or nil -- também com a raiz ancorada
 	self._currentSpeed = 0
 	self._desiredWalk = Vector3.zero 
 
@@ -267,13 +260,9 @@ function NPCMovement:SetSpeed(speed)
 end
 
 --[[
-IMPORTANTE: isso NÃO escreve no ForceRig diretamente. Se escrevesse, e o
-MovementController chamasse ApplyForceFrame/ReleaseForces logo em seguida no
-MESMO frame (que é exatamente o que sempre acontece — Move() roda primeiro,
-Forces depois), o que essa função escrevesse seria apagado sem efeito nenhum
-antes mesmo do próximo passo de física rodar. Por isso só guardamos a
-intenção aqui; quem efetivamente escreve no rig, compondo isso com o
-resultado das Forces eixo a eixo, é ApplyForceFrame/ReleaseForces abaixo.
+Só guarda a intenção: o MovementController chama ApplyForceFrame/ReleaseForces logo depois no mesmo
+frame, e é lá que a caminhada é composta com as Forces eixo a eixo (escrever no rig aqui seria
+sobrescrito).
 ]]
 function NPCMovement:Move(direction: Vector3)
 	local flat = Vector3.new(direction.X, 0, direction.Z)

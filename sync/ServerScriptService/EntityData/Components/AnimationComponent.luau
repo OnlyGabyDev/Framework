@@ -211,9 +211,9 @@ function AnimationComponent:PlayAnimation(animId : string | number, key : string
 	-- Armazena
 	self.Tracks[key] = track
 	
-	-- Auto-cleanup quando terminar. Só limpa a key se ela ainda for desta track: antes o Stopped
-	-- da track antiga (parada pelo replay na mesma key) apagava a nova, que ficava órfã tocando;
-	-- a conexão sai junto e a track é destruída (o Animator tem limite de 64 tracks) (F25)
+	-- Auto-cleanup quando terminar. Só limpa a key se ela ainda for desta track (o Stopped da
+	-- track antiga, parada pelo replay na mesma key, não apaga a nova); a conexão sai junto e a
+	-- track é destruída (o Animator tem limite de 64 tracks)
 	local connection
 	connection = track.Stopped:Connect(function()
 		connection:Disconnect()
@@ -385,8 +385,7 @@ function AnimationComponent:WaitForMarker(key : string, markerName : string, tim
 	if not signal then return false end
 	
 	if timeout then
-		-- Retorna no disparo do marker ou no timeout, o que vier antes. Antes esperava sempre o
-		-- timeout inteiro (F72)
+		-- Retorna no disparo do marker ou no timeout, o que vier primeiro
 		local thread = coroutine.running()
 		local done = false
 		local connection, timer

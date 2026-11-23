@@ -1,5 +1,5 @@
 --[[
-	LogConfig — quanto do framework aparece no Output (F64, regra 18). Configuração do JOGO: troque
+	LogConfig: quanto do framework aparece no Output. Configuração do JOGO: troque
 	aqui. Vale para servidor e cliente.
 
 	Níveis, do mais verboso ao mais quieto: Debug < Info < Warn < Error < Off

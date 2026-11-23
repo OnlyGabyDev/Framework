@@ -205,8 +205,8 @@ function CameraOverride.Init()
 
 	ControlStateChanged.OnClientEvent:Connect(function(isLocked: boolean, entityID: string?, suspendNative: boolean?, subject: Instance?)
 		if entityID then
-			-- O servidor manda o model (F57); a busca pelo atributo fica de reserva para um
-			-- servidor antigo ou um model que ainda não replicou
+			-- O servidor manda o model; a busca pelo atributo fica de reserva para um model que ainda
+			-- não replicou
 			local found = (subject and subject:IsDescendantOf(workspace)) and subject or nil
 			if not found then
 				for _, obj in ipairs(workspace:GetChildren()) do
@@ -239,7 +239,7 @@ function CameraOverride.Init()
 
 		if isLocked or suspendNative then
 			-- Humanoid:Move persiste até a próxima chamada: sem parar o corpo aqui, quem estava
-			-- andando quando o Lock chegou seguia na última direção até o Unlock (F92)
+			-- andando quando o Lock chegou seguiria na última direção até o Unlock
 			NATIVE_MOVE(player, Vector3.zero, false)
 			if Controls.humanoid then Controls.humanoid.Jump = false end
 			Controls.moveFunction = function() end

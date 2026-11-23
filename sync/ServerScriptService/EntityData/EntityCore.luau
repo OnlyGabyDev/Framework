@@ -1,11 +1,11 @@
 --[[
-	EntityCore - Núcleo de toda entidade, componentizado, passar os componentes antes de criar a entidade.)
+	EntityCore: núcleo de toda entidade, componentizado. Os componentes são passados antes de criar a entidade.
 ]]
 
 local EntityCore = {}
 EntityCore.ComponentKey = {}
 EntityCore.Events = {}
--- Dono único dos tipos de entidade (F38): DataManager grava, IsPlayer/IsNPC leem
+-- Dono único dos tipos de entidade: DataManager grava, IsPlayer/IsNPC leem
 EntityCore.EntityTypes = table.freeze({
 	Player = "Player",
 	NPC = "NPC",
@@ -168,7 +168,7 @@ function EntityCore:ComponentsLoaded()
 	local highPriority = {}
 	local normalPriority = {}
 
-	-- Regra 16: dependência declarada vira warn IMEDIATO, não um erro descoberto sprints depois
+	-- Dependência declarada ausente vira warn imediato
 	for name in pairs(self.Components) do
 		local registryData = ComponentRegistry[name]
 		if registryData and registryData.Requires then
@@ -237,7 +237,7 @@ function EntityCore:RemoveComponent(componentName : string)
 	end
 
 	-- A API exposta sai junto: a chamada volta a cair no stub (warn) em vez de ir para o
-	-- componente destruído, dar erro e vazar a cadeia (F35)
+	-- componente destruído
 	local registryData = ComponentRegistry[componentName]
 	if registryData and registryData.ExposeAPI then
 		for methodName in pairs(registryData.ExposeAPI) do
@@ -321,7 +321,7 @@ function EntityCore.RegisterComponent(name : string, componentModule : {[string]
 		ExposeAPI = componentModule.ExposeAPI,
 		InitPriority = componentModule.InitPriority,
 		Requires = componentModule.Requires,
-		EventKey = componentModule.EventKey, -- sem isso EntityCore.Events ficava sempre vazio (F37)
+		EventKey = componentModule.EventKey, -- alimenta EntityCore.Events
 	}
 
 	Log.Debug("componente registrado:", name)

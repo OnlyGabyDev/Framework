@@ -11,16 +11,15 @@ function TriggerSet.new()
 	return self
 end
 
--- Dono único da checagem de expiração de TTD (Regra 1) — usado tanto em Emit
--- quanto em Fork. Antes só Emit sabia disso, e Fork podia "ressuscitar" um
--- sub cujo TTD já tinha estourado, herdando um countdown novo do zero.
+-- Dono único da checagem de expiração de TTD, usado por Emit e por Fork (o Fork não pode
+-- copiar um sub já expirado com um countdown novo)
 local function isExpired(sub: any): boolean
 	return sub._expirationTime ~= nil and os.clock() >= sub._expirationTime
 end
 
 function TriggerSet:Subscribe(sub: any)
 	if type(sub.Owner) == "string" then
-		-- F51: string é global entre entidades; use StateTable.OwnerToken(entidade, tag)
+		-- Owner em string é global entre entidades; use StateTable.OwnerToken(entidade, tag)
 		Log.WarnOnce(sub.Owner, "Owner em string ('" .. sub.Owner .. "') é compartilhado entre entidades;"
 			.. " use StateTable.OwnerToken(entidade, \"" .. sub.Owner .. "\")")
 	end
@@ -47,8 +46,7 @@ function TriggerSet:Subscribe(sub: any)
 	sub._seq = self._seq
 
 	-- Inserção ordenada (binária): Priority maior primeiro; empate fica na ordem de inscrição
-	-- (o _seq do novo é sempre o maior, então ele entra depois de todos de mesma Priority).
-	-- Antes a lista inteira era reordenada a cada inscrição: 3000 listeners = 3,2 s de CPU (F52)
+	-- (o _seq do novo é sempre o maior, então ele entra depois de todos de mesma Priority)
 	local list = self.Subscriptions[sub.Role][sub.Breakpoint]
 	local priority = sub.Priority or 0
 	local lo, hi = 1, #list + 1
@@ -105,7 +103,7 @@ function TriggerSet:Emit(role: string, breakpoint: string, context: any, ...)
 	if not list or #list == 0 then
 		return
 	end
-	-- Context padrão: Emit sem context dava erro fora do pcall (F48)
+	-- Context padrão para Emit sem context
 	if context == nil then
 		context = { traits = {} }
 	elseif context.traits == nil then
@@ -159,11 +157,8 @@ function TriggerSet:Fork()
 			for _, sub in ipairs(table.clone(list)) do
 				if sub._removed then continue end
 
-				-- FIX: sem isso, um sub cujo TTD já estourou (mas que ainda
-				-- não foi podado por falta de Emit nesse breakpoint
-				-- específico) era copiado pro filho com um countdown NOVO,
-				-- do zero — "ressuscitando" uma reação que já devia estar
-				-- morta. Aproveita a passagem pra podar do PAI também, de graça.
+				-- Sub expirado (ainda não podado por falta de Emit neste breakpoint) não vai pro filho
+				-- com um countdown novo; aproveita a passagem e poda do pai também
 				if isExpired(sub) then
 					self:Unsubscribe(sub)
 					continue

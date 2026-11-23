@@ -29,7 +29,7 @@ end
 --  PIPELINE ATRIBUTOS
 --=============================================================================
 
--- Limite declarado do stat (Enum.StatLimits, F100). Só para número: há stat que é texto (Weapon)
+-- Limite declarado do stat (Enum.StatLimits). Só para número: há stat que é texto (Weapon)
 local function limited(AttributeName, value)
     if type(value) ~= "number" then return value end
     local limit = Enum.StatLimits[AttributeName] or Enum.StatLimitDefault
@@ -42,9 +42,7 @@ function AttributeComponents:GetStat(AttributeName, default)
         return self._cache[AttributeName]
     end
 
-    -- Sem base registrada o valor depende do default de QUEM pergunta: não entra no cache.
-    -- Antes a 1ª chamada gravava o resultado com o default dela e a 2ª, com outro default,
-    -- recebia o mesmo valor (F42)
+    -- Sem base registrada o valor depende do default de QUEM pergunta: não entra no cache
     local hasBase = self.BaseStats[AttributeName] ~= nil
     local base = self.BaseStats[AttributeName] or default or 0
     local mods = self.Modifiers[AttributeName]
@@ -127,9 +125,8 @@ end
 
 --[[
 Adiciona um modificador com base num ID e nome de atributo. Com contagem de referência: o
-mesmo sourceID adicionado N vezes precisa de N RemoveModifier para sair. Antes duas zonas
-com o mesmo ID se anulavam: sair de uma tirava o efeito de quem seguia dentro da outra (F45).
-Reaplicar o mesmo ID atualiza Type/Value e soma 1 na contagem.
+mesmo sourceID adicionado N vezes precisa de N RemoveModifier para sair (duas zonas com o mesmo
+ID não se anulam). Reaplicar o mesmo ID atualiza Type/Value e soma 1 na contagem.
 ]]
 function AttributeComponents:AddModifier(AttributeName, sourceID, type, value)
     if not self.Modifiers[AttributeName] then

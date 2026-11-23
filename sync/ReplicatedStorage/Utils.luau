@@ -42,9 +42,9 @@ end
 
 --[[
 Rotaciona `current` em direção a `target` (Vector3, não precisam ser unitários),
-respeitando um ângulo máximo por chamada. DONO ÚNICO dessa lógica (Regra 1) —
-usado por MovementController (giro de personagem em Force) e por
-HitboxBehaviors.Homing (giro de projétil). Não duplique isto em nenhum lugar.
+respeitando um ângulo máximo por chamada. Dono único dessa lógica: usado por
+MovementController (giro de personagem em Force) e por HitboxBehaviors.Homing
+(giro de projétil).
 ]]
 function Utils.rotateTowards(current, target, maxRadians)
 	if current.Magnitude < 1e-6 then
@@ -89,8 +89,7 @@ function Utils.worldToLocalPlanar(moveDirection, facingDirection)
 	local flatFacing = Vector3.new(facingDirection.X, 0, facingDirection.Z)
 	flatFacing = flatFacing.Magnitude < 0.1 and Vector3.new(0, 0, -1) or flatFacing.Unit
 
-	-- Direita = facing girado 90° no sentido horário visto de cima: facing -Z dá +X (F28; o
-	-- sinal estava invertido e andar para a direita era classificado como Left)
+	-- Direita = facing girado 90° no sentido horário visto de cima: facing -Z dá +X
 	local right = Vector3.new(-flatFacing.Z, 0, flatFacing.X)
 	local forwardDot = flatMove:Dot(flatFacing)
 	local rightDot = flatMove:Dot(right)

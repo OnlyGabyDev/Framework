@@ -50,7 +50,7 @@ end
 
 
 
--- Funções padrão dos status (dado estático: antes a tabela era recriada a cada ApplyStatus)
+-- Funções padrão dos status (dado estático, compartilhado entre os ApplyStatus)
 local StatusDefaults = {
 	onStart = function() end,
 	onStep = function() end,
@@ -63,7 +63,7 @@ local StatusDefaults = {
 function SkillFactory.GetStatus(originalData)
 	local originalCallbacks = originalData.callbacks or {}
 
-	-- Status NÃO pode recusar cancelamento: o onCancel repassa o ctx (com ctx.reason, F54) e
+	-- Status NÃO pode recusar cancelamento: o onCancel repassa o ctx (com ctx.reason) e
 	-- descarta o retorno. O RemoveStatus tira a entrada do registro antes de encerrar o runner;
 	-- se um status pudesse vetar, o runner seguiria vivo fora do registro. Para permitir veto um
 	-- dia, o RemoveStatus teria de respeitá-lo (só desregistrar depois do fim confirmado).

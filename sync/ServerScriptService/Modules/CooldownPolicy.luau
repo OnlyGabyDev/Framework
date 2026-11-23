@@ -1,5 +1,5 @@
 --[[
-CooldownPolicy — dono único das regras de cooldown de skill (D13). A skill DECLARA no data; o
+CooldownPolicy: as regras de cooldown de skill. A skill declara no data; o motor executa. O
 motor executa. O CombatComponent guarda os dados (self.Cooldowns) e delega as contas para cá.
 Status não passam por aqui (o cooldown deles é o StatusCooldowns do StatusComponent).
 
@@ -39,7 +39,7 @@ herança (skill roubada, possessão)
 	CooldownPolicy.Transfer(de, para, nomeDaSkill, "Copy" | "Move") copia o estado (tempo restante
 	e cargas) de uma entidade para outra; Move também libera a de origem.
 
-Formato de uma entrada do armazenamento (dono deste formato, regra 17):
+Formato de uma entrada do armazenamento:
 	Cooldowns[nome] = {
 		endAt: number,        -- tick() em que a contagem corrente termina (0 = nenhuma)
 		duration: number,     -- duração efetiva da contagem corrente
@@ -171,8 +171,8 @@ local function policyOf(runner)
 end
 
 --[[
-Duração efetiva de uma contagem que começa agora: cooldown × (1 − CooldownReduction), com o
-stat lido do AttributesComponent (dependência opcional, regra 16) e limitado ao teto DA SKILL.
+Duração efetiva de uma contagem que começa agora: cooldown × (1 − CooldownReduction), com o stat
+lido do AttributesComponent (dependência opcional) e limitado ao teto da skill.
 ]]
 function CooldownPolicy.EffectiveDuration(entity, policy): number
 	if policy.ignoreReduction or not entity:HasComponent(entity.ComponentKey.Attributes) then

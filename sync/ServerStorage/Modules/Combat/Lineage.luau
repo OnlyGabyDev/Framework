@@ -4,10 +4,10 @@ local Lineage = {}
 --[[
 Cria um novo nó na árvore de histórico.
 Origin SEMPRE propaga a partir da raiz (quem começou a cadeia), nunca do elo
-imediato — assim um dano causado por um DoT aplicado por uma skill ainda
-atribui corretamente ao personagem que lançou a skill original.
+imediato: um dano causado por um DoT aplicado por uma skill ainda
+atribui ao personagem que lançou a skill original.
 `runner` é o runner dono deste elo (nil no elo de um hit): é por ele que o filho acha o runner
-imediatamente anterior (Context.sourceRunner, F111).
+imediatamente anterior (Context.sourceRunner).
 ]]
 function Lineage.Fork(parent: any?, origin: any, cause: string?, runner: any?): any
 	local newNode = {

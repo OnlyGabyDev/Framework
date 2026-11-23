@@ -12,13 +12,11 @@ local function hasMovement(entity): boolean
 	return entity:HasComponent(entity.ComponentKey.Movement)
 end
 
--- Empurra/puxa quem está na zona, na direção fornecida (função ou fixa) —
--- mesmo contrato de Behaviors.LinearMove: aceita função pra permitir origem
--- que se move/gira.
--- A Force tem Key (F29): cada chamada RENOVA a mesma força em vez de empilhar outra.
+-- Empurra/puxa quem está na zona, na direção fornecida (função ou fixa); mesmo contrato de
+-- Behaviors.LinearMove: aceita função para origem que se move/gira.
+-- A Force tem Key: cada chamada RENOVA a mesma força em vez de empilhar outra.
 -- Força de ambiente é externa: por padrão empurra mesmo quem não pode se mover (Root/Stun),
--- como a doc do MovementComponent pede para vento e knockback (F30). RequiresControl = true
--- é opt-in.
+-- como vento e knockback. RequiresControl = true é opt-in.
 -- Chamada solta (sem BindDirectionalForce), a força só acaba pelo Duration: quem sai da zona
 -- segue sendo empurrado até 0,5 s. Para zona, use BindDirectionalForce.
 -- opts = { Area: AreaEffect?, Key: string?, Duration: number?, Hard: boolean?, RequiresControl: boolean?, MaxForce: number? }
@@ -44,10 +42,9 @@ end
 
 --[[
 Liga uma DirectionalForce a uma zona: vale do primeiro poll em que a entidade está dentro
-(OnEnter) até o poll em que ela sai (OnExit, inclusive o do zone:Stop). Antes a zona só aplicava
-no OnStay: o 1º poll dentro não empurrava, e a força sobrevivia à saída pelo resto do Duration
-(até 0,5 s, ~12 studs além da borda a 30 studs/s). Com um dash Hard no meio, o vento ficava
-contido até o fim do dash e o resto saía de uma vez, já fora da zona.
+(OnEnter) até o poll em que ela sai (OnExit, inclusive o do zone:Stop). A força não sobrevive à
+saída: não empurra além da borda pelo resto do Duration nem fica contida sob um dash Hard para
+sair de uma vez depois.
 @param zone AreaEffect
 @param direction Vector3 | () -> Vector3
 @param opts os mesmos do DirectionalForce; Area é sempre a zona

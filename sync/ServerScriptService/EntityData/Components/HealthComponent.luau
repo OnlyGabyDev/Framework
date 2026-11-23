@@ -1,10 +1,9 @@
 --[[
-============================Componente de HP============================
-- Entrada principal de dano e cura
-- Pub/Sub de entrada de dano pra garantir que efeitos como rupture ativem ao ser atingido e devolva a informação ao atacante/status
-- Callbacks para eventos de dano, cura e morte
-- Histórico de dano
-======================================================================================================================
+HealthComponent: vida, dano e cura da entidade.
+- TakeDamage: pipeline do lado do alvo (imunidade, bloqueio, proteções de stat, IN.PreDamage,
+  HP, efeitos on-hit, IN.PostDamage, OUT.OnDamage no dono do dano)
+- Heal com teto declarado (HealCap); HP acima do máximo é permitido (sobrevida)
+- Morte (IN.OnDeath, OUT.OnDeath no dono do efeito) e histórico de dano
 ]]
 
 local ServerStorage = game:GetService("ServerStorage")
@@ -17,9 +16,8 @@ local HealthComponent = {}
 HealthComponent.__index = HealthComponent
 
 --[[
-Eventos do config (Events = { onDamage = fn, ... }) e de EntityCore.Events: são do lado de quem
-APANHA (canal IN). onDamage é o PostDamage (F99): antes virava IN.OnDamage, que o motor nunca emite
-(o OnDamage é do dono do dano, canal OUT), e o callback nunca rodava. Dono único deste mapa.
+Eventos do config (Events = { onDamage = fn, ... }) e de EntityCore.Events, do lado de quem apanha
+(canal IN). onDamage é o PostDamage.
 ]]
 local EVENT_KEY = table.freeze({
 	onDamage = StateEnum.Breakpoints.PostDamage,
@@ -30,10 +28,9 @@ local EVENT_KEY = table.freeze({
 
 
 --[[
-Cria uma nova instância do HealthComponent
-@param entity - Entidade dona do componente Entity, enviar EntityData
-@param config - Configurações iniciais do componente TABLE { MaxHP: number, StartHP: number Events:{OnDamage,OnHeal,onDeath,onRevive}}
-@return nova instância do HealthComponent HealthComponent]]
+@param entity - entidade dona
+@param config - { MaxHP?, StartHP?, HealCap?, Events? = { onDamage, onHeal, onDeath, onRevive } }
+]]
 function HealthComponent.new(entity, config)
 	local self = setmetatable({}, HealthComponent)
 	
@@ -41,7 +38,7 @@ function HealthComponent.new(entity, config)
 	self.MaxHP = config.MaxHP or StateEnum.StatDefaults.MaxHP
 	self.HP = config.StartHP or self.MaxHP
 	self.Subscription = config.Events or false
-	-- Teto da cura em × MaxHP (F107): padrão em Enum.HealthDefaults; math.huge = sem teto
+	-- Teto da cura em × MaxHP (Enum.HealthDefaults.HealCap); math.huge = sem teto
 	self.HealCap = config.HealCap or StateEnum.HealthDefaults.HealCap
 	self.IsDead = false
 	self._lastDamageTime = 0
@@ -63,15 +60,14 @@ local function getAntiCheat()
 end
 
 --[[
-Quem vê a barra de vida deste corpo: o player que está com ELE roteado (D15, F56). Candidatos: o
-dono nativo e quem o possui. Durante a possessão a HUD mostra o corpo controlado; antes mostrava
-sempre o corpo original. Antes do AntiCheat registrar o player (spawn), vale o dono nativo.
+Quem vê a barra de vida deste corpo: o player que está com ele roteado (o dono nativo ou quem o
+possui). Antes de o AntiCheat registrar o player (spawn), vale o dono nativo.
 ]]
 function HealthComponent:_HudViewers(): {Player}
 	local entity = self.Entity
 	local candidates = {}
 	if entity.Player then candidates[entity.Player] = true end
-	if entity:HasComponent(entity.ComponentKey.Control) then -- dependência opcional (regra 16)
+	if entity:HasComponent(entity.ComponentKey.Control) then -- dependência opcional
 		local controller = entity.GetController()
 		if controller and controller.Player then candidates[controller.Player] = true end
 	end
@@ -100,10 +96,6 @@ end
 --  VALIDAÇÃO DE HIT
 --=============================================================================
 
---[[
-FUNÇÃO INTERNA!
-Valida se um ataque pode afetar a entidade baseado em suas tags de imunidade
-@return sucesso BOOLEAN, razão STRING (nome da imunidade que bloqueou o hit)]]
 
 
 --=============================================================================
@@ -112,11 +104,11 @@ Valida se um ataque pode afetar a entidade baseado em suas tags de imunidade
 
 
 --[[
-Aplica dano à entidade
-@param amount - Quantidade de dano a ser aplicada NUMBER
-@param source - Fonte do dano ANY
-@return sucesso BOOLEAN, quantidade real de dano aplicada NUMBER | false, Enum.ChainOutcomes
-	(Deferred: a cadeia estava funda demais e o dano roda no próximo frame, F62)]]
+Aplica dano à entidade.
+@param amountOrContext - dano NUMBER ou um HitContext pronto
+@param source - runner que causou ANY?
+@return sucesso BOOLEAN, dano real NUMBER, contexto | false, Enum.ChainOutcomes (Deferred: a
+	cadeia estava funda demais e o dano roda no próximo frame)]]
 function HealthComponent:TakeDamage(amountOrContext : number | {}, source : any?)
 	local ran, success, actualDamage, context = StateTable.RunInChain(
 		"[HealthComponent] TakeDamage", self.Entity and self.Entity.ID,
@@ -129,8 +121,8 @@ function HealthComponent:TakeDamage(amountOrContext : number | {}, source : any?
 end
 
 function HealthComponent:_TakeDamageInner(amountOrContext, source)
-	-- Aqui e não no TakeDamage: um dano adiado pela cadeia (F62) roda no frame seguinte, quando o
-	-- alvo pode ter morrido ou saído do jogo (Destroy zera self.Entity)
+	-- Aqui e não no TakeDamage: um dano adiado pela cadeia roda no frame seguinte, quando o alvo pode
+	-- ter morrido ou saído do jogo
 	if self.IsDead or not self.Entity then return false, 0 end
 
 	local context
@@ -140,13 +132,12 @@ function HealthComponent:_TakeDamageInner(amountOrContext, source)
 		context = StateTable.BuildContext(source, amountOrContext)
 	end
 
-	-- Hit de 0 de dano só continua se tiver efeitos para aplicar (slow puro, marca: D6, F41)
+	-- Hit de 0 de dano só continua se tiver efeitos para aplicar (slow puro, marca)
 	local hasEffects = context.effects ~= nil and #context.effects > 0
 	local zeroDamageHit = context.damage <= 0
 	if zeroDamageHit and not hasEffects then return false, 0 end
 
-	-- Se tem StatusComponent, valida imunidades e aplica mitigação (block/parry).
-	-- Toda a lógica de "o que é block/iFrame" mora no StatusComponent agora (Regra 20).
+	-- Imunidade e bloqueio são do StatusComponent (dependência opcional)
 	local statusComp = self.Entity:HasComponent(self.Entity.ComponentKey.Status)
 	if statusComp then
 		local canHit, reason = self.Entity.ValidateHit(context)
@@ -159,13 +150,12 @@ function HealthComponent:_TakeDamageInner(amountOrContext, source)
 		context.blocked = before > 0 and context.damage <= 0
 	end
 
-	-- Proteções de stat do alvo (Defense, Armor...: D11, F43). Dependência opcional de Attributes
-	-- (regra 16): sem ele não há stat de proteção. Antes Defense existia e nunca entrava no dano
+	-- Proteções de stat do alvo (Defense, Armor: Enum.DamageMitigation). Dependência opcional de Attributes
 	if context.damage > 0 and self.Entity:HasComponent(self.Entity.ComponentKey.Attributes) then
 		context.damage = StateTable.MitigateDamage(context.damage, self.Entity.GetStat, context.traits)
 	end
 
-	-- Ponto de extensão declarativo (novo): cancelamento/mutação simples ANTES do HP mudar.
+	-- Ponto de extensão: listeners mudam ou cancelam o dano antes do HP mudar
 	self.Entity:Emit(StateEnum.Roles.IN, StateEnum.Breakpoints.PreDamage, context)
 	if context.cancelled then
 		return false, context.reason or "Cancelled"
@@ -185,8 +175,7 @@ function HealthComponent:_TakeDamageInner(amountOrContext, source)
 		self:Die(context.source)
 	end
 
-	-- Efeitos on-hit pela política declarada (D6, F41): antes um hit 100% bloqueado aplicava os
-	-- efeitos, e um hit de 0 de dano nunca chegava aqui (slow puro era impossível)
+	-- Efeitos on-hit pela política declarada (Enum.EffectDefaults / data.effectPolicy)
 	if hasEffects and statusComp then
 		local source = context.source
 		local sourceData = source and (source.skill and source.skill.data or source.data) or nil
@@ -194,7 +183,7 @@ function HealthComponent:_TakeDamageInner(amountOrContext, source)
 			local status, onBlocked, onZeroDamage = StateTable.ResolveEffect(entry, sourceData)
 			local skip = (context.blocked and not onBlocked) or (zeroDamageHit and not onZeroDamage)
 			if status and not skip then
-				-- O inherited do hit (o que quem atacou pôs e o OUT.onHit injetou) segue para o status (F111)
+				-- O inherited do hit (o que quem atacou pôs e o OUT.onHit injetou) segue para o status
 				self.Entity.ApplyStatus(status, { Source = source, Inherited = context.inherited })
 			end
 		end
@@ -203,13 +192,11 @@ function HealthComponent:_TakeDamageInner(amountOrContext, source)
 	context.actualDamage = actualDamage
 	context.targetEntity = context.targetEntity or self.Entity
 
-	-- Hook reativo do lado do ALVO (novo): dispara DEPOIS do HP já ter mudado
+	-- Reação do lado do alvo, depois do HP mudar
 	self.Entity:Emit(StateEnum.Roles.IN, StateEnum.Breakpoints.PostDamage, context)
 
-	-- OUT.OnDamage no DONO do dano (D3, F101), para todo dano: direto (skill) e indireto (DOT,
-	-- reflexo, área de status), com as traits do efeito no contexto (quem não quer DOT filtra com
-	-- Query = { None = { DOT } }). Antes só o ApplyDamage emitia, e o dano de status não tinha OUT
-	-- ownerEntity vem do BuildContext; contexto montado à mão (sem ele) resolve aqui
+	-- OUT.OnDamage no dono do dano, para todo dano (direto e indireto: DOT, reflexo), com as traits do
+	-- efeito no contexto (quem não quer DOT filtra com Query = { None = { DOT } })
 	local owner = context.ownerEntity or StateTable.EffectOwner(context.source)
 	if owner then
 		owner:Emit(StateEnum.Roles.OUT, StateEnum.Breakpoints.OnDamage, context)
@@ -223,11 +210,10 @@ end
 
 
 --[[
-Cura a entidade por uma quantidade específica
-@param amount - Quantidade de HP a ser curada NUMBER
-@param opts - Types.HealOptions? (F107): Source (runner de quem curou: OUT.OnHeal nele), Traits, Cap
-	(teto em × MaxHP só desta cura)
-@return quantidade total de HP curada NUMBER
+Cura a entidade.
+@param amount - quanto curar NUMBER
+@param opts - Types.HealOptions? { Source (recebe o OUT.OnHeal), Traits, Cap (teto em × MaxHP) }
+@return quanto o HP subiu NUMBER
 ]]
 function HealthComponent:Heal(amount : number, opts : any?) : number
 	if self.IsDead or amount <= 0 then return 0 end
@@ -240,8 +226,7 @@ function HealthComponent:Heal(amount : number, opts : any?) : number
 	self.Entity:Emit(StateEnum.Roles.IN, StateEnum.Breakpoints.OnHeal, context)
 	context.damage = math.max(0, context.damage)
 
-	-- Teto da cura: HealCap × MaxHP, e NUNCA abaixo do HP atual (F107). HP acima do máximo é escolha
-	-- de design (sobrevida); antes, com o HP acima do teto, a cura o cortava e devolvia valor negativo
+	-- Teto: HealCap × MaxHP, e nunca abaixo do HP atual (a cura não corta a sobrevida)
 	local cap = (opts and opts.Cap) or self.HealCap
 	local ceiling = math.max(self.HP, cap * self:GetMaxHP())
 	local oldHP = self.HP
@@ -250,7 +235,7 @@ function HealthComponent:Heal(amount : number, opts : any?) : number
 
 	local healed = self.HP - oldHP
 	context.actualHeal = healed
-	-- OUT.OnHeal no dono da cura (lifesteal, cura de aliado), simétrico ao OUT.OnDamage (D3)
+	-- OUT.OnHeal no dono da cura (lifesteal, cura de aliado)
 	local owner = context.ownerEntity
 	if owner then
 		owner:Emit(StateEnum.Roles.OUT, StateEnum.Breakpoints.OnHeal, context)
@@ -259,8 +244,8 @@ function HealthComponent:Heal(amount : number, opts : any?) : number
 end
 
 --[[
-Mata a entidade
-@param killer - Quem matou a entidade, recebe any, pois pode ser ED ou Nil
+Mata a entidade.
+@param killer - runner que matou ANY?
 ]]
 function HealthComponent:Die(killer : any)
 	if self.IsDead then return end
@@ -271,8 +256,7 @@ function HealthComponent:Die(killer : any)
 	local context = StateTable.BuildContext(killer, 0)
 	self.Entity:Emit(StateEnum.Roles.IN, StateEnum.Breakpoints.OnDeath, context)
 
-	-- OUT.OnDeath no DONO do que matou (StateTable.EffectOwner): numa morte por DOT o runner do
-	-- status roda na própria vítima, e antes ela recebia o crédito da própria morte
+	-- OUT.OnDeath no dono do que matou (StateTable.EffectOwner): numa morte por DOT, quem aplicou o DOT
 	local owner = StateTable.EffectOwner(killer)
 	if owner then
 		local outContext = StateTable.BuildContext(killer, 0)
@@ -286,7 +270,7 @@ function HealthComponent:Revive(hpAmount : number?) : boolean
 	if not self.IsDead then return false end
 
 	self.IsDead = false
-	-- Sem valor, volta com o MaxHP; com valor, exatamente ele (sem corte no MaxHP: F110)
+	-- Sem valor, volta com o MaxHP; com valor, exatamente ele
 	self.HP = math.max(0, hpAmount or self:GetMaxHP())
 	self:_SyncClient()
 
@@ -315,8 +299,8 @@ function HealthComponent:GetMaxHP()
 end
 
 --[[
-Define o HP exato. NÃO corta no MaxHP (F110): HP acima do máximo é design (sobrevida), e o teto é
-papel do SetMaxHP e do HealCap da cura. Só não fica negativo; 0 ou menos mata.
+Define o HP exato, sem corte no MaxHP (o teto é do SetMaxHP e do HealCap). Só não fica negativo;
+0 ou menos mata.
 ]]
 function HealthComponent:SetHP(value)
 	if self.IsDead then return end
@@ -337,7 +321,7 @@ end
 function HealthComponent:SetMaxHP(value)
 	value = math.max(1, value)
 
-	-- Ratio calculado ANTES de trocar o teto (bug antigo: ratio saía 2 e o HP ficava acima do MaxHP)
+	-- Proporção calculada antes de trocar o teto
 	local ratio = self.HP / math.max(1, self:GetMaxHP())
 
 	if self:_UsesAttributes() then

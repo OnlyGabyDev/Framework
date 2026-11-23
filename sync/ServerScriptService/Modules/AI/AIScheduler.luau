@@ -1,5 +1,5 @@
---[[ Roda o Brain de todo AIComponent ativo num único Heartbeat (Regra 6 —
-mesmo padrão de MovementController: nada de 1 conexão por entidade). ]]
+--[[ Roda o Brain de todo AIComponent ativo num único Heartbeat (mesmo padrão do
+MovementController: nada de 1 conexão por entidade). ]]
 local RunService = game:GetService("RunService")
 
 local AIScheduler = {}

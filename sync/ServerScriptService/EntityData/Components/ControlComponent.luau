@@ -1,14 +1,12 @@
 --[[
 ControlComponent
 ================
-Responsabilidade ÚNICA: identidade de QUEM manda numa entidade, e AUTORIDADE
-de input (cortar a fonte, não a capacidade — canMove/canCast continuam
-sendo trabalho do StatusComponent, de propósito, pra não duplicar autoridade).
+Quem manda numa entidade e a autoridade de input (corta a fonte, não a capacidade: canMove/canCast
+são do StatusComponent).
 
 Um controlador é um Player ({ Player = p }) ou uma IA ({ AI = true, Brain = fn? }).
-Cada player tem uma PILHA de controle: possuir B estando em A empilha B; o
-Release de B volta pra A e o de A volta pro corpo nativo. O que muda o
-comportamento vem por opção, sem código extra no jogo:
+Cada player tem uma pilha de controle: possuir B estando em A empilha B; o Release de B volta pra A
+e o de A volta pro corpo nativo. O comportamento muda por opção:
 
 	alvo.Possess({ Player = p })                                 -- pilha; pausa a IA do alvo
 	alvo.Possess({ Player = p }, { Policy = Policy.Swap })       -- troca: solta os anteriores
@@ -16,13 +14,10 @@ comportamento vem por opção, sem código extra no jogo:
 	alvo.Possess({ AI = true, Brain = fn })                      -- outra mente dirige o alvo
 	alvo.Release()                                               -- devolve ao controlador nativo
 
-Padrão por entidade no config do componente (DataManager.Create(..., { Control = {...} }))
-e, na falta, DEFAULTS abaixo (dono único). Possuído destruído ou morto devolve
-o player ao corpo anterior sozinho.
+Padrão por entidade no config do componente (DataManager.Create(..., { Control = {...} })) e, na
+falta, DEFAULTS abaixo. Possuído destruído ou morto devolve o player ao corpo anterior sozinho.
 
-Regra 16 — dependências opcionais declaradas: Movement (direção e DrivesInput do
-corpo) e AI (o AIComponent É o mecanismo do controlador IA: estruturalmente
-inevitável, Regra 20).
+Dependências opcionais: Movement (direção e DrivesInput do corpo) e AI (o mecanismo do controlador IA).
 ]]
 
 local ServerStorage = game:GetService("ServerStorage")
@@ -82,18 +77,15 @@ end
 --  CORPO (ownership, direção, IA)
 --=============================================================================
 
--- Só mexe em ownership de peça que está no workspace, não ancorada e que aceita ownership.
--- A falta disso lançava erro no meio do Possess/Release (F04: raiz ancorada da torre; F02:
--- corpo antigo já fora do workspace no respawn) e deixava a rota presa.
+-- Só mexe em ownership de peça que está no workspace, não ancorada e que aceita ownership
 local function setOwnerIfValid(part: BasePart?, owner: Player?): boolean
 	if not part or part.Anchored or not part:IsDescendantOf(workspace) then return false end
 	if not part:CanSetNetworkOwnership() then return false end
 	return (pcall(part.SetNetworkOwner, part, owner))
 end
 
--- Troca o dono de um corpo. toPlayer = nil: o servidor dirige (DrivesInput) e simula a
--- física; toPlayer = p: o cliente de p volta a dirigir e simular. A direção é zerada nos
--- dois sentidos: corpo que troca de dono nunca segue andando com o último input (F23).
+-- Troca o dono de um corpo. toPlayer = nil: o servidor dirige (DrivesInput) e simula a física;
+-- toPlayer = p: o cliente de p volta a dirigir. A direção é zerada nos dois sentidos.
 local function handBody(core, toPlayer: Player?)
 	if not core or not core.Active then return end
 	if core:HasComponent(core.ComponentKey.Movement) then
@@ -105,8 +97,8 @@ local function handBody(core, toPlayer: Player?)
 	end
 end
 
--- Guarda a mente e o estado do AIComponent UMA vez, antes do primeiro controlador
--- estrangeiro; a volta ao nativo restaura exatamente isso (F24 e a pausa da IA).
+-- Guarda a mente e o estado do AIComponent uma vez, antes do primeiro controlador estrangeiro;
+-- a volta ao nativo restaura exatamente isso
 local function snapshotAI(entity, possession)
 	if possession.AI == nil and entity:HasComponent(entity.ComponentKey.AI) then
 		possession.AI = { Brain = entity.GetBrain(), Enabled = entity.IsAIEnabled() }
@@ -132,9 +124,7 @@ local function nativeCoreOf(player: Player)
 	return id and getDataManager().Get(id)
 end
 
--- Manda o input do player pro topo da pilha, ou de volta pro corpo nativo. UMA mensagem pro
--- cliente com o estado completo (F22: antes o suspendNative=true vinha seguido de outra
--- mensagem com false, e o cliente religava o WASD nativo no meio da possessão).
+-- Manda o input do player pro topo da pilha, ou de volta pro corpo nativo, numa mensagem só
 local function route(player: Player)
 	local AC = getAntiCheat()
 	getInputSessions().CancelActiveGestures(player)
@@ -145,12 +135,11 @@ local function route(player: Player)
 		handBody(nativeCoreOf(player), player)
 		AC.SetControlledEntity(player, AC.GetNativeEntityId(player), false)
 	end
-	-- Streaming em volta do corpo dirigido (F57): sem isso o corpo possuído longe do nativo nem
-	-- chegava a replicar para o cliente
+	-- Streaming em volta do corpo dirigido (o corpo possuído longe do nativo precisa replicar)
 	local focusRoot = top and top.Entity:HasComponent(top.Entity.ComponentKey.Character) and top.Entity.GetRoot()
 	player.ReplicationFocus = focusRoot or nil
 
-	-- A HUD passa a mostrar o corpo que o player dirige agora (D15, F56)
+	-- A HUD passa a mostrar o corpo que o player dirige agora
 	local drivenId = AC.GetControlledEntityId(player)
 	local driven = drivenId and getDataManager().Get(drivenId)
 	if driven and driven:HasComponent(driven.ComponentKey.Health) then
@@ -207,8 +196,7 @@ function ControlComponent.new(entity, config)
 end
 
 function ControlComponent:OnAdded()
-	-- Possuído que morre devolve o controlador (F03), reagindo ao IN.OnDeath da própria
-	-- entidade: o Control não conhece o Health (Regra 20)
+	-- Possuído que morre devolve o controlador (o Control escuta o IN.OnDeath da própria entidade)
 	self._unsubscribeDeath = self.Entity:Listen({
 		Role = StateEnum.Roles.IN,
 		Breakpoint = StateEnum.Breakpoints.OnDeath,
@@ -304,7 +292,7 @@ function ControlComponent:_PossessByPlayer(player: Player, opts): boolean
 	if previous then
 		previous:_Suspend()
 	else
-		handBody(nativeCoreOf(player), nil) -- saindo do corpo nativo: o servidor assume (F23)
+		handBody(nativeCoreOf(player), nil) -- saindo do corpo nativo: o servidor assume
 	end
 
 	self:_BeginPossession(opts, player)
@@ -341,7 +329,7 @@ function ControlComponent:_PossessByAI(controller: Controller, opts): boolean
 		if controller.Brain then entity.SetBrain(controller.Brain) end
 		entity.SetEnabled(true)
 	else
-		-- Corpo sem IA: o AIComponent existe só enquanto durar esta posse (Regra 5)
+		-- Corpo sem IA: o AIComponent existe só enquanto durar esta posse
 		entity:AddComponent(entity.ComponentKey.AI, { Brain = controller.Brain }, true)
 		self._possession.AddedAI = true
 	end
@@ -385,10 +373,8 @@ function ControlComponent:Release(): boolean
 end
 
 --[[
-Corta o controlador ATUAL sem reatribuir a ninguém (cutscene, QTE, etc). Se
-o controlador for Player, corta na fonte via AntiCheat. Se for AI, desliga o
-Brain. O Unlock devolve exatamente o que ESTE Lock cortou, mesmo que o player já
-tenha trocado de corpo no meio (antes o Unlock perguntava o controlador atual).
+Corta o controlador atual sem reatribuir (cutscene, QTE). Player: corta na fonte via AntiCheat;
+IA: desliga o Brain. O Unlock devolve exatamente o que este Lock cortou.
 ]]
 function ControlComponent:Lock()
 	if self._locked then return end
@@ -471,8 +457,7 @@ end
 
 function ControlComponent:Destroy()
 	if self._unsubscribeDeath then self._unsubscribeDeath() end
-	-- Possuído destruído devolve o player ao corpo anterior/nativo (F03); um Lock dele não
-	-- pode sobreviver à entidade e prender o player
+	-- Possuído destruído devolve o player ao corpo anterior/nativo; um Lock dele não sobrevive à entidade
 	self:Release()
 	self:Unlock()
 	self._links = nil

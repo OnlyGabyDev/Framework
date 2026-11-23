@@ -25,19 +25,17 @@ local CombatComponent = {}
 CombatComponent.__index = CombatComponent
 
 --[[
-Inicializa o componente de combate na entidade
-@param entity - Entidade dona do componente Entity, enviar EntityData
-@param config - Configurações iniciais do componente TABLE { ChosenChar: string | false, Mode: string, CancelSkillsOnDeath: boolean? }
-	(ChosenChar ausente = Enum.CombatDefaults.ChosenChar; false = sem personagem)
-@return nova instância do CombatComponent CombatComponent
+@param entity - entidade dona
+@param config - { ChosenChar: string | false?, Mode: string?, CancelSkillsOnDeath: boolean?,
+	RefuseCastOnDeath: boolean? }. ChosenChar ausente = Enum.CombatDefaults.ChosenChar; false = sem
+	personagem (kit montado em runtime)
 ]]
 function CombatComponent.new(entity, config)
 	local self = setmetatable({}, CombatComponent)
 
 	self.Entity = entity
 
-	-- Skills disponíveis: Loadout é o EFETIVO (mesclagem das camadas, só leitura para os outros);
-	-- quem escreve escreve numa camada (D5, F16)
+	-- Loadout é o efetivo (mesclagem das camadas, só leitura); quem escreve escreve numa camada
 	self.Loadout = {}
 	self.LoadoutLayers = { [StateEnum.LoadoutLayers.Base] = {} } -- [camada] = { [slot] = skill | false }
 	self.LoadoutOrder = { StateEnum.LoadoutLayers.Base }          -- de baixo para cima
@@ -51,22 +49,18 @@ function CombatComponent.new(entity, config)
 	-- Skills ativas (runners)
 	self.ActiveSkills = {} -- [skillName] = {runner1, runner2, ...}
 	
-	-- Runner que cada intent está segurando (ver SkillHandler.track). Dá ao Release o runner CERTO.
+	-- Runner que cada intent está segurando (ver SkillHandler.track): o Release chega no runner certo
 	self.IntentRunners = {} -- [intent] = runner
 
 	-- Personagem e modo
-	-- Padrão do JOGO em Enum.CombatDefaults; ChosenChar = false = sem personagem (F106): kit montado
-	-- em runtime (EquipSkill/ApplyLoadout), sem o loadout do banco e sem aviso. Antes todo Combat
-	-- sem config nascia com o kit Schema, e quem não queria kit usava um nome inexistente
 	local chosenChar = config.ChosenChar
 	if chosenChar == nil then chosenChar = StateEnum.CombatDefaults.ChosenChar end
 	self.ChosenChar = chosenChar or nil
 	self.Mode = config.Mode or StateEnum.CombatDefaults.Mode
 	self.baseStats = {}
 
-	-- Regra de morte do motor (F20): padrão em Enum.DeathDefaults, override no config
+	-- Regras de morte do motor: padrão em Enum.DeathDefaults, override no config
 	self._cancelSkillsOnDeath = StateTable.ResolveDeathPolicy(config, "CancelSkillsOnDeath")
-	-- F75: morto não inicia cast novo (o motor já recusa dano e status e cancela as skills)
 	self._refuseCastOnDeath = StateTable.ResolveDeathPolicy(config, "RefuseCastOnDeath")
 
 	--Estado de cast
@@ -84,7 +78,7 @@ end
 
 
 -- As contas (cargas, recarga, redução, herança) são do CooldownPolicy; o componente só guarda
--- os dados em self.Cooldowns, no formato declarado lá (regra 17).
+-- os dados em self.Cooldowns, no formato declarado lá.
 
 --[[
 Checa se a skill está em cooldown (com cargas: sem nenhuma carga disponível)
@@ -334,9 +328,7 @@ Para cada skill ativa, para todos os runners (Stop)
 @param runnerType - só runners desse tipo (StateTable.Enum.Types), opcional STRING
 ]]
 function CombatComponent:StopAllActiveSkills(cancel : boolean?, runnerType : string?)
-	-- Snapshot: Stop -> endSkill -> RemoveActiveSkill tira o runner da lista durante a
-	-- iteração. Sem a cópia, de 2 runners da mesma skill um era pulado e o table.clear do
-	-- fim o tirava do registro ainda rodando (mesmo defeito do F06 no StatusComponent).
+	-- Snapshot: encerrar um runner o tira da lista durante a iteração
 	local runners = {}
 	for _, list in pairs(self.ActiveSkills) do
 		for _, runner in ipairs(list) do
@@ -357,18 +349,13 @@ function CombatComponent:StopAllActiveSkills(cancel : boolean?, runnerType : str
 end
 
 
---[[
-Atualiza o loadout de Skills (func interna)
-]]
 --=============================================================================
---  LOADOUT EM CAMADAS (D5, F16)
+--  LOADOUT EM CAMADAS
 --=============================================================================
 --[[
 O loadout efetivo (self.Loadout) é a mesclagem das camadas, da Base para cima: a camada de cima
-vence no slot. Um modo de arma ou forma escreve na SUA camada e só troca os slots que declara;
-antes o ApplyLoadout apagava o loadout inteiro, e depois do WeaponTransform só sobrava o Ability1.
-Um modo que queira o loadout inteiro declara todos os slots na própria camada. Slots[slot] = false
-esvazia o slot de propósito (a Base fica escondida enquanto a camada existir).
+vence no slot. Um modo de arma ou forma escreve na sua camada e só troca os slots que declara.
+Slots[slot] = false esvazia o slot de propósito (a Base fica escondida enquanto a camada existir).
 ]]
 
 -- Camada pelo nome (padrão Base); criada no topo da pilha na primeira escrita
@@ -489,8 +476,8 @@ function CombatComponent:EquipSkill(slotIndex, skillKey, layerName : string?)
 			--Aplica nome caso não tenha
 			if not result.data then result.data = {} end
 			if not result.data.name then result.data.name = skillKey end
-			-- Kit dono (a pasta no SkillDatabase): é de onde a skill tira as animações em qualquer
-			-- corpo, inclusive roubada (F55). A skill pode declarar o próprio data.kit
+			-- Kit dono (a pasta no SkillDatabase): de onde a skill tira as animações em qualquer corpo.
+			-- A skill pode declarar o próprio data.kit
 			if result.data.kit == nil then result.data.kit = SkillData.KitOf(skillKey) end
 			
 			--Salva no cache
@@ -588,18 +575,16 @@ end
 --=============================================================================
 
 --[[
-Aplica dano a uma entidade alvo, acionando o pipeline OUT do atacante antes e depois do hit
-@param amount - Quantidade de dano base NUMBER
-@param source - Fonte do dano (ex: SkillRunner) ANY
-@param targetEntity - Entidade alvo (EntityCore)
-@param opts - Types.DamageOptions? (F108): Traits/Effects deste hit, Hit (o hitResult: ponto do impacto),
-	Prescaled (o dano já vem escalado: repasse, reflexo; pula o DamageMult)
-@return sucesso BOOLEAN, actualDamage NUMBER | false, StateTable.Enum.ChainOutcomes (Deferred: o hit
-	inteiro roda no próximo frame, F62)
+Aplica dano a uma entidade, com o OUT.onHit do atacante antes do hit.
+@param amount - dano base NUMBER
+@param source - runner que causou ANY
+@param targetEntity - EntityCore alvo
+@param opts - Types.DamageOptions? { Traits, Effects, Hit, Prescaled, Inherited } só deste hit
+@return sucesso BOOLEAN, dano real NUMBER | false, Enum.ChainOutcomes (Deferred: o hit inteiro roda
+	no próximo frame)
 ]]
 function CombatComponent:ApplyDamage(amount: number, source: any, targetEntity: any, opts: any?)
-	-- O hit inteiro (OUT.onHit e o TakeDamage, que emite o OUT.OnDamage) é um elo só da cadeia:
-	-- reserva o nível do TakeDamage de dentro, para o OUT.onHit não rodar agora com o dano adiado (F62)
+	-- O hit inteiro (OUT.onHit e o TakeDamage) é um elo só da cadeia: reserva o nível do TakeDamage
 	local ran, success, actualDamage = StateTable.RunInChainReserving(2,
 		"[CombatComponent] ApplyDamage", self.Entity and self.Entity.ID,
 		self._ApplyDamageInner, self, amount, source, targetEntity, opts)
@@ -610,10 +595,10 @@ function CombatComponent:ApplyDamage(amount: number, source: any, targetEntity: 
 end
 
 function CombatComponent:_ApplyDamageInner(amount: number, source: any, targetEntity: any, opts: any?)
-	-- Um hit adiado (F62) roda no frame seguinte: o atacante pode ter saído do jogo
+	-- Um hit adiado roda no frame seguinte: o atacante pode ter saído do jogo
 	if not self.Entity then return false, 0 end
 
-	-- O stub do EntityCore também é função: o guarda olha o componente (F65)
+	-- O stub do EntityCore também é função: o guarda olha o componente
 	if not targetEntity or type(targetEntity.HasComponent) ~= "function"
 		or not targetEntity:HasComponent(targetEntity.ComponentKey.Health) then
 		return false, 0
@@ -623,8 +608,7 @@ function CombatComponent:_ApplyDamageInner(amount: number, source: any, targetEn
 	local context = StateTable.BuildContext(source, amount)
 	context.targetEntity = targetEntity
 
-	-- Opções DESTE hit (F108): antes o Damage só aceitava o número, e trait por hit (bala perfurante,
-	-- crítico), efeito extra e ponto do impacto exigiam montar o contexto à mão
+	-- Opções só deste hit
 	if opts then
 		for _, trait in opts.Traits or {} do
 			if not table.find(context.traits, trait) then table.insert(context.traits, trait) end
@@ -632,7 +616,7 @@ function CombatComponent:_ApplyDamageInner(amount: number, source: any, targetEn
 		for _, effect in opts.Effects or {} do
 			table.insert(context.effects, effect)
 		end
-		-- Payload para os status on-hit deste hit (F111); o OUT.onHit abaixo ainda pode injetar
+		-- Payload para os status on-hit deste hit; o OUT.onHit abaixo ainda pode injetar
 		for key, value in opts.Inherited or {} do
 			context.inherited[key] = value
 		end
@@ -642,8 +626,7 @@ function CombatComponent:_ApplyDamageInner(amount: number, source: any, targetEn
 		end
 	end
 
-	-- DamageMult do atacante (D11, F43): multiplica o dano antes das proteções do alvo. Prescaled: o
-	-- dano já veio escalado (repasse membro → corpo, reflexo) e não escala de novo
+	-- DamageMult do atacante, antes das proteções do alvo. Prescaled: o dano já veio escalado
 	local prescaled = opts ~= nil and opts.Prescaled == true
 	if not prescaled and self.Entity:HasComponent(self.Entity.ComponentKey.Attributes) then
 		context.damage *= self.Entity.GetStat(StateEnum.Stats.DamageMult, StateEnum.StatDefaults.DamageMult)
@@ -652,9 +635,8 @@ function CombatComponent:_ApplyDamageInner(amount: number, source: any, targetEn
 	-- 1. Emite OUT antes do hit conectar
 	self.Entity:Emit(StateEnum.Roles.OUT, StateEnum.Breakpoints.onHit, context)
 
-	-- 2. Aplica o dano no alvo passando o CONTEXT (traits/effects/damage alterados pelos listeners OUT
-	-- precisam chegar no alvo). O OUT.OnDamage, depois do hit, é emitido pelo HealthComponent no dono
-	-- do dano: um ponto só para dano direto e indireto (D3, F101)
+	-- 2. Aplica o dano no alvo com o contexto (o que os listeners OUT mudaram chega no alvo). O
+	-- OUT.OnDamage é emitido pelo HealthComponent no dono do dano
 	local success, actualDamage = targetEntity.TakeDamage(context)
 
 	return success, actualDamage
@@ -683,22 +665,16 @@ end
 --  LIFECYCLE
 --=============================================================================
 
---[[
-Função de inicialização do componente, tenta carregar skills automaticamente
-]]
+--[[ Carrega o personagem e assina a morte e a interrupção da própria entidade ]]
 function CombatComponent:OnAdded()
 	-- Carrega o personagem (sem personagem: loadout vazio, montado pelo jogo)
 	if self.ChosenChar then
 		self:SetCharMode(self.ChosenChar, self.Mode)
 	end
 
-	-- F20: a morte encerra as skills ativas. O Combat reage ao IN.OnDeath da própria entidade
-	-- (o Health não conhece o Combat, Regra 20) e cancela só runners de skill: os status seguem
-	-- a política do StatusComponent. Um listener por entidade, não por runner (o Subscribe
-	-- reordena a lista a cada inscrição: 3000 inscrições custaram 3,2 s no T23). Roda com a
-	-- prioridade do motor, antes dos listeners de conteúdo, para não cancelar uma skill que o
-	-- próprio jogo dispare no OnDeath (ex.: explosão ao morrer). Com CancelSkillsOnDeath = false
-	-- no config, nem assina.
+	-- A morte encerra as skills ativas (só runners de skill: os status seguem a política do
+	-- StatusComponent). Prioridade do motor: roda antes dos listeners de conteúdo do OnDeath.
+	-- Com CancelSkillsOnDeath = false no config, nem assina.
 	if self._cancelSkillsOnDeath then
 		self._unsubscribeDeath = self.Entity:Listen({
 			Role = StateEnum.Roles.IN,
@@ -820,7 +796,7 @@ local ExposeAPI = {
 
 	
 	
-	--Intents (hold, release) (NÃO é obrigação desse component, mas por precisar do redirect pra skill mantivemos aqui)
+	--Intents (hold, release): o Release precisa achar o runner da skill
 	TakeIntentRunner = function(component,...) return component:TakeIntentRunner(...)end,
 	SetIntentRunner = function(component,...) return component:SetIntentRunner(...)end,
 }

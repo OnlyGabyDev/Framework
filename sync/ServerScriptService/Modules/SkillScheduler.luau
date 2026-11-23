@@ -27,8 +27,8 @@ local function listFor(runnerType)
 end
 
 -- Durante o update nenhuma lista muda de tamanho: Unregister só marca o runner (_unscheduled)
--- e a lista é compactada no fim. Antes o Unregister removia na hora; encerrar um runner de
--- índice menor deslocava a lista e o runner atual rodava 2 vezes no frame (F15).
+-- e a lista é compactada no fim (remover na hora deslocaria a lista e um runner rodaria 2
+-- vezes no frame).
 local updating = false
 
 local function isLive(runner)
@@ -63,7 +63,7 @@ local function updateList(list, dt, label)
 			local success, err = pcall(runner._internalUpdate, runner, dt)
 			if not success then
 				warn("[SkillScheduler] Erro em " .. label .. ":", runner.skillName, err)
-				runner:Abort() -- erro não aceita veto do onCancel (F78)
+				runner:Abort() -- erro não aceita veto do onCancel
 			end
 		end
 	end

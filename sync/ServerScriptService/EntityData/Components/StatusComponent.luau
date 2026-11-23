@@ -1,6 +1,7 @@
 --[[
-    StatusComponent.module.lua
-    Componente para gerenciar status (buffs, debuffs, estados) em uma entidade.
+StatusComponent: status (buffs, debuffs) e estados (Stun, Root...) da entidade. Cada status é um
+SkillRunner registrado em self.Effects; as tags dos ativos viram as permissões da entidade
+(canMove, canCast, block, iFrame...).
 ]]
 
 
@@ -23,14 +24,12 @@ local function asItems(entry)
 	return (entry.runner or entry.data) and { entry } or entry
 end
 
--- Regra 16: dependência OPCIONAL de Health, declarada aqui num único ponto.
--- Sem Health a entidade não morre, então nunca recusa status por isso.
+-- Dependência opcional de Health: sem ela a entidade não morre, então nunca recusa status por isso
 local function isDead(entity)
 	return StateTable.IsDead(entity)
 end
 
--- Encerra runners que JÁ saíram do registro: o onFinish deles não acha mais a entrada
--- e não mexe em lista nenhuma no meio de uma iteração.
+-- Encerra runners que já saíram do registro (o onFinish deles não mexe em lista nenhuma)
 local function endDetached(items)
 	for _, item in items do
 		if item.runner then
@@ -53,12 +52,12 @@ function StatusComponent.new(entity, config)
 	-- Cache de tags combinadas
 	self._cachedTags = nil
 	self._tagsDirty = true
-	self._effectSeq = 0 -- NOVO: contador monotônico, usado pra desempate determinístico em GetActiveTags
+	self._effectSeq = 0 -- contador monotônico: desempate determinístico em GetActiveTags
 
 	--Cooldown de status
 	self.StatusCooldowns = {} -- [statusName] = timestamp
 
-	-- Regra de morte do motor (F39): padrão em Enum.DeathDefaults, override no config
+	-- Regra de morte do motor: padrão em Enum.DeathDefaults, override no config
 	self._refuseStatusOnDeath = StateTable.ResolveDeathPolicy(config, "RefuseStatusOnDeath")
 
 	return self
@@ -104,17 +103,13 @@ end
 --=============================================================================
 
 --[[
-Aplica um status à entidade. O alvo é sempre a própria entidade: para mirar outra, chame o
-ApplyStatus dela ou use runner:ApplyStatus(status, { Target = alvo }).
-@param statusData - Dados do status TABLE
-@param durationOrOpts - NUMBER (duração, estilo legado) OU TABLE de opções:
-	{ Duration: number?, Source: Runner|SkillProxy?, ID: string?, Inherited: {[string]: any}? }
-	Inherited = payload explícito para o status (o ctx.inherited dele, F111)
-@param sourceSkill - (só no estilo legado) Runner ou proxy de skill responsável
-@param ID - (só no estilo legado) ID único do status
-@param targetEntity - (só no estilo legado) ignorado se for outra entidade, com warn
-@return ID do status STRING ou nil se não aplicado (também quando a cadeia estava funda demais e
-	o status vai ser aplicado no próximo frame: StateTable.Enum.ChainLimits, F62)
+Aplica um status à entidade (sempre nesta entidade: para mirar outra, use o ApplyStatus dela ou
+runner:ApplyStatus(status, { Target = alvo })).
+@param statusData - o status { data, callbacks } TABLE
+@param durationOrOpts - { Duration?, Source?, ID?, Inherited? } ou a duração NUMBER (forma posicional)
+@param sourceSkill, ID, targetEntity - só na forma posicional
+@return ID do status STRING, ou nil se não entrou (também quando a cadeia estava funda demais e o
+	status vai entrar no próximo frame)
 ]]
 function StatusComponent:ApplyStatus(statusData, durationOrOpts, sourceSkill, ID, targetEntity)
 	local ran, resultID = StateTable.RunInChain(
@@ -124,8 +119,7 @@ function StatusComponent:ApplyStatus(statusData, durationOrOpts, sourceSkill, ID
 end
 
 function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSkill, ID, targetEntity)
-	-- Entidade saindo não recebe status. Primeiro de tudo: um status adiado pela cadeia (F62) roda
-	-- no frame seguinte, e o Destroy já pode ter zerado self.Entity
+	-- Entidade saindo não recebe status (um status adiado pela cadeia roda no frame seguinte)
 	if self._destroying then return nil end
 
 	-- Aceita opts (estilo novo) OU os parâmetros posicionais antigos (compatibilidade)
@@ -140,16 +134,14 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 	local source = StateTable.ResolveRunner(opts.Source)
 	local suppliedID = opts.ID
 
-	-- Um alvo diferente deixava o status registrado aqui (tags desta entidade) com o runner
-	-- agindo na outra
+	-- O alvo é sempre esta entidade
 	if opts.Target and opts.Target ~= self.Entity then
 		warn("[StatusComponent] ApplyStatus ignora Target de outra entidade; use runner:ApplyStatus(status, { Target = alvo }):",
 			statusData.data and statusData.data.name)
 	end
 
-	-- F39: entidade morta não recebe status. Configurável por entidade (RefuseStatusOnDeath = false
-	-- no config: nem checa a morte) e por status (um status que precise agir sobre cadáver declara
-	-- data.allowOnDead = true).
+	-- Morto não recebe status. Configurável por entidade (RefuseStatusOnDeath = false no config) e por
+	-- status (data.allowOnDead = true)
 	if self._refuseStatusOnDeath and isDead(self.Entity) and not (statusData.data and statusData.data.allowOnDead) then
 		return nil
 	end
@@ -159,9 +151,8 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 		return nil
 	end
 
-	-- Checagem pré-output de "debuff propagado" (Context por Breakpoint, F112): o dono do efeito
-	-- recebe OUT.PreApplyStatus com as traits do status, o alvo e o inherited, e pode cancelar ou
-	-- injetar no inherited antes do status nascer. Sem ouvinte, nenhum contexto é montado
+	-- Checagem pré-output: o dono do efeito recebe OUT.PreApplyStatus (traits do status, alvo,
+	-- inherited) e pode cancelar ou injetar no inherited. Sem ouvinte, nenhum contexto é montado
 	local inherited = opts.Inherited
 	local owner = StateTable.EffectOwner(source)
 	if owner and owner:HasListeners(StateEnum.Roles.OUT, StateEnum.Breakpoints.PreApplyStatus) then
@@ -211,9 +202,8 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 	end
 
 	-- ===== STACK NA MESMA INSTÂNCIA =====
-	-- A reaplicação soma um stack na instância existente e devolve o ID DELA (o que o
-	-- RemoveStatusByID aceita; um ID novo, mesmo passado em opts.ID, não existiria). O Source
-	-- não muda: o crédito fica com quem aplicou o 1º stack. O contador é runner.skill.counter.
+	-- A reaplicação soma um stack na instância existente e devolve o ID dela. O Source não muda: o
+	-- crédito fica com quem aplicou o 1º stack. O contador é runner.skill.counter.
 	if StateTable.HasTrait(meta, StateEnum.Traits.Stackable) and meta.stackOnSelf then
 		local existing = group[meta.name]
 		-- Runner encerrado ainda listado (reaplicação durante o próprio teardown, antes do
@@ -221,8 +211,7 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 		if existing and not existing.runner:IsEnded() then
 			local runner = existing.runner
 			local atMax = runner.skill.counter >= (meta.maxStacks or math.huge)
-			-- No máximo de stacks a reaplicação só renova a duração (D5); opt-out com
-			-- data.refreshOnMax = false, e aí ela não muda nada
+			-- No máximo de stacks a reaplicação só renova a duração (data.refreshOnMax = false desliga)
 			if atMax and meta.refreshOnMax == false then
 				return existing.ID
 			end
@@ -266,8 +255,7 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 		-- aplicar status neste mesmo grupo enquanto o pairs ainda percorre ele.
 		local sameCategory = {}
 		for name, entry in pairs(group) do
-			-- Stack em instâncias é uma LISTA de entradas: o meta vem da 1ª. Antes a lista não
-			-- tinha .data e o exclusive passava reto por ela (F67)
+			-- Stack em instâncias é uma lista de entradas: o meta vem da 1ª
 			local first = asItems(entry)[1]
 			local entryMeta = first and first.data and first.data.data
 			if entryMeta and entryMeta.category == meta.category then
@@ -291,9 +279,8 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 end
 
 --[[
-Inicia um runner cuja entrada JÁ está registrada em self.Effects. A ordem importa: um
-status que falha (F14) ou se encerra dentro do próprio onStart passa pelo onFinish e sai
-do registro, em vez de ficar listado com o runner morto (e com as tags dele valendo).
+Inicia um runner cuja entrada já está registrada em self.Effects: um status que falha ou se encerra
+no próprio onStart passa pelo onFinish e sai do registro.
 @return o ID, ou nil se o onStart falhou
 ]]
 function StatusComponent:_StartRunner(runner, suppliedID)
@@ -312,18 +299,11 @@ function StatusComponent:_StartRunner(runner, suppliedID)
 end
 
 --[[
-Cria um SkillRunner para o status
-@param data - Dados do status TABLE
-@param name - Nome do status STRING
-@param duration - Duração do status NUMBER (opcional)
-@return SkillRunner criado SkillRunner
-]]
---[[
-Cria um SkillRunner para o status. NÃO inicia: quem chama registra a entrada em
-self.Effects e só então chama _StartRunner.
-@param source - Runner original que aplicou o status (opcional). Vira runner.Source
-	(acessível como self.Source dentro dos callbacks) e alimenta a Lineage do novo
-	runner, corrigindo Lineage.Origin (antes sempre virava o portador, nunca o caster).
+Cria o runner do status. Não inicia: quem chama registra a entrada em self.Effects e só então
+chama _StartRunner.
+@param source - runner que aplicou o status: vira runner.Source (self.Source nos callbacks) e o
+	pai na Lineage
+@param inherited - payload explícito (ctx.inherited do status)
 ]]
 function StatusComponent:_CreateRunner(data, name, duration, source, inherited)
 
@@ -336,7 +316,7 @@ function StatusComponent:_CreateRunner(data, name, duration, source, inherited)
 
 	if runner then
 		runner.Source = source
-		runner.skill.Source = source -- Opção A: acesso direto por self.Source dentro dos callbacks
+		runner.skill.Source = source -- self.Source dentro dos callbacks
 
 		runner.onFinish = function()
 			self:_OnRunnerFinished(name, runner)
@@ -348,10 +328,8 @@ end
 
 
 --[[
-Função interna, valida a aplicação de um status/estado
-@param statusData - Dados do status TABLE
-@param sourceSkill - SkillRunner que aplicou o status ANY (opcional)
-@return sucesso,motivo(se falseo) BOOLEAN,STRING
+Confere os escudos de status (ShieldsFrom) contra o status que está entrando.
+@return pode aplicar BOOLEAN
 ]]
 function StatusComponent:_ValidateApplication(statusData, sourceSkill)
 	local activeShields = self:_GetShields()
@@ -429,9 +407,7 @@ RemoveStatus um status completamente pelo nome (todas as instâncias, nos dois g
 @return removeu alguma instância BOOLEAN
 ]]
 function StatusComponent:RemoveStatus(name : string) : boolean
-	-- Desregistra ANTES de encerrar: endSkill dispara onFinish -> _OnRunnerFinished, que
-	-- tirava runners da lista enquanto ela era percorrida (metade de uma stack de
-	-- instâncias ficava órfã, rodando fora do registro).
+	-- Desregistra antes de encerrar: o onFinish de cada runner mexe nas listas
 	local detached = {}
 	for _, group in pairs(self.Effects) do
 		local entry = group[name]
@@ -451,10 +427,10 @@ end
 
 
 --[[
-RemoveAmount
-@param name - Nome do status
-@param amount - Quantidade de instâncias a serem removidas
-RemoveStatus uma quantidade específica de instâncias de um status por nome
+Remove `amount` stacks (stackOnSelf) ou instâncias de um status.
+@param name - nome do status STRING
+@param amount - quantos NUMBER
+@return removeu algo BOOLEAN
 ]]
 
 function StatusComponent:RemoveAmount(name: string, amount: number): boolean
@@ -470,10 +446,8 @@ function StatusComponent:RemoveAmount(name: string, amount: number): boolean
 		return false
 	end
 
-	-- Desregistra ANTES de encerrar, como o RemoveStatus: antes o runner era encerrado e só então a
-	-- entrada saía (group[name] = nil). Um status que se reaplica no onEnd (maldição que volta)
-	-- gravava a entrada nova ali no meio, e o nil logo depois a apagava: o runner novo seguia
-	-- rodando fora do registro, sem tags valendo e sem poder ser removido
+	-- Desregistra antes de encerrar: um status que se reaplica no onEnd grava a entrada nova, e ela
+	-- não pode ser apagada depois
 	local detached = {}
 
 	--Remoção de stacks na mesma instância
@@ -510,10 +484,9 @@ function StatusComponent:RemoveAmount(name: string, amount: number): boolean
 end
 
 --[[
-RemoveStatusByID
-@param id - ID único do status/estado STRING
-@return sucesso BOOLEAN
-RemoveStatus um status/estado completamente pelo ID único
+Remove o status/estado com este ID (todas as entradas dele).
+@param id - ID STRING
+@return removeu BOOLEAN
 ]]
 function StatusComponent:RemoveStatusByID(id : string) : boolean
 	-- 1ª passada só coleta: encerrar runners roda callbacks que podem mexer em self.Effects
@@ -529,8 +502,7 @@ function StatusComponent:RemoveStatusByID(id : string) : boolean
 	end
 	if #found == 0 then return false end
 
-	-- Desregistra ANTES de encerrar (mesmo motivo do RemoveStatus): antes o onFinish tirava
-	-- o runner da lista e o table.remove(list, i) logo em seguida tirava a instância vizinha.
+	-- Desregistra antes de encerrar (mesmo motivo do RemoveStatus)
 	local detached = {}
 	for _, hit in found do
 		local entry = hit.group[hit.name]
@@ -625,8 +597,7 @@ function StatusComponent:GetActiveTags()
                     
                     if runner and val then
                         local itemSeq = item.seq or 0
-                        -- Dono da tag = aplicação mais recente (maior seq). Sem isso, pairs()
-                        -- decidia o "vencedor" de forma não-determinística a cada rehash da hash table.
+                        -- Dono da tag = aplicação mais recente (maior seq)
                         if tagOwnerSeq[tagName] == nil or itemSeq >= tagOwnerSeq[tagName] then
                             tagOwners[tagName] = item
                             tagOwnerSeq[tagName] = itemSeq
@@ -665,9 +636,8 @@ function StatusComponent:GetImmunityRules()
 end
 
 --[[
-Valida se um ataque pode afetar a entidade baseado em suas tags de imunidade (iFrame e afins).
-Relocado de HealthComponent: Health não deveria conhecer o conceito de imunidade.
-@return sucesso BOOLEAN, razão STRING (nome da imunidade que bloqueou o hit)
+Valida se um ataque pode afetar a entidade pelas tags de imunidade (iFrame e afins).
+@return pode BOOLEAN, motivo STRING (a imunidade que barrou)
 ]]
 function StatusComponent:ValidateHit(context)
 	local targetTags = self:GetActiveTags()
@@ -695,9 +665,7 @@ function StatusComponent:ValidateHit(context)
 end
 
 --[[
-Aplica a mitigação de block/parry (se a entidade tiver a tag `block` ativa).
-Comportamento IDÊNTICO ao que estava em HealthComponent:TakeDamage — só relocado.
-Pode reduzir/zerar context.damage; não retorna nada (muta o context).
+Aplica a mitigação de bloqueio (tag block ativa). Pode reduzir ou zerar context.damage.
 ]]
 function StatusComponent:ApplyMitigation(context)
 	local activeTags, owners = self:GetActiveTags()
@@ -716,8 +684,7 @@ function StatusComponent:ApplyMitigation(context)
 	local blockRunner = owners[blockTag]
 	if not blockRunner then return end
 
-	-- As traits do bloqueio moram no meta (entry.data.data). Antes eram lidas em entry.data,
-	-- que é o módulo: Unbreakable e TrueBlock nunca valiam (F10)
+	-- As traits do bloqueio moram no meta (entry.data.data)
 	local blockMeta = StateTable.BlockerMeta(blockRunner)
 
 	local skipBlock = (
@@ -752,9 +719,7 @@ function StatusComponent:ApplyMitigation(context)
 	end
 end
 
---[[
-Retorna os efeitos a ser ignorados.
-]]
+--[[ Escudos de status ativos: [categoria | trait | nome] = entrada do status ]]
 function StatusComponent:_GetShields()
 	local shields = {}
 
@@ -762,8 +727,7 @@ function StatusComponent:_GetShields()
 		for _, item in ipairs(asItems(entry)) do
 			local shieldsFrom = item.data.data.ShieldsFrom
 			if shieldsFrom ~= nil then
-				-- Guarda a ENTRADA: o _TriggerShield lê entry.runner. Antes guardava o runner, o
-				-- _TriggerShield lia runner.runner (nil) e escudo de status nunca barrava (F11)
+				-- Guarda a entrada: o _TriggerShield lê entry.runner
 				for _, statusName in pairs(shieldsFrom) do
 					shields[statusName] = item
 				end

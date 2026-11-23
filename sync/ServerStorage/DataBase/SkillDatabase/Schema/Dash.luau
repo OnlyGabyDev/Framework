@@ -61,7 +61,7 @@ callbacks = {
         
 		self.accumulatedBleedDamage = 0
 		self.isUltActive = false
-		-- Dono por entidade (F51): o mesmo token em todo Dash DESTE atacante, outro para os demais
+		-- Dono por entidade: o mesmo token em todo Dash DESTE atacante, outro para os demais
 		local comboOwner = StateTable.OwnerToken(self.Entity, "DashBleedCombo")
 
 		-- Limpa combos residuais de Dashes anteriores para não vazar memória
@@ -138,7 +138,7 @@ callbacks = {
 
 	end,    
 
-	-- onEnd roda em qualquer fim, inclusive depois do onCancel (F54): uma limpeza só
+	-- onEnd roda em qualquer fim, inclusive depois do onCancel: uma limpeza só
 	onEnd = function(self)
         if self.cleanUp then self.cleanUp() end
 	end,

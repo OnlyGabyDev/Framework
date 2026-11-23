@@ -28,7 +28,7 @@ local Bleed = {
 		onRecast = function(self)
 			-- Roda toda vez que uma nova stack é aplicada sobre a mesma instância
 			Log.Debug("onRecast, nova stack, total:", self.counter)
-			-- Se quiser checar o GetStatusCounter (agora ele funciona porque o runner já está salvo):
+			-- Confere o GetStatusCounter (o runner já está registrado aqui):
 			Log.Debug("GetStatusCounter confirma:", self.Entity.GetStatusCounter("Bleed"))
 		end,
 

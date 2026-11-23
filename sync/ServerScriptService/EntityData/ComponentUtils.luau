@@ -1,17 +1,13 @@
 --[[
-	ComponentUtils — utilitários pequenos usados pelo EntityCore.
-	Tirar essa lógica de dentro do EntityCore (Regra 1: nada de repetir o mesmo
-	padrão de validação/require em 3 lugares diferentes).
+	ComponentUtils: utilitários pequenos usados pelo EntityCore (validação e require num lugar só).
 ]]
 
 local ComponentUtils = {}
 local Log = require(game:GetService("ReplicatedStorage").Logger).Channel("EntityCore")
 
 --[[
-require protegido que loga o ERRO REAL, não só "deu ruim". No lugar de um
-pcall(require, ...) cru: um componente com erro de sintaxe aparece no output
-NA HORA com a razão, em vez de virar um HasComponent(nome) = false silencioso
-descoberto sprints depois (Regra 16).
+require protegido que loga o ERRO REAL: um componente com erro de sintaxe aparece no output na
+hora com a razão, em vez de virar um HasComponent(nome) = false silencioso.
 ]]
 function ComponentUtils.SafeRequire(moduleScript: ModuleScript)
 	local success, result = pcall(require, moduleScript)
@@ -40,10 +36,8 @@ function ComponentUtils.Expose(class: {[string]: any}, names: {string})
 end
 
 --[[
-Confere se as dependências declaradas em `Requires` (nomes de ComponentKey) estão
-presentes na entidade. Só WARN — não bloqueia a criação, pra não travar o jogo
-por um erro de setup. O objetivo é encurtar a distância entre "esqueci de
-adicionar um componente" e "percebi que esqueci" (Regra 16).
+Confere se as dependências declaradas em `Requires` (nomes de ComponentKey) estão presentes na
+entidade. Só WARN: não bloqueia a criação, para não travar o jogo por um erro de setup.
 ]]
 function ComponentUtils.CheckRequires(entity: any, componentName: string, requires: {string})
 	for _, depName in requires do
@@ -57,11 +51,9 @@ function ComponentUtils.CheckRequires(entity: any, componentName: string, requir
 end
 
 --[[
-Popula a tabela COMPARTILHADA de stubs (uma função de warn por método exposto por
-qualquer componente registrado). Chamado uma única vez, depois que todo componente
-já foi auto-registrado. Antes, EntityCore.new criava esse conjunto de closures
-TODA VEZ que uma entidade nascia — parede, minion, jogador, todo mundo pagava
-esse custo (Regra 6).
+Popula a tabela COMPARTILHADA de stubs (uma função de warn por método exposto por qualquer
+componente registrado). Chamado uma única vez, depois que todo componente já foi auto-registrado:
+nenhuma entidade paga por criar closures ao nascer.
 ]]
 function ComponentUtils.BuildStubs(componentRegistry: {[string]: any}, targetStubs: {[string]: any})
 	for compName, compData in pairs(componentRegistry) do
@@ -69,8 +61,8 @@ function ComponentUtils.BuildStubs(componentRegistry: {[string]: any}, targetStu
 			for funcName in pairs(compData.ExposeAPI) do
 				if targetStubs[funcName] == nil then
 					targetStubs[funcName] = function(...)
-						-- 1ª chamada por componente+função em Warn; as seguintes só em Debug (antes
-						-- era um warn por chamada: centenas por segundo num loop)
+						-- 1ª chamada por componente+função em Warn; as seguintes só em Debug (um loop não inunda o
+						-- output)
 						Log.WarnOnce(compName .. "." .. funcName,
 							"Componente ausente:", compName, "| Func:", funcName,
 							"(as próximas chamadas iguais só aparecem em Debug)")

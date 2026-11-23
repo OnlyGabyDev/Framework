@@ -19,16 +19,15 @@ local function DeepFreeze(tbl)
 end
 
 --[[
-Verifica se o data de um efeito/skill declara a trait. `traits` é SEMPRE array de strings.
-(dono único dessa checagem: não use traits[Trait] em lugar nenhum)
+O meta (data) de um efeito/skill declara a trait? `traits` é sempre um array de strings.
 ]]
 function Helper.HasTrait(meta, trait)
 	return meta ~= nil and meta.traits ~= nil and table.find(meta.traits, trait) ~= nil
 end
 
 --[[
-Skills recebem um proxy (`self`) que aponta pro SkillRunner via `.Runner`.
-Toda API que guarda/compara identidade de runner ou usa `source` normaliza aqui.
+Skills recebem um proxy (`self`) que aponta pro SkillRunner via `.Runner`: quem guarda ou compara
+identidade de runner normaliza aqui.
 ]]
 function Helper.ResolveRunner(runnerOrProxy)
 	if type(runnerOrProxy) == "table" and runnerOrProxy.Runner then
@@ -37,14 +36,13 @@ function Helper.ResolveRunner(runnerOrProxy)
 	return runnerOrProxy
 end
 
-local MAX_OWNER_HOPS = 8 -- status aplicado por status aplicado por...: ciclo de Source não trava
+local MAX_OWNER_HOPS = 8 -- limite de saltos pelo Source (ciclo não trava)
 
 --[[
-Entidade DONA de um efeito: quem causou, não onde ele roda. Um status (DOT, reflexo, aura) roda no
-PORTADOR (runner.Entity), mas foi aplicado por alguém (runner.Source). Sobe o Source até um runner
-de skill (ou sem Source). Antes o Die creditava a morte por DOT à própria vítima (OUT.OnDeath no
-portador). Dono único desta regra: o BuildContext grava o dono em context.ownerEntity, e o OUT.OnDamage
-(D3, F101) e o OUT.OnDeath vão para ele.
+Entidade dona de um efeito: quem causou, não onde ele roda. Um status (DOT, reflexo, aura) roda no
+portador, mas foi aplicado por alguém (runner.Source): sobe o Source até um runner de skill. O
+BuildContext grava o dono em context.ownerEntity; o OUT.OnDamage, o OUT.OnHeal e o OUT.OnDeath vão
+para ele.
 @param source - runner, proxy de skill ou nil
 @return EntityCore? (nil sem runner, ou se o dono já saiu do jogo)
 ]]
@@ -70,8 +68,8 @@ local function teamOf(entity)
 end
 
 --[[
-Relação entre duas entidades (F105): Self, Ally (mesmo time), Enemy (times diferentes) ou Neutral
-(um dos dois sem time). Dono único da regra de time do motor.
+Relação entre duas entidades: Self, Ally (mesmo time), Enemy (times diferentes) ou Neutral (um
+dos dois sem time).
 @return Enum.Relations
 ]]
 function Helper.Relation(a, b): string
@@ -82,9 +80,8 @@ function Helper.Relation(a, b): string
 end
 
 --[[
-A ação de `source` afeta `targetEntity`? Pergunta de quem RESOLVE alvo (hitbox da arma, zona com
-filtro): a skill declara em data.affects = { Ally = true, ... } por cima de Enum.AffectsDefaults.
-Antes toda hitbox acertava aliado e cada kit filtrava por um campo próprio (entity.Team).
+A ação de `source` afeta `targetEntity`? Pergunta de quem resolve alvo (hitbox da arma, zona com
+filtro): vale o data.affects da skill por cima de Enum.AffectsDefaults.
 @param source - runner/proxy de skill (vale o dono do efeito e o data.affects dele), entidade, ou
 	nil (ambiente: afeta todos)
 @param targetEntity - EntityCore
@@ -117,20 +114,16 @@ function Helper.AffectsFilter(source, affects)
 end
 
 --[[
-Disjuntor de recursão SÍNCRONA. Cadeias dano->status->dano (ex: parry devolvendo
-dano na hora) não tinham nenhum limite real — MAX_RECURSION existia no Enum mas
-nada olhava pra ele. Isso é global (não por entidade) de propósito: o risco é
-estouro de call stack do SERVIDOR inteiro, não só de uma entidade.
+Disjuntor de recursão síncrona (dano -> status -> dano na mesma pilha). Global de propósito: o
+risco é estourar a pilha do servidor, não de uma entidade.
 ]]
 local activeChainDepth = 0
 
 --[[
-Fila das ações adiadas (F62). Acima de MAX_RECURSION a ação não roda nesta pilha: entra aqui e roda
-no próximo Heartbeat, com a pilha zerada. Antes ela era descartada, e a cadeia em linha de 80 alvos
-parava em 50. A conexão só existe enquanto a fila tem ação: custo zero fora de cadeia longa.
-Formato de um item (dono: este arquivo): { reserve, label, subject, fn, args = table.pack(...), gen }
-- gen: gerações de adiamento da cadeia. A ação que roda a partir da fila marca currentGeneration;
-  se ela adiar outra, a nova recebe gen + 1. Acima de ChainLimits.maxDeferrals, recusa.
+Fila das ações adiadas: acima de MAX_RECURSION a ação entra aqui e roda no próximo Heartbeat, com a
+pilha zerada. A conexão só existe enquanto a fila tem ação.
+Formato de um item: { reserve, label, subject, fn, args = table.pack(...), gen }
+- gen: gerações de adiamento da cadeia; acima de ChainLimits.maxDeferrals, a ação é recusada.
 ]]
 local CHAIN = Enum.ChainLimits
 local OUTCOME = Enum.ChainOutcomes
@@ -167,21 +160,12 @@ local function finishChain(label: string, subject: any, ok: boolean, ...: any)
 end
 
 --[[
-Dono único do par TryEnterChain/ExitChain: roda `fn(...)` dentro do disjuntor e
-SEMPRE sai da cadeia, mesmo se `fn` lançar erro. Antes TakeDamage e ApplyStatus
-faziam o par à mão e um erro no miolo pulava o ExitChain: depois de MAX_RECURSION
-erros o servidor inteiro passava a recusar dano e status.
-
-A profundidade continua global de propósito: ela mede o aninhamento SÍNCRONO real
-da pilha (o risco é estourar a pilha do servidor). Um contador no context não
-enxergaria reentradas que não repassam o context — ex.: um block que reflete dano
-chamando attacker.TakeDamage(dano, self.Runner) monta um context novo a cada nível.
-
-Acima de MAX_RECURSION a ação vai para a fila (Enum.ChainLimits, F62) e roda no próximo frame.
-Quem chama recebe false, Deferred e não tem o retorno dela (ela roda depois, numa pilha nova).
-Como a ação adiada pode rodar com o alvo já morto ou fora do jogo, `fn` confere o estado da
-entidade no começo (o miolo do HealthComponent e o do StatusComponent conferem).
-
+Roda `fn(...)` dentro do disjuntor e sempre sai da cadeia, mesmo se `fn` lançar erro.
+A profundidade é global porque mede o aninhamento síncrono real da pilha: um contador no context
+não enxergaria reentradas que não repassam o context (um reflexo monta um context novo a cada nível).
+Acima de MAX_RECURSION a ação vai para a fila e roda no próximo frame; quem chama recebe false,
+Deferred. Como a ação adiada pode rodar com o alvo já morto ou fora do jogo, `fn` confere o estado
+da entidade no começo.
 @param label - prefixo dos warns, ex. "[HealthComponent] TakeDamage" STRING
 @param subject - identificação da entidade, só usada nos warns ANY
 @return true, ...retornos de fn | false, Enum.ChainOutcomes (Deferred | MaxRecursion | Error)
@@ -200,9 +184,8 @@ function Helper.RunInChain(label: string, subject: any, fn: (...any) -> ...any, 
 end
 
 --[[
-Igual ao RunInChain, para uma ação que chama outra ação da cadeia por dentro e precisa das duas
-na mesma pilha. O ApplyDamage reserva 2 (ele e o TakeDamage do alvo): se só o TakeDamage fosse
-adiado, o dano aconteceria e o OUT.OnDamage do atacante, emitido depois dele, se perderia.
+Igual ao RunInChain, para uma ação que chama outra ação da cadeia por dentro e precisa das duas na
+mesma pilha (o ApplyDamage reserva 2: ele e o TakeDamage do alvo).
 @param levels - níveis que a ação usa NUMBER
 ]]
 function Helper.RunInChainReserving(levels: number, label: string, subject: any, fn: (...any) -> ...any, ...: any)
@@ -261,9 +244,9 @@ function Helper.GetDeferredCount(): number
 end
 
 --[[
-Resolve uma regra de morte do motor pra uma entidade: o valor do config do componente ou, na
-falta, Enum.DeathDefaults (dono único dos padrões). Chamado UMA vez, no new() do componente.
-@param config - config do componente na criação da entidade TABLE?
+Regra de morte do motor para uma entidade: o valor do config do componente ou, na falta,
+Enum.DeathDefaults. Chamado uma vez, no new() do componente.
+@param config - config do componente TABLE?
 @param key - chave de Enum.DeathDefaults STRING
 ]]
 function Helper.ResolveDeathPolicy(config: {[string]: any}?, key: string): boolean
@@ -277,17 +260,15 @@ function Helper.ResolveDeathPolicy(config: {[string]: any}?, key: string): boole
 end
 
 --[[
-Morte do ponto de vista do motor. Dependência OPCIONAL de Health (regra 16): sem Health a
-entidade não morre, então nenhuma regra de morte vale para ela.
+Morte do ponto de vista do motor. Dependência opcional de Health: sem ela a entidade não morre.
 ]]
 function Helper.IsDead(entity): boolean
 	return entity:HasComponent(entity.ComponentKey.Health) and not entity.IsAlive()
 end
 
 --[[
-Meta (data.data) de quem bloqueia. Aceita os dois formatos que chegam aqui: a entrada do
-StatusComponent ({ data = módulo, runner }) e o próprio SkillRunner (runner.data já É o
-meta). Antes o filtro lia runner.data.data no SkillRunner, achava nil e era pulado (F11).
+Meta (data.data) de quem bloqueia. Aceita a entrada do StatusComponent ({ data = módulo, runner })
+e o próprio SkillRunner (runner.data já é o meta).
 ]]
 function Helper.BlockerMeta(blocker)
 	if type(blocker) ~= "table" then return nil end
@@ -298,8 +279,8 @@ function Helper.BlockerMeta(blocker)
 end
 
 --[[
-Resolve um efeito on-hit (D6, F41): o status e se ele vale para hit bloqueado e para hit de 0 de
-dano. Precedência: o próprio efeito > data.effectPolicy da skill de origem > Enum.EffectDefaults.
+Resolve um efeito on-hit: o status e se ele vale para hit bloqueado e para hit de 0 de dano.
+Precedência: o próprio efeito > data.effectPolicy da skill de origem > Enum.EffectDefaults.
 @param entry - o status, ou { status = status, onBlocked = bool?, onZeroDamage = bool? }
 @param sourceData - data da skill/status que causou o hit TABLE?
 @return status, onBlocked BOOLEAN, onZeroDamage BOOLEAN
@@ -319,7 +300,7 @@ function Helper.ResolveEffect(entry, sourceData)
 end
 
 --[[
-Dano depois das proteções de stat do alvo (D11, F43), na ordem de Enum.DamageMitigation.
+Dano depois das proteções de stat do alvo, na ordem de Enum.DamageMitigation.
 @param damage NUMBER
 @param getStat - (statName, default) -> number (o GetStat do alvo)
 @param traits - traits do hit {string}
@@ -350,9 +331,8 @@ end
 local ownerTokens = setmetatable({}, { __mode = "k" }) -- [entidade] = { [tag] = token }
 
 --[[
-Dono de inscrição (Listen/UnsubscribeByOwner) por entidade (F51). Devolve SEMPRE o mesmo token
-para a mesma entidade e tag, e tokens diferentes para entidades diferentes. Um Owner em string é
-global: limpar o combo de um atacante num alvo removia também o combo de outro atacante.
+Dono de inscrição (Listen/UnsubscribeByOwner) por entidade: sempre o mesmo token para a mesma
+entidade e tag. Use no lugar de Owner em string, que é global entre entidades.
 ]]
 function Helper.OwnerToken(entity, tag: string)
 	local byTag = ownerTokens[entity]
@@ -371,9 +351,8 @@ end
 local warnedBlocks = {} -- [nome do bloqueio] = true: aviso uma vez por servidor
 
 --[[
-Resultado de um bloqueio SEM onTrigger, a partir do data.block declarado (D14). Chamado pelo
-SkillRunner:TriggerAction. Devolve o dano novo (bloqueio de dano), true (status barrado) ou nil
-(não bloqueia). Nada implícito: sem block declarado, não bloqueia.
+Resultado de um bloqueio sem onTrigger, a partir do data.block declarado. Devolve o dano novo
+(bloqueio de dano), true (status barrado) ou nil (não bloqueia). Sem block declarado, não bloqueia.
 ]]
 function Helper.ResolveBlock(meta, context)
 	local name = meta and meta.name or "?"
@@ -548,11 +527,8 @@ function Helper.CheckBlockFilter(runner, context)
 end
 
 --[[
-Monta o mapa de imunidades (tag -> quais traits furam ela) a partir de TODOS os
-Status cadastrados. É dado ESTÁTICO (não muda por entidade nem em runtime), então
-isso deve rodar UMA VEZ pro servidor inteiro — antes, cada entidade recomputava
-isso a cada hit que sofria (StatusComponent:GetImmunityRules era chamado, mas o
-cache que ele preenchia nunca era lido de volta).
+Mapa de imunidades (tag -> traits que furam) a partir de todos os status cadastrados. Dado
+estático: roda uma vez para o servidor inteiro.
 ]]
 function Helper.BuildImmunityRules(stateTable)
 	local rules = {}
@@ -570,9 +546,7 @@ function Helper.BuildImmunityRules(stateTable)
 						bypassableBy = table.clone(data.bypassBy),
 					}
 				else
-					-- Dois status com a mesma tag de imunidade: a regra mesclada só deixa passar a
-					-- trait que AMBOS deixam (interseção, independe da ordem). Antes vencia a última
-					-- do pairs(), não determinístico (F74)
+					-- Dois status com a mesma tag de imunidade: só passa a trait que ambos deixam passar
 					local merged = {}
 					for _, trait in existing.bypassableBy do
 						if table.find(data.bypassBy, trait) then table.insert(merged, trait) end
@@ -591,11 +565,11 @@ function Helper.BuildImmunityRules(stateTable)
 end
 
 --[[
-@param source - Runner (ou proxy de skill) responsável pela ação
+Monta o contexto de uma ação ofensiva (Types.HitContext).
+@param source - runner (ou proxy de skill) responsável
 @param amount - dano/cura base
-@param parentContext - Context de quem originou esta ação (opcional). Sem isso,
-	a lineage é forkada a partir de `source.Lineage`, que já é o caso comum
-	(um Runner de skill/status sempre carrega sua própria Lineage).
+@param parentContext - contexto de quem originou esta ação (opcional; sem ele, a Lineage sai de
+	source.Lineage)
 ]]
 function Helper.BuildContext(source, amount, parentContext)
 	source = Helper.ResolveRunner(source)
@@ -605,12 +579,11 @@ function Helper.BuildContext(source, amount, parentContext)
 		direction = nil,
 		source = source,
 		sourceEntity = nil,  -- onde o runner que causou roda (num DOT, a própria vítima)
-		ownerEntity = Helper.EffectOwner(source), -- quem causou: dono do efeito (D3, F101)
+		ownerEntity = Helper.EffectOwner(source), -- quem causou: dono do efeito
 		traits = {},
 		effects = {},
-		-- Payload explícito para o que este hit/aplicação gerar (status on-hit): Context por
-		-- Breakpoint, F111. Começa vazio (nada herda sozinho); quem dispara põe (opts.Inherited) e a
-		-- checagem pré-output (OUT.onHit, OUT.PreApplyStatus) pode injetar antes do callback final
+		-- Payload explícito para o que este hit gerar (status on-hit). Começa vazio; quem dispara põe
+		-- (opts.Inherited) e a checagem pré-output (OUT.onHit, OUT.PreApplyStatus) pode injetar
 		inherited = {},
 		cancelled = false,
 		reason = nil,
@@ -630,9 +603,7 @@ function Helper.BuildContext(source, amount, parentContext)
 		end
 	end
 
-	-- Direção de intenção de quem originou a ação. Regra 16 (dependência
-	-- opcional explícita): sem MovementComponent, direction fica nil — quem
-	-- ler isso precisa checar por nil.
+	-- Direção de intenção de quem originou (dependência opcional de Movement: sem ele, nil)
 	if context.sourceEntity and context.sourceEntity:HasComponent(context.sourceEntity.ComponentKey.Movement) then
 		local worldDir = context.sourceEntity.GetDirection()
 		local facing = context.sourceEntity.GetLookDirection()
@@ -644,7 +615,7 @@ function Helper.BuildContext(source, amount, parentContext)
 		}
 	end
 
-	-- Lineage: dono único é Combat/Lineage.luau (antes essa função não trackeava nada disso)
+	-- Lineage: dono do formato é Combat/Lineage.luau
 	local parentLineage = (parentContext and parentContext.Lineage) or (source and source.Lineage)
 	context.Lineage = LineageModule.Fork(parentLineage, context.sourceEntity, (source and source.skillName) or "Unknown")
 

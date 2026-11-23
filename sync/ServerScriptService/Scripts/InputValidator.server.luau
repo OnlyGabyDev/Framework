@@ -27,8 +27,7 @@ local RequestDir = Remotes.RequestDir
 local RequestLook = Remotes.RequestLook
 local SkillFired = Remotes.SkillFired
 
--- O único remote de input que não existe no place: nasce aqui, na borda de rede. Antes era
--- criado pela GrandIntegrationDemo, e o pulo durante a possessão dependia da demo estar no jogo
+-- O único remote de input que não existe no place: nasce aqui, na borda de rede
 local RequestJump = Remotes:FindFirstChild("RequestJump")
 if not RequestJump then
 	RequestJump = Instance.new("RemoteEvent")
@@ -60,7 +59,7 @@ local function dispatch(player: Player, event)
 	if success and skillName and cooldown then
 		-- A UI é por SLOT, não por skill: manda a intent (o botão da tela carrega o mesmo atributo).
 		-- Assim trocar de personagem/forma ou roubar uma skill não exige nenhum elemento novo de UI.
-		-- Cargas (D13): quantas restam, o máximo e a recarga corrente, para a HUD mostrar "2/3"
+		-- Cargas: quantas restam, o máximo e a recarga corrente, para a HUD mostrar "2/3"
 		local core = DataManager.Get(ID)
 		local charges, maxCharges = core.GetCooldownCharges(skillName)
 		local snapshot = maxCharges and core.ExportCooldown(skillName)
@@ -116,7 +115,7 @@ RequestIntent.OnServerEvent:Connect(function(player: Player, intent: any, isDown
 		return
 	end
 
-	-- Rate limit por intent (antes era um único relógio por player: dois botões no mesmo frame perdiam um)
+	-- Rate limit por intent: dois botões no mesmo frame não se anulam
 	if not AntiCheat.CheckInput(player, session.lastPress[intent] or 0) then
 		return
 	end

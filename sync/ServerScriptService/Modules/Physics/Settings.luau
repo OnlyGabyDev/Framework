@@ -18,21 +18,16 @@ return {
 	-- parecer um teleporte.
 	Soft_Force_Strength = 2500,
 
-	-- Forças proporcionais à massa (D7; F31, F32, F33). Com isto ligado, o orçamento padrão
-	-- de uma Force Soft e a força de caminhada do NPC sem Humanoid saem de aceleração × massa
-	-- do corpo (AssemblyMass): todo corpo responde igual, do dummy ao chefe. Antes eram
-	-- números fixos (2500 e 2000): o chefe não andava e o vento não o movia. Os valores
-	-- abaixo dão os números antigos num corpo de massa 10. Por entidade: MassScaling = false
-	-- no config do Movement volta aos números fixos (chefe "pesado" de propósito). Um
-	-- MaxForce declarado na Force continua absoluto; Hard continua Hard_Force_Strength.
+	-- Forças proporcionais à massa. Ligado, o orçamento padrão de uma Force Soft e a força de
+	-- caminhada do NPC sem Humanoid saem de aceleração × massa do corpo (AssemblyMass): todo corpo
+	-- responde igual, do dummy ao chefe. Os valores abaixo dão os números antigos num corpo de massa 10.
+	-- Por entidade: MassScaling = false no config do Movement volta aos números fixos. Um MaxForce
+	-- declarado na Force continua absoluto; Hard continua Hard_Force_Strength.
 	Force_Mass_Scaling = true,
 	Soft_Force_Acceleration = 250, -- studs/s²
-	-- Corpo com Humanoid (player e NPC do D8): o controlador do Humanoid segura a velocidade na da
-	-- caminhada, e 250 não o vence (F32: 0,8 de ~20 studs). Varredura de 11/11 num corpo de massa
-	-- 13,6: até 500 o vento não move; de 1000 em diante chega à velocidade pedida e andar contra o
-	-- vento soma certo (30 - 16 = 14). 2500 dá folga de 5× e o menor tremor (desvio 0,1 studs/s);
-	-- é ~34000 nesse corpo, perto do MaxForce 35000 que o ventilador já usava. O alvo continua
-	-- sendo caminhada + Soft (D6): a força alta não tira o controle de quem anda no vento.
+	-- Corpo com Humanoid: o controlador do Humanoid segura a velocidade na da caminhada, e a
+	-- aceleração Soft comum não o vence. Até 500 o vento não move; de 1000 em diante chega à
+	-- velocidade pedida. 2500 dá folga com o menor tremor. O alvo continua sendo caminhada + Soft.
 	Humanoid_Soft_Force_Acceleration = 2500, -- studs/s²
 	NPC_Walk_Acceleration = 200,   -- studs/s²
 	NPC_Walk_Force = 2000,         -- força fixa de caminhada quando MassScaling = false
@@ -54,11 +49,11 @@ return {
 	Teleport_Smoothing_Snap_Threshold = 6,
 
 
-	--========= Validação de movimento do player (GlobalAntiCheat, F05) =========--
-	-- O corpo do player é simulado pelo cliente; o servidor confere a distância andada
-	-- contra a velocidade permitida (WalkSpeed do servidor + Forces + chão) e devolve o
-	-- corpo à última posição válida quando ela estoura. Com Workspace.AuthorityMode =
-	-- Server (alvo da reescrita do movimento) a validação fica redundante: desligue aqui.
+	--========= Validação de movimento do player (GlobalAntiCheat) =========--
+	-- O corpo do player é simulado pelo cliente; o servidor confere a distância andada contra a
+	-- velocidade permitida (WalkSpeed do servidor + Forces + chão) e devolve o corpo à última
+	-- posição válida quando ela estoura. Com Workspace.AuthorityMode = Server a validação fica
+	-- redundante: desligue aqui.
 	Movement_Validation_Enabled = true,
 
 	-- Multiplicador sobre o WalkSpeed do servidor.
@@ -97,9 +92,9 @@ return {
 	-- Intervalo mínimo (s) entre dois warns de correção do mesmo player.
 	Movement_Warn_Interval = 1,
 
-	-- Atraso (s) com que o servidor vê um corpo simulado pelo cliente, sem contar o ping (medido
-	-- em 11/11 no Studio: ~0,35 s). Base do NetworkView, que prevê onde o corpo está de verdade.
-	-- As janelas do AntiCheat acima são tolerâncias, com outro papel: não derive uma da outra.
+	-- Atraso (s) com que o servidor vê um corpo simulado pelo cliente, sem contar o ping (~0,35 s
+	-- medido no Studio). Base do NetworkView. As janelas do AntiCheat acima são tolerâncias, com outro
+	-- papel: não derive uma da outra.
 	Client_View_Lag = 0.35,
 	-- Quanto do GetNetworkPing (ida e volta) entra no atraso de visão: 0,5 = um sentido.
 	Client_View_Ping_Factor = 0.5,

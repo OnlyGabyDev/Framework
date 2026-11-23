@@ -55,7 +55,7 @@ table.freeze(SkillDatabase._Kits)
 
 --[[
 Kit dono da skill (o nome da pasta de 1º nível, que é também a chave dela no AnimationLib e nos
-assets). É de onde a skill tira as animações em qualquer corpo (F55). nil = skill solta.
+assets). É de onde a skill tira as animações em qualquer corpo. nil = skill solta.
 @param skillKey - chave da skill (SkillDatabase.Keys) STRING
 ]]
 function SkillDatabase.KitOf(skillKey: string): string?

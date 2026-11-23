@@ -1,5 +1,5 @@
 --[[
-	CollisionGroups — grupos de colisão do motor (F19). Quem é agarrado (FW_Grabbed) não colide com
+	CollisionGroups: grupos de colisão do motor. Quem é agarrado (FW_Grabbed) não colide com
 	outro agarrado nem com quem agarrou (FW_Grabber); os dois continuam colidindo com o mundo.
 	Assign devolve a função que restaura o grupo original de cada peça (chame no fim do grab).
 ]]
