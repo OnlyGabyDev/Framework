@@ -412,8 +412,9 @@ function WeaponComponent:DestroyHitbox()
 	end
 end
 
-function WeaponComponent:GetActiveHitboxes()
-	return self.Hitbox and self.Hitbox:GetActiveHitboxes() or {}
+-- Com owner, as hitboxes ativas da sessão dele; sem owner, as de todas as sessões (debug)
+function WeaponComponent:GetActiveHitboxes(owner)
+	return self.Hitbox and self.Hitbox:GetActiveHitboxes(owner) or {}
 end
 
 function WeaponComponent:GetHitboxConfigs()
@@ -488,12 +489,13 @@ local ExposeAPI = {
 
 	-- Hitbox proxy 
 	StartHitbox        = function(component, ...) return component:StartHitbox(...) end,
-	StopHitbox         = function(component) return component:StopHitbox() end,
+	-- owner = o runner dono da sessão (self:StopHitbox passa o dele); sem owner, a sessão compartilhada
+	StopHitbox         = function(component, owner) return component:StopHitbox(owner) end,
 	DestroyHitbox      = function(component) return component:DestroyHitbox() end,
 	AddHitboxOwner     = function(component, owner) return component:AddHitboxOwner(owner) end,
 	RemoveHitboxOwner  = function(component, owner) return component:RemoveHitboxOwner(owner) end,
-	IsHitboxActive     = function(component) return component:IsHitboxActive() end,
-	GetActiveHitboxes  = function(component) return component:GetActiveHitboxes() end,
+	IsHitboxActive     = function(component, owner) return component:IsHitboxActive(owner) end,
+	GetActiveHitboxes  = function(component, owner) return component:GetActiveHitboxes(owner) end,
 	GetHitboxConfigs   = function(component) return component:GetHitboxConfigs() end,
 }
 
