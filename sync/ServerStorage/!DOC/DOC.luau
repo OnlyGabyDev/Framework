@@ -386,6 +386,18 @@ OPÇÕES DO HIT (F108): self:Damage(alvo, n, { Traits = {...}, Effects = {...}, 
 (Types.DamageOptions). Traits/efeitos valem só para esse hit; Hit vira context.hit (ponto do impacto);
 Prescaled pula o DamageMult.
 
+CONTEXT POR BREAKPOINT (F111, design de .agents/rules/01; formato em Combat/Types RunnerContext): todo
+callback recebe ctx = { depth, history (nomes raiz -> atual), rootOrigin, sourceRunner (o runner anterior:
+quem aplicou/criou; nil no cast por input), input, inherited }. inherited é o payload EXPLÍCITO do pai, só
+leitura: self:ApplyStatus(status, { Inherited = { mult = 3 } }) entrega ctx.inherited.mult ao status;
+self:Damage(alvo, n, { Inherited = {...} }) entrega aos status on-hit desse hit; SkillRunner.new(..., inherited)
+para skill criada por skill. Nada herda sozinho: o neto só recebe o que o filho passar.
+
+CHECAGEM PRÉ-OUTPUT (F112): antes de um status entrar, o dono do efeito recebe OUT.PreApplyStatus (contexto
+com traits do status, targetEntity, incomingStatus e inherited mutável). O listener filtra por Query de traits,
+injeta em ctx.inherited ou cancela (ctx.cancelled = true). Para dano, o mesmo papel é do OUT.onHit (o
+inherited dele segue para os status on-hit). Sem ouvinte, custo zero.
+
 SETHP/REVIVE (F110): SetHP(n) e Revive(n) definem o HP exato, sem corte no MaxHP (sobrevida é design); o
 teto fica com o SetMaxHP e o HealCap da cura.
 

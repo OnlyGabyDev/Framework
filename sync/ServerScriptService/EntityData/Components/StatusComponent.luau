@@ -108,7 +108,8 @@ Aplica um status à entidade. O alvo é sempre a própria entidade: para mirar o
 ApplyStatus dela ou use runner:ApplyStatus(status, { Target = alvo }).
 @param statusData - Dados do status TABLE
 @param durationOrOpts - NUMBER (duração, estilo legado) OU TABLE de opções:
-	{ Duration: number?, Source: Runner|SkillProxy?, ID: string? }
+	{ Duration: number?, Source: Runner|SkillProxy?, ID: string?, Inherited: {[string]: any}? }
+	Inherited = payload explícito para o status (o ctx.inherited dele, F111)
 @param sourceSkill - (só no estilo legado) Runner ou proxy de skill responsável
 @param ID - (só no estilo legado) ID único do status
 @param targetEntity - (só no estilo legado) ignorado se for outra entidade, com warn
@@ -156,6 +157,26 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 	local canApply = self:_ValidateApplication(statusData, source)
 	if not canApply then
 		return nil
+	end
+
+	-- Checagem pré-output de "debuff propagado" (Context por Breakpoint, F112): o dono do efeito
+	-- recebe OUT.PreApplyStatus com as traits do status, o alvo e o inherited, e pode cancelar ou
+	-- injetar no inherited antes do status nascer. Sem ouvinte, nenhum contexto é montado
+	local inherited = opts.Inherited
+	local owner = StateTable.EffectOwner(source)
+	if owner and owner:HasListeners(StateEnum.Roles.OUT, StateEnum.Breakpoints.PreApplyStatus) then
+		local context = StateTable.BuildContext(source, 0)
+		context.traits = table.clone(statusData.data and statusData.data.traits or {})
+		context.incomingStatus = statusData
+		context.targetEntity = self.Entity
+		for key, value in inherited or {} do
+			context.inherited[key] = value
+		end
+		owner:Emit(StateEnum.Roles.OUT, StateEnum.Breakpoints.PreApplyStatus, context)
+		if context.cancelled then
+			return nil
+		end
+		inherited = context.inherited
 	end
 
 	if not suppliedID then
@@ -216,7 +237,7 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 			return existing.ID
 		end
 
-		local runner = self:_CreateRunner(data, meta.name, duration, source)
+		local runner = self:_CreateRunner(data, meta.name, duration, source, inherited)
 		group[meta.name] = { data = data, runner = runner, sourceSkill = source, ID = suppliedID, seq = nextSeq(self) }
 		return self:_StartRunner(runner, suppliedID)
 	end
@@ -232,7 +253,7 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 			return nil
 		end
 
-		local runner = self:_CreateRunner(data, meta.name, duration, source)
+		local runner = self:_CreateRunner(data, meta.name, duration, source, inherited)
 		table.insert(list, { data = data, runner = runner, sourceSkill = source, ID = suppliedID, seq = nextSeq(self) })
 
 		group[meta.name] = list
@@ -264,7 +285,7 @@ function StatusComponent:_ApplyStatusInner(statusData, durationOrOpts, sourceSki
 		previous.runner:endSkill(true)
 	end
 
-	local runner = self:_CreateRunner(data, meta.name, duration, source)
+	local runner = self:_CreateRunner(data, meta.name, duration, source, inherited)
 	group[meta.name] = { data = data, runner = runner, sourceSkill = source, ID = suppliedID, seq = nextSeq(self) }
 	return self:_StartRunner(runner, suppliedID)
 end
@@ -297,14 +318,14 @@ self.Effects e só então chama _StartRunner.
 	(acessível como self.Source dentro dos callbacks) e alimenta a Lineage do novo
 	runner, corrigindo Lineage.Origin (antes sempre virava o portador, nunca o caster).
 ]]
-function StatusComponent:_CreateRunner(data, name, duration, source)
+function StatusComponent:_CreateRunner(data, name, duration, source, inherited)
 
 	if duration then
 		data.runtimeDuration = duration
 	end
 
 	-- O runner age na entidade que registra o status (é o portador: self.Entity nos callbacks)
-	local runner = SkillRunner.new(data, self.Entity, name, StateEnum.Types.Status, source and source.Lineage)
+	local runner = SkillRunner.new(data, self.Entity, name, StateEnum.Types.Status, source and source.Lineage, nil, inherited)
 
 	if runner then
 		runner.Source = source

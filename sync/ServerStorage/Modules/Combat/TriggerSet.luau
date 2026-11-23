@@ -92,6 +92,13 @@ function TriggerSet:UnsubscribeByOwner(owner: any)
 	end
 end
 
+--[[ Há inscrição neste canal? Para quem montaria um contexto só para emitir (custo zero sem ouvinte) ]]
+function TriggerSet:HasAny(role: string, breakpoint: string): boolean
+	local byRole = self.Subscriptions[role]
+	local list = byRole and byRole[breakpoint]
+	return list ~= nil and #list > 0
+end
+
 function TriggerSet:Emit(role: string, breakpoint: string, context: any, ...)
 	local byRole = self.Subscriptions[role]
 	local list = byRole and byRole[breakpoint]

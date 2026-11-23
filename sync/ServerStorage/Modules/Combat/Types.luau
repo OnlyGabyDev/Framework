@@ -34,6 +34,7 @@ export type Lineage = {
 	Origin: any,
 	Cause: string,
 	LiveRunners: number?,            -- só na raiz: runners vivos sob ela (SkillRunner:start, F62)
+	Runner: any?,                    -- o runner dono do elo (nil no elo de um hit): Context.sourceRunner
 }
 
 --[[
@@ -44,13 +45,18 @@ Dois contextos diferentes (F68: antes um tipo só misturava os dois e não batia
   proteções de stat, PreDamage/PostDamage e os listeners de onHit. Montado por
   StateTable.BuildContext (Helper.BuildContext).
 ]]
+-- Context por Breakpoint: design decidido em .agents/rules/01 (F111)
 export type RunnerContext = {
 	depth: number,                   -- profundidade na Lineage (cast por input = 1)
-	history: {string},               -- mantido por compatibilidade
+	history: {string},               -- trilha de nomes, raiz -> ... -> este runner (só leitura)
 	rootOrigin: any,                 -- entidade que iniciou a cadeia
-	sourceRunner: any,               -- o SkillRunner
+	sourceRunner: any?,              -- o runner IMEDIATAMENTE anterior: nos callbacks do runner, quem o
+	                                 -- aplicou/criou (nil na raiz, cast por input); no evento que o runner
+	                                 -- emite (OUT.onStart/onEnd), o próprio runner (o anterior de quem escuta)
 	input: any?,                     -- Intents.InputEvent que originou o cast
-	inherited: {[string]: any},
+	inherited: {[string]: any},      -- payload explícito do pai, decidido no ponto de injeção (só leitura):
+	                                 -- ApplyStatus(..., { Inherited }), Damage(..., { Inherited }),
+	                                 -- SkillRunner.new(..., inherited). Nada herda sozinho
 	reason: string?,                 -- só no onCancel/onEnd/OUT.onEnd: StateTable.Enum.EndReasons
 }
 
@@ -70,7 +76,11 @@ export type HitContext = {
 		Local: Vector3?,
 		Magnitude: number?
 	}?,
-	incomingStatus: any?,            -- só no escudo de status (_TriggerShield)
+	incomingStatus: any?,            -- o status entrando: no escudo de status (_TriggerShield) e no
+	                                 -- OUT.PreApplyStatus (F112)
+	inherited: {[string]: any},      -- payload para o que este hit/aplicação gerar (F111): mutável aqui,
+	                                 -- os listeners da checagem pré-output (OUT.onHit, OUT.PreApplyStatus)
+	                                 -- injetam; o status on-hit recebe como ctx.inherited
 	blocked: boolean?,               -- o bloqueio zerou um hit que tinha dano (D6)
 	actualDamage: number?,           -- depois do HP mudar (PostDamage)
 	actualHeal: number?,             -- só no OnHeal (IN e OUT): quanto o HP subiu de fato
@@ -89,6 +99,7 @@ export type DamageOptions = {
 	Effects: {any}?,                 -- efeitos on-hit só deste hit (mesmo formato de data.effects)
 	Hit: any?,                       -- o hitResult da hitbox (position, normal, instance) -> context.hit
 	Prescaled: boolean?,             -- o dano já vem escalado: não aplica o DamageMult do atacante
+	Inherited: {[string]: any}?,     -- payload para os status on-hit deste hit (context.inherited, F111)
 }
 
 -- Opções de uma cura: entity.Heal(n, opts) (F107)

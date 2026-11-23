@@ -75,6 +75,11 @@ function EntityCore:Emit(role: string, breakpoint: string, context: any, ...)
 	self._triggerSet:Emit(role, breakpoint, context, ...)
 end
 
+--[[ Alguém escuta este canal da entidade? (evita montar contexto que ninguém vai ler) ]]
+function EntityCore:HasListeners(role: string, breakpoint: string): boolean
+	return self._triggerSet ~= nil and self._triggerSet:HasAny(role, breakpoint)
+end
+
 function EntityCore:UnsubscribeByOwner(owner: any)
 	if not self._triggerSet then return end
 	self._triggerSet:UnsubscribeByOwner(owner)

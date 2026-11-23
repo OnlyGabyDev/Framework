@@ -6,6 +6,7 @@ local Storage = game:GetService("ServerStorage")
 local StateTable = require(Storage.Modules.Combat.StateTable)
 local Utils = require(ReplicatedStorage.Utils)
 local CooldownPolicy = require(ServerScript.Modules.CooldownPolicy)
+local LineageModule = require(Storage.Modules.Combat.Lineage) -- dono do formato dos nós (Types.Lineage)
 
 local SkillRunner = {}
 SkillRunner.__index = SkillRunner
@@ -36,14 +37,20 @@ local function protect(runner, label, fn, ...)
 	return ok, result
 end
 
-local function endContext(runner, reason)
-	local context = runner:BuildContext()
+local function endContext(runner, reason, forListeners)
+	local context = runner:BuildContext(forListeners)
 	context.reason = reason
 	return context
 end
 
+local NOTHING_INHERITED = table.freeze({})
 
-function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input) --Instancia o SkillRunner como um objeto responsável de criar a habilidade junto do EntityData para as skills utilizarem
+
+--[[
+@param inherited - payload explícito do pai para este runner (Context.inherited, F111): copiado e
+	congelado aqui, o filho só lê. Status recebe pelo ApplyStatus(..., { Inherited = {...} })
+]]
+function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input,inherited) --Instancia o SkillRunner como um objeto responsável de criar a habilidade junto do EntityData para as skills utilizarem
 
 
 	--================VÁRIAVEIS(FACILITAÇÃO DE ACESSO)===================--
@@ -80,6 +87,8 @@ function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input) --Instanc
 	self.type = runnerType		 		--Tipo de SR, Skill, Status
 	self.skillName = name  		 		--Guarda o nome da skill pra controle de runners ativos
 	self.input = input					--Input/intenção que originou o chamado (permitindo hold e release)
+	-- Payload do pai (Context.inherited): cópia rasa congelada, para o pai não mudar o que o filho lê
+	self._inherited = inherited and table.freeze(table.clone(inherited)) or NOTHING_INHERITED
 
 
 	--=====FACILITADORES DE ACESSO=====--
@@ -139,7 +148,8 @@ function SkillRunner.new(skillModule,Entity,name,SRtype,Lineage,input) --Instanc
 	local lineageData = {
 		Entity = Entity,
 		name = name,
-		ParentLineage = parentLineage
+		ParentLineage = parentLineage,
+		Runner = self, -- o filho acha o runner anterior pelo nó (Context.sourceRunner, F111)
 	}
 	self.Lineage = self.statusTable.BuildHistory(lineageData)
 
@@ -153,14 +163,25 @@ end
 --				 LIFECYCLE
 --================================================
 
-function SkillRunner:BuildContext()
+--[[
+Context por Breakpoint (Types.RunnerContext; design em .agents/rules/01, F111). history e inherited são
+congelados e calculados uma vez por runner: o onStep monta um contexto por frame.
+@param forListeners - true no evento que ESTE runner emite (OUT.onStart/onEnd): para quem escuta, o
+	runner imediatamente anterior é este. Nos callbacks do próprio runner, é o pai (quem o aplicou/criou)
+]]
+function SkillRunner:BuildContext(forListeners: boolean?)
+	local lineage = self.Lineage
+	if not self._history then
+		self._history = table.freeze(lineage and LineageModule.GetHistoryArray(lineage) or { self.skillName })
+	end
+	local parent = lineage and lineage.Parent
 	return {
-		depth = self.Lineage and self.Lineage.Depth or 1,
-		history = {}, -- mantido por compatibilidade temporária
-		rootOrigin = self.Lineage and self.Lineage.Root.Origin or nil,
-		sourceRunner = self,
+		depth = lineage and lineage.Depth or 1,
+		history = self._history,
+		rootOrigin = lineage and lineage.Root.Origin or nil,
+		sourceRunner = if forListeners then self else (parent and parent.Runner),
 		input = self.input,
-		inherited = {}
+		inherited = self._inherited,
 	}
 end
 
@@ -246,7 +267,7 @@ function SkillRunner:start(): boolean
 	if self.state == STATES.Ended then return true end
 
 	if self.Entity then
-		self.Entity:Emit(StateTable.Enum.Roles.OUT, StateTable.Enum.Breakpoints.onStart, self:BuildContext())
+		self.Entity:Emit(StateTable.Enum.Roles.OUT, StateTable.Enum.Breakpoints.onStart, self:BuildContext(true))
 	end
 	return true
 end
@@ -582,7 +603,7 @@ function SkillRunner:endSkill(cancel, reason)
 
 	-- Par do OUT.onStart, que vale para qualquer entidade: emitido também sem Combat
 	if self.Entity then
-		self.Entity:Emit(StateTable.Enum.Roles.OUT, StateTable.Enum.Breakpoints.onEnd, endContext(self, reason))
+		self.Entity:Emit(StateTable.Enum.Roles.OUT, StateTable.Enum.Breakpoints.onEnd, endContext(self, reason, true))
 	end
 
 	if self.connection then

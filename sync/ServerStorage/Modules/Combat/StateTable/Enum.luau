@@ -54,6 +54,8 @@ enum.Breakpoints = {
         OnDamage = "OnDamage",   -- canal OUT (atacante), disparado depois do hit já ter acontecido
         PreDamage = "PreDamage", -- canal IN (alvo), ANTES do HP mudar — ponto de extensão pra cancelar/mutar
         PostDamage = "PostDamage", -- canal IN (alvo), DEPOIS do HP mudar — reação do lado de quem apanhou
+        PreApplyStatus = "PreApplyStatus", -- canal OUT (dono do efeito), ANTES de um status entrar: checagem
+                                           -- pré-output (F112). Pode cancelar e injetar context.inherited
         OnDeath = "OnDeath",
         OnRevive = "OnRevive",
         

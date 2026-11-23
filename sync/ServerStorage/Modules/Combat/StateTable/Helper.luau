@@ -608,6 +608,10 @@ function Helper.BuildContext(source, amount, parentContext)
 		ownerEntity = Helper.EffectOwner(source), -- quem causou: dono do efeito (D3, F101)
 		traits = {},
 		effects = {},
+		-- Payload explícito para o que este hit/aplicação gerar (status on-hit): Context por
+		-- Breakpoint, F111. Começa vazio (nada herda sozinho); quem dispara põe (opts.Inherited) e a
+		-- checagem pré-output (OUT.onHit, OUT.PreApplyStatus) pode injetar antes do callback final
+		inherited = {},
 		cancelled = false,
 		reason = nil,
 	}
@@ -650,7 +654,7 @@ end
 
 
 function Helper.BuildHistory(data)
-	return LineageModule.Fork(data.ParentLineage, data.Entity, data.name)
+	return LineageModule.Fork(data.ParentLineage, data.Entity, data.name, data.Runner)
 end
 
 

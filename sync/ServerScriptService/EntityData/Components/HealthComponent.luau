@@ -194,7 +194,8 @@ function HealthComponent:_TakeDamageInner(amountOrContext, source)
 			local status, onBlocked, onZeroDamage = StateTable.ResolveEffect(entry, sourceData)
 			local skip = (context.blocked and not onBlocked) or (zeroDamageHit and not onZeroDamage)
 			if status and not skip then
-				self.Entity.ApplyStatus(status, { Source = source })
+				-- O inherited do hit (o que quem atacou pôs e o OUT.onHit injetou) segue para o status (F111)
+				self.Entity.ApplyStatus(status, { Source = source, Inherited = context.inherited })
 			end
 		end
 	end

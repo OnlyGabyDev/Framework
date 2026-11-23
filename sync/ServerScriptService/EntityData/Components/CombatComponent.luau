@@ -632,6 +632,10 @@ function CombatComponent:_ApplyDamageInner(amount: number, source: any, targetEn
 		for _, effect in opts.Effects or {} do
 			table.insert(context.effects, effect)
 		end
+		-- Payload para os status on-hit deste hit (F111); o OUT.onHit abaixo ainda pode injetar
+		for key, value in opts.Inherited or {} do
+			context.inherited[key] = value
+		end
 		local hit = opts.Hit
 		if hit then
 			context.hit = { instance = hit.instance, position = hit.position, normal = hit.normal }

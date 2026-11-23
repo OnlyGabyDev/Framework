@@ -1062,4 +1062,95 @@ return function(env)
 		t.assert(e.Revive() == true and e.GetHP() == 100, "Revive sem valor devia voltar com o MaxHP")
 		cleanup(e)
 	end)
+
+	run("F111 — Context: history da raiz, sourceRunner anterior, inherited explícito e só leitura", function(t)
+		local caster = still(CFrame.new(-4, 5, 0), COMBAT)
+		local target = still(CFrame.new(4, 5, 0))
+		local seen = {}
+		local Grand = { data = { name = "__HardCtxGrand", category = E.Categories.Debuff }, callbacks = {
+			onStart = function(_, ctx) seen.grand = ctx end } }
+		local Child = { data = { name = "__HardCtxChild", category = E.Categories.Debuff }, callbacks = {
+			onStart = function(self, ctx)
+				seen.child = ctx
+				seen.childRunner = self.Runner
+				seen.writeBlocked = not pcall(function() ctx.inherited.mult = 99 end)
+				self:ApplyStatus(Grand, { Duration = 1 }) -- sem Inherited: o neto não herda sozinho
+			end } }
+		local payload = { mult = 3 }
+		local root = makeRunner(caster, "__HardCtxRoot", { duration = 2 }, {
+			onStart = function(self, ctx)
+				seen.root = ctx
+				self:ApplyStatus(Child, { Target = target, Duration = 1, Inherited = payload })
+			end })
+		caster:Listen({ Role = E.Roles.OUT, Breakpoint = E.Breakpoints.onStart, Action = function(ctx)
+			seen.event = seen.event or ctx
+		end })
+		root:start()
+		payload.mult = 7 -- o pai mudando a tabela depois não muda o que o filho recebeu
+
+		local function path(ctx) return ctx and table.concat(ctx.history, ">") or "nil" end
+		t.assert(seen.root and seen.root.sourceRunner == nil and path(seen.root) == "__HardCtxRoot" and seen.root.depth == 1,
+			"Raiz: sourceRunner " .. tostring(seen.root and seen.root.sourceRunner) .. ", history " .. path(seen.root))
+		t.assert(seen.event and seen.event.sourceRunner == root,
+			"No OUT.onStart emitido pela skill, quem escuta devia ver a própria skill (o Dash depende disso)")
+		t.assert(seen.child and path(seen.child) == "__HardCtxRoot>__HardCtxChild" and seen.child.depth == 2,
+			"Filho: history " .. path(seen.child))
+		t.assert(seen.child.sourceRunner == root, "O sourceRunner do filho não é o runner que o aplicou")
+		t.assert(seen.child.inherited.mult == 3, "O inherited do filho: mult = " .. tostring(seen.child.inherited.mult))
+		t.assert(seen.writeBlocked and table.isfrozen(seen.child.history), "O filho conseguiu escrever no inherited/history")
+		t.assert(seen.grand and path(seen.grand) == "__HardCtxRoot>__HardCtxChild>__HardCtxGrand",
+			"Neto: history " .. path(seen.grand))
+		t.assert(seen.grand.sourceRunner == seen.childRunner, "O sourceRunner do neto não é o filho")
+		t.assert(next(seen.grand.inherited) == nil, "O neto herdou sozinho o payload do avô")
+		root:endSkill(false)
+		cleanup(caster)
+		cleanup(target)
+	end)
+
+	run("F112 — checagem pré-output: OUT.PreApplyStatus filtra, injeta e cancela; o OUT.onHit injeta no status on-hit", function(t)
+		local caster = still(CFrame.new(-4, 5, 0), COMBAT)
+		local target = still(CFrame.new(4, 5, 0), LIGHT, { Health = { MaxHP = 1000 } })
+		local got = {}
+		local function recorder(name, traits)
+			return { data = { name = name, category = E.Categories.Debuff, traits = traits }, callbacks = {
+				onStart = function(_, ctx) got[name] = ctx.inherited end } }
+		end
+		local Poison = recorder("__HardPoison", { E.Traits.DOT })
+		local Mark = recorder("__HardMarkPlain", nil)
+		local Blocked = recorder("__HardBlocked", nil)
+		local src = makeRunner(caster, "__HardPreOut", { duration = 5 }, {})
+		src:start()
+		caster:Listen({ Role = E.Roles.OUT, Breakpoint = E.Breakpoints.PreApplyStatus, Owner = src,
+			Query = { All = { E.Traits.DOT } }, Action = function(ctx) ctx.inherited.boost = 2 end })
+		caster:Listen({ Role = E.Roles.OUT, Breakpoint = E.Breakpoints.PreApplyStatus, Owner = src, Action = function(ctx)
+			got.lastTarget = ctx.targetEntity
+			if ctx.incomingStatus.data.name == "__HardBlocked" then ctx.cancelled = true end
+		end })
+
+		src:ApplyStatus(Poison, { Target = target, Duration = 1, Inherited = { from = "skill" } })
+		src:ApplyStatus(Mark, { Target = target, Duration = 1 })
+		local blockedID = src:ApplyStatus(Blocked, { Target = target, Duration = 1 })
+		local poison = got.__HardPoison
+		t.assert(poison and poison.boost == 2 and poison.from == "skill",
+			"O status DOT não recebeu a injeção da checagem (boost) junto do payload da skill")
+		t.assert(got.__HardMarkPlain and got.__HardMarkPlain.boost == nil, "A injeção filtrada por DOT vazou para status sem a trait")
+		t.assert(blockedID == nil and target.GetStatus("__HardBlocked") == nil and got.__HardBlocked == nil,
+			"A checagem cancelou, mas o status entrou")
+		t.assert(got.lastTarget == target, "A checagem não recebeu o alvo")
+
+		-- Dano: o inherited do hit e a injeção do OUT.onHit chegam ao status on-hit (e passam pela checagem)
+		target.RemoveStatus("__HardPoison")
+		got.__HardPoison = nil
+		caster:Listen({ Role = E.Roles.OUT, Breakpoint = E.Breakpoints.onHit, Owner = src, Action = function(ctx)
+			ctx.inherited.onHit = true
+		end })
+		src:Damage(target, 5, { Effects = { Poison }, Inherited = { fromHit = 1 } })
+		local onHit = got.__HardPoison
+		t.assert(onHit and onHit.fromHit == 1 and onHit.onHit == true and onHit.boost == 2, string.format(
+			"Status on-hit: fromHit %s, onHit %s, boost %s", tostring(onHit and onHit.fromHit),
+			tostring(onHit and onHit.onHit), tostring(onHit and onHit.boost)))
+		src:endSkill(false)
+		cleanup(caster)
+		cleanup(target)
+	end)
 end
