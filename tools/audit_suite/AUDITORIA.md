@@ -6,6 +6,8 @@ Oct 15, 2026 · @Gabi
 
 > **Estado em 23/11/2026:** 0 abertos de 116 achados, placar **(0 crít, 0 alta, 0 méd, 0 baixa)**. F55 e F62 corrigidos em 22/11; F97 a F102 foram achados pelos testes duros e corrigidos no mesmo dia; F103 e F104 (agarrão atrasado e vento depois do dash, vistos pelo usuário no cliente) e as lacunas F105 a F108 (time, Combat sem personagem, cura, opções do hit) entraram na 3ª rodada. F109 (teleporte do AntiCheat no Dash durante a Ultimate) fechou a rodada. F110 a F112 (SetHP/Revive e o Context por Breakpoint decidido em arquitetura) fecharam o que faltava do motor. F113 a F116 (interrupção por tag, entidade de dado, evento global e alvo no input) foram os últimos ajustes; o framework está finalizado. HP acima do máximo é escolha de design (espaço para sobrevida). F95 e F96 foram achados e corrigidos em 11/11. O F71 já estava corrigido no Studio e o F93 era falso positivo (código comentado). O resto foi corrigido no lote P0 (16/10), na Fase 1 do hardening (16/10) e no lote de 08/11. O texto abaixo é o retrato de 15/10.
 
+> **Removidos em 23/11/2026, com o framework finalizado:** a pasta `Tests` (suíte de integração, física e cenários duros), os handoffs e as sondas desta auditoria. Estão no histórico do git (o commit `bf1eb77` é o último com eles). A referência de uso do framework é a documentação em `docs/index.html`.
+
 ## Resumo executivo
 
 O framework aguenta carga e luta longa sem quebrar, mas ainda não é desacoplado, abstrato nem server-authoritative. Dos 99 testes, 65 falharam, e confirmei 74 falhas: 5 críticas e 26 altas. O Place está igual ao GitHub (159 de 161 scripts idênticos); a exceção é a pasta `Martelo` duplicada.
